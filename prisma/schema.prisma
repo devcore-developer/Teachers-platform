@@ -1,0 +1,1468 @@
+// Manarat Qurtubah — Phase 2 data model
+// SQLite for the development phase; the same schema maps to PostgreSQL
+// later without model changes (only the datasource provider changes).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * A school tenant. Each school carries its own identity (names, slug,
+ * logo, brand color) and owns a set of branches. Schools are never
+ * hard-deleted once related records exist — they are deactivated.
+ */
+model School {
+  id         String   @id @default(cuid())
+  /// Arabic school name (primary, required).
+  nameAr     String
+  /// Optional English school name.
+  nameEn     String?
+  /// Unique URL-friendly identifier used in routes and in the
+  /// school-specific teacher registration link (/register/{slug}).
+  slug       String   @unique
+  /// Logo reference. Stores a URL — never inline image bytes.
+  logoUrl    String?
+  /// Primary brand color as #RRGGBB. Defaults to the platform blue.
+  brandColor String   @default("#1D5BD6")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  branches Branch[]
+  users    User[]
+
+  supervisorAssignments SupervisorAssignment[]
+  deputyGrants          DeputyGrant[]
+
+  teacherSupervisorAssignments TeacherSupervisorAssignment[]
+
+  trainingPrograms TrainingProgram[]
+  academyCourses   Course[]
+
+  /** Phase 6 — assessments owned by this school (null-school = platform). */
+  assessments Assessment[]
+  /** Phase 7 — assignments are ALWAYS school-owned. */
+  assignments Assignment[]
+  /** Phase 8 — certificates are ALWAYS school-owned (never platform). */
+  certificates Certificate[]
+  /** Phase 9 — surveys and follow-ups are ALWAYS school-owned. */
+  surveys   Survey[]
+  followUps FollowUp[]
+  archiveEvents ArchiveEvent[]
+  @@map("schools")
+}
+
+/**
+ * A branch belonging to exactly one school. Educational stage is stored
+ * as a canonical key ("primary" | "intermediate" | "secondary") and
+ * validated with Zod on every write — SQLite has no native enum type.
+ *
+ * Duplicate branch names inside the same school are prevented by a
+ * unique constraint on the normalized name (nameNorm: trimmed, collapsed
+ * whitespace, lowercased) — see src/lib/validation/schools.ts.
+ */
+model Branch {
+  id        String   @id @default(cuid())
+  schoolId  String
+  nameAr    String
+  nameEn    String?
+  /// Normalized Arabic/English name for in-school uniqueness (see above).
+  nameNorm  String
+  stage     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  users                 User[]
+  supervisorAssignments SupervisorAssignment[]
+  deputyGrants          DeputyGrant[]
+  /// Branch names must be unique within the same school (normalized).
+  @@unique([schoolId, nameNorm])
+  @@index([schoolId])
+  @@map("branches")
+}
+
+/**
+ * A platform or school user. Roles are stored as canonical English keys
+ * ("SUPER_ADMIN" | "DEVELOPMENT_OFFICE_MANAGER" | "EDUCATIONAL_DEPUTY" |
+ * "EDUCATIONAL_SUPERVISOR" | "TEACHER") and validated with Zod on every
+ * write — SQLite has no native enum type. Role-specific authorization
+ * lives centrally in src/lib/auth (never scattered across call-sites).
+ *
+ * SUPER_ADMIN is a platform-level actor: schoolId stays null.
+ * Email is stored normalized (trimmed, lowercased) and unique at the DB
+ * level as the final duplicate-prevention guarantee.
+ *
+ * tokenVersion is bumped on security-sensitive changes (password reset,
+ * logout-everywhere): session JWTs embed it and older sessions become
+ * invalid immediately — no server-side session table needed.
+ */
+model User {
+  id             String    @id @default(cuid())
+  name           String
+  /// Normalized email address (trimmed + lowercased) — unique.
+  email          String    @unique
+  /// bcrypt hash — plaintext passwords are never stored or logged.
+  passwordHash   String
+  role           String
+  /** Owning school tenant. Null for SUPER_ADMIN (platform-level). */
+  schoolId       String?
+  /** Home branch for branch-scoped roles (e.g. a teacher's branch). */
+  branchId       String?
+  isActive       Boolean   @default(true)
+  /// Null until the email-verification flow completes (teachers).
+  emailVerifiedAt DateTime?
+  /// Set on every successful credential sign-in (server-side only).
+  /// Null means the account has never signed in — displayed honestly.
+  lastLoginAt    DateTime?
+  tokenVersion   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school               School?                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branch               Branch?                @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  supervisorAssignments SupervisorAssignment[] @relation("SupervisorUser")
+  deputyGrants          DeputyGrant[]          @relation("DeputyUser")
+
+  verificationTokens   EmailVerificationToken[]
+  passwordResetTokens  PasswordResetToken[]
+
+  /** This user's CURRENT supervisor (null = none) — one row per teacher. */
+  teacherSupervision    TeacherSupervisorAssignment? @relation("TeacherSupervisionTeacher")
+  /** Teachers explicitly assigned to this supervisor. */
+  supervisedTeachers    TeacherSupervisorAssignment[] @relation("TeacherSupervisionSupervisor")
+
+  /** Phase 5 — training academy authorship & participation. */
+  createdPrograms      TrainingProgram[]  @relation("ProgramCreator")
+  createdCourses       Course[]           @relation("CourseCreator")
+  instructedCourses    Course[]           @relation("CourseInstructor")
+  uploadedAttachments  Attachment[]       @relation("AttachmentUploader")
+  enrollments          CourseEnrollment[] @relation("Enrollments")
+
+  /** Phase 6 — assessment authorship, attempts and manual reviews. */
+  createdAssessments Assessment[]         @relation("AssessmentCreator")
+  assessmentAttempts AssessmentAttempt[]  @relation("AttemptOwner")
+  reviewedAttempts   AssessmentAttempt[]  @relation("AttemptReviewer")
+  /** Phase 7 — assignments, submissions and review audit. */
+  createdAssignments    Assignment[]           @relation("CreatedAssignments")
+  assignmentSubmissions AssignmentSubmission[] @relation("AssignmentSubmissions")
+  reviewedSubmissions   AssignmentSubmission[] @relation("ReviewedSubmissions")
+  /** Phase 8 — certificate ownership, issuance/revocation audit. */
+  certificates       Certificate[]      @relation("CertificateOwner")
+  issuedCertificates Certificate[]      @relation("CertificateIssuer")
+  revokedCertificates Certificate[]     @relation("CertificateRevoker")
+  certificateEvents  CertificateEvent[] @relation("CertificateEventActor")
+  /** Phase 9 — survey authorship, responses and audit. */
+  ownedSurveys     Survey[]         @relation("SurveyOwner")
+  surveyResponses  SurveyResponse[] @relation("SurveyRespondent")
+  surveyEventActor SurveyEvent[]    @relation("SurveyEventActor")
+  /** Phase 9 — follow-up responsibilities and audit. */
+  followUpsAsTeacher     FollowUp[]      @relation("FollowUpTeacher")
+  followUpsAsSupervisor  FollowUp[]      @relation("FollowUpSupervisor")
+  followUpsAsCreator     FollowUp[]      @relation("FollowUpCreator")
+  followUpEventActor     FollowUpEvent[] @relation("FollowUpEventActor")
+  /** Phase 10 — archive operations audit. */
+  archivedFollowUps FollowUp[]      @relation("FollowUpArchiver")
+  archiveEventActor ArchiveEvent[]  @relation("ArchiveEventActor")
+  /** Phase 11 — in-app notifications, preferences and email audit. */
+  notifications          Notification[]          @relation("NotificationOwner")
+  notificationPreference NotificationPreference?
+  emailDeliveries        EmailDelivery[]         @relation("EmailDeliveryOwner")
+  @@index([schoolId])
+  @@index([role])
+  @@map("users")
+}
+
+/**
+ * Explicit supervisor → branch assignment inside one school. Supervisors
+ * may only see teachers of their assigned branches — this table is the
+ * single source of that boundary (checked server-side everywhere).
+ */
+model SupervisorAssignment {
+  id           String   @id @default(cuid())
+  supervisorId String
+  schoolId     String
+  branchId     String
+  createdAt    DateTime @default(now())
+
+  supervisor User     @relation("SupervisorUser", fields: [supervisorId], references: [id], onDelete: Cascade)
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([supervisorId, branchId])
+  @@index([supervisorId])
+  @@map("supervisor_assignments")
+}
+
+/**
+ * Explicit read-only authorization for an EDUCATIONAL_DEPUTY over a
+ * school (branchId null) or a single branch. Deputies never get write
+ * access through this grant — it only widens what they may read.
+ */
+model DeputyGrant {
+  id        String   @id @default(cuid())
+  userId    String
+  schoolId  String
+  /// Null = the grant covers the whole school.
+  branchId  String?
+  createdAt DateTime @default(now())
+
+  user   User    @relation("DeputyUser", fields: [userId], references: [id], onDelete: Cascade)
+  school School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("deputy_grants")
+}
+
+/**
+ * Explicit teacher -> supervisor assignment inside ONE school.
+ *
+ * A teacher has at most ONE current supervisor (@@unique on teacherId),
+ * so "changing the supervisor" is a single-row replace: the former
+ * supervisor loses access automatically unless ANOTHER valid grant
+ * (e.g. a branch assignment) still covers the teacher. Visibility is
+ * the union of explicit assignments and branch-derived coverage —
+ * always confined to the supervisor's own school (service layer).
+ */
+model TeacherSupervisorAssignment {
+  id           String   @id @default(cuid())
+  /// Unique per teacher: one current supervisor at a time.
+  teacherId    String   @unique
+  supervisorId String
+  /// Denormalized from teacher.schoolId — enforced equal on write.
+  schoolId     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teacher    User   @relation("TeacherSupervisionTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  supervisor User   @relation("TeacherSupervisionSupervisor", fields: [supervisorId], references: [id], onDelete: Cascade)
+  school     School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([supervisorId])
+  @@index([schoolId])
+  @@map("teacher_supervisor_assignments")
+}
+
+/**
+ * Single-use, expiring email-verification token. The raw token lives
+ * only inside the emailed URL; the database stores its SHA-256 hash so
+ * a database leak cannot be replayed against the public endpoint.
+ */
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+/**
+ * Single-use, expiring password-reset token (same hash-at-rest policy).
+ * Consuming a reset token bumps the user's tokenVersion, invalidating
+ * every existing session immediately.
+ */
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 5 — training academy                                           */
+/*                                                                      */
+/* Tenancy: schoolId null means PLATFORM-WIDE (shared with every        */
+/* school). Only SUPER_ADMIN may create/manage platform-wide records —  */
+/* enforced in the service layer, never trusted from the client.        */
+/* SQLite has no native enums: status/type/category columns are         */
+/* canonical English keys validated with Zod on every write.            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A training program grouping related courses. DRAFT -> PUBLISHED ->
+ * ARCHIVED lifecycle; programs are never hard-deleted once courses
+ * reference them (archiving preserves history).
+ */
+model TrainingProgram {
+  id            String   @id @default(cuid())
+  /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
+  schoolId      String?
+  nameAr        String
+  nameEn        String?
+  /// Normalized name for duplicate prevention within the same scope.
+  nameNorm      String
+  descriptionAr String
+  descriptionEn String?
+  /// Cover image attachment (optional).
+  coverAttachmentId String? @unique
+  /// Canonical category key — validated against src/config/training.ts.
+  category      String
+  /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
+  status        String   @default("DRAFT")
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school    School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  createdBy User    @relation("ProgramCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  cover     Attachment? @relation("ProgramCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
+
+  courses      Course[]
+  assignments  Assignment[]
+  attachments  Attachment[] @relation("ProgramFiles")
+  /** Phase 8 — certificates issued for completing this program. */
+  certificates Certificate[]
+  /** Phase 9 — impact surveys and follow-ups linked to this program. */
+  surveys   Survey[]
+  followUps FollowUp[]
+
+  @@index([schoolId])
+  @@index([status])
+  @@map("training_programs")
+}
+
+/**
+ * A training course inside (optionally) a program. Content is built
+ * from ordered sections and lessons; publishing is a server-validated
+ * workflow that requires at least one section and one lesson.
+ */
+model Course {
+  id            String   @id @default(cuid())
+  /// Optional parent program.
+  programId     String?
+  /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
+  schoolId      String?
+  titleAr       String
+  titleEn       String?
+  descriptionAr String
+  descriptionEn String?
+  /// Cover image attachment (optional).
+  coverAttachmentId String? @unique
+  /// Canonical category key — validated against src/config/training.ts.
+  category      String
+  /// BEGINNER | INTERMEDIATE | ADVANCED — optional difficulty level.
+  level         String?
+  /// Estimated effort in hours (display only).
+  estimatedHours Int?
+  /// Instructor / responsible user (optional, must belong to the
+  /// course's school when set — service-layer enforced).
+  instructorId  String?
+  /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
+  status        String   @default("DRAFT")
+  /// Set on the first successful publish; kept while archived.
+  publishedAt   DateTime?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  program    TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  school     School?          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  instructor User?            @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  createdBy  User             @relation("CourseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  cover      Attachment?      @relation("CourseCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
+
+  sections    CourseSection[]
+  attachments Attachment[]       @relation("CourseFiles")
+  enrollments CourseEnrollment[]
+  assignments Assignment[]
+  /** Phase 6 — assessments bound to this course (optional binding). */
+  assessments Assessment[]
+  /** Phase 8 — certificates issued for completing this course. */
+  certificates Certificate[]
+  /** Phase 9 — impact surveys and follow-ups linked to this course. */
+  surveys   Survey[]
+  followUps FollowUp[]
+  @@index([schoolId])
+  @@index([status])
+  @@index([programId])
+  @@map("courses")
+}
+
+/**
+ * An ordered section (module) inside one course. Ordering is a plain
+ * integer maintained by the service layer (swap-based moves inside a
+ * transaction) — SQLite + Prisma cannot defer unique constraints, so
+ * no DB-level unique on orderIndex.
+ */
+model CourseSection {
+  id          String   @id @default(cuid())
+  courseId    String
+  titleAr     String
+  description String?
+  orderIndex  Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course  Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons CourseLesson[]
+  /** Phase 7 — assignments linked to this section. */
+  assignments Assignment[]
+  /** Phase 9 — surveys linked to lessons of this section (no direct link). */
+
+  @@index([courseId])
+  @@map("course_sections")
+}
+
+/**
+ * A lesson inside one section. Types:
+ *   TEXT          — plain-text body rendered safely (never HTML)
+ *   VIDEO         — uploaded video file (Attachment reference)
+ *   EXTERNAL_VIDEO — https URL to an allow-listed external host
+ *   RESOURCE      — downloadable file (Attachment reference)
+ */
+model CourseLesson {
+  id          String   @id @default(cuid())
+  sectionId   String
+  titleAr     String
+  description String?
+  /// TEXT | VIDEO | EXTERNAL_VIDEO | RESOURCE — validated with Zod.
+  type        String
+  /// Plain-text body for TEXT lessons (safe rendering, no HTML).
+  content     String?
+  /// External video URL for EXTERNAL_VIDEO lessons (validated https).
+  videoUrl    String?
+  /// Primary media attachment for VIDEO / RESOURCE lessons (one-to-one).
+  attachmentId String? @unique
+  orderIndex  Int
+  /// Draft lessons stay invisible to teachers even in published courses.
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  attachment  Attachment?   @relation("LessonPrimaryAttachment", fields: [attachmentId], references: [id], onDelete: SetNull)
+  attachments Attachment[]  @relation("LessonFiles")
+  /** Phase 7 — assignments linked to this lesson. */
+  assignments Assignment[]
+  /** Phase 9 — surveys linked to this lesson. */
+  surveys Survey[]
+
+  @@index([sectionId])
+  @@map("course_lessons")
+}
+
+/**
+ * Uploaded file metadata — bytes live in the configured storage
+ * backend (local disk in development; the adapter interface is
+ * provider-agnostic), NEVER in the relational database. Filenames are
+ * display-only: storage keys are generated server-side.
+ */
+model Attachment {
+  id           String   @id @default(cuid())
+  /// Original client filename — display only, never used as a path.
+  originalName String
+  /// Server-generated safe storage key inside the storage backend.
+  storageKey   String   @unique
+  mimeType     String
+  sizeBytes    Int
+  /// COVER | RESOURCE — canonical key, validated with Zod.
+  kind         String
+  /// Owning course (required for every attachment).
+  courseId     String?
+  /// Owning lesson for lesson-bound resources (optional).
+  lessonId     String?
+  /// Owning program for program covers (optional).
+  programId    String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  course   Course?          @relation("CourseFiles", fields: [courseId], references: [id], onDelete: Cascade)
+  lesson   CourseLesson?    @relation("LessonFiles", fields: [lessonId], references: [id], onDelete: Cascade)
+  program  TrainingProgram? @relation("ProgramFiles", fields: [programId], references: [id], onDelete: Cascade)
+  /// Reverse links for cover references (no FK — the FK lives on the
+  /// cover owner side).
+  courseCoverFor Course? @relation("CourseCover")
+  programCoverFor TrainingProgram? @relation("ProgramCover")
+  /// Reverse link for the lesson primary-media reference.
+  primaryForLesson CourseLesson? @relation("LessonPrimaryAttachment")
+  uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([courseId])
+  @@index([lessonId])
+  @@index([programId])
+  @@map("attachments")
+}
+
+/**
+ * A teacher's enrollment in one course. Unique (courseId, userId)
+ * prevents duplicates. Completion tracking and lesson analytics are
+ * intentionally deferred to a later phase — enrollment alone never
+ * marks anything completed.
+ */
+model CourseEnrollment {
+  id         String   @id @default(cuid())
+  courseId   String
+  userId     String
+  /// ACTIVE (completion states arrive in a later phase).
+  status     String   @default("ACTIVE")
+  enrolledAt DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation("Enrollments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, userId])
+  @@index([userId])
+  @@map("course_enrollments")
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 6 — exam engine, assessments & learning progress               */
+/*                                                                      */
+/* Tenancy mirrors the training academy: schoolId null means            */
+/* PLATFORM-WIDE (visible to every school); only SUPER_ADMIN may        */
+/* create platform-wide assessments. SQLite has no native enums:        */
+/* status/type columns are canonical English keys validated with Zod    */
+/* on every write (src/lib/validation/assessment.ts).                   */
+/*                                                                      */
+/* SECURITY: the answer key lives ONLY in AssessmentQuestion rows and   */
+/* never crosses the RSC boundary before a submission is finalized —    */
+/* the service layer strips it from every teacher-facing projection.    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * An assessment (quiz/exam) optionally bound to one training course.
+ * DRAFT -> PUBLISHED -> ARCHIVED lifecycle, same as programs/courses.
+ * Publishing requires at least one question and a passing score that
+ * fits the total points (service-layer guard on every publish).
+ */
+model Assessment {
+  id             String   @id @default(cuid())
+  /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
+  schoolId       String?
+  /// Optional binding to a published training course (same tenant).
+  courseId       String?
+  titleAr        String
+  titleEn        String?
+  instructionsAr String
+  instructionsEn String?
+  /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
+  status         String   @default("DRAFT")
+  /// Points required to pass (validated <= total question points).
+  passingScore   Int
+  /// Time limit in minutes (null = untimed). Server-enforced deadline.
+  timeLimitMinutes Int?
+  /// Maximum attempts per teacher (null = unlimited).
+  attemptLimit   Int?
+  /// Availability window (null bounds = always available).
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  /// Denormalized sum of question points — recomputed by the service
+  /// layer inside the same transaction as every question mutation.
+  maxScore       Int      @default(0)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school    School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy User    @relation("AssessmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  questions AssessmentQuestion[]
+  attempts  AssessmentAttempt[]
+
+  @@index([schoolId])
+  @@index([status])
+  @@index([courseId])
+  @@map("assessments")
+}
+
+/**
+ * One question inside an assessment. Options and the correct-answer key
+ * are stored as JSON strings (SQLite has no native JSON type) and are
+ * always written through the Zod-validated service layer:
+ *   SINGLE_CHOICE   options + answerKey {optionId}
+ *   MULTIPLE_CHOICE options + answerKey {optionIds: [...]}
+ *   TRUE_FALSE      no options + answerKey {value: boolean}
+ *   SHORT_ANSWER    no auto grading — model answer helps the reviewer;
+ *                   the attempt lands in NEEDS_REVIEW until reviewed.
+ */
+model AssessmentQuestion {
+  id           String  @id @default(cuid())
+  assessmentId String
+  /// SINGLE_CHOICE | MULTIPLE_CHOICE | TRUE_FALSE | SHORT_ANSWER
+  type         String
+  textAr       String
+  textEn       String?
+  orderIndex   Int
+  /// Points awarded for a fully correct answer (1..100).
+  points       Int
+  isRequired   Boolean @default(true)
+  /// JSON [{id, textAr}] — choice types only.
+  optionsJson  String?
+  /// SERVER-ONLY answer key JSON — never serialized to the client
+  /// before the attempt is finalized.
+  answerKeyJson String?
+  /// Optional feedback shown after submission.
+  explanation  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@map("assessment_questions")
+}
+
+/**
+ * One teacher attempt. Lifecycle:
+ *   IN_PROGRESS (answers draft autosaved) -> EXPIRED (deadline passed,
+ *   never submitted — no invented grade) -> on submit either
+ *   NEEDS_REVIEW (contains short-answer questions) or graded atomically
+ *   into PASSED / FAILED. Finalized rows are immutable (service guard).
+ *
+ * Concurrency: submission flips the row with a conditional
+ * updateMany(status = IN_PROGRESS) inside a transaction, so double
+ * submissions cannot double-grade; attempt limits are re-checked inside
+ * the start/submit transactions (SQLite serializes writers).
+ */
+model AssessmentAttempt {
+  id           String    @id @default(cuid())
+  assessmentId String
+  userId       String
+  /// IN_PROGRESS | EXPIRED | NEEDS_REVIEW | PASSED | FAILED
+  status       String    @default("IN_PROGRESS")
+  startedAt    DateTime  @default(now())
+  /// Server-side deadline for timed assessments (startedAt + limit).
+  deadlineAt   DateTime?
+  submittedAt  DateTime?
+  /// JSON [{questionId, choice?/bool?/text?}] — autosaved draft, then
+  /// the graded submission snapshot.
+  answersJson  String?
+  /// Points earned on auto-gradable questions (set at submission).
+  objectiveScore Int     @default(0)
+  /// Final score after any manual review (null until finalized).
+  earnedScore  Int?
+  /// Snapshot of the graded question set's total points (set at submit).
+  maxScore     Int?
+  /// 0..100 rounded integer (set when finalized).
+  percentage   Int?
+  passed       Boolean?
+  /// Manual review audit (short-answer grading).
+  reviewedById String?
+  reviewedAt   DateTime?
+  /// JSON [{questionId, points}] — per-question manual review scores
+  /// (audit trail + per-question feedback after review).
+  reviewScoresJson String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user       User       @relation("AttemptOwner", fields: [userId], references: [id], onDelete: Restrict)
+  reviewedBy User?      @relation("AttemptReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([assessmentId])
+  @@index([userId])
+  @@index([status])
+  @@map("assessment_attempts")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 7 — Assignments, teacher submissions and supervision.
+// Assignments are ALWAYS school-owned (schoolId NOT NULL).
+// SQLite has no enums: canonical English string keys are validated
+// with Zod on every write (see src/lib/validation/assignments.ts).
+// ─────────────────────────────────────────────────────────────────
+
+model Assignment {
+  id            String   @id @default(cuid())
+  schoolId      String
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  // Optional content binding — every linked row must belong to the
+  // same school and must not be archived (validated in the service).
+  programId     String?
+  program       TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId      String?
+  course        Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  sectionId     String?
+  section       CourseSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  lessonId      String?
+  lesson        CourseLesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  createdById   String
+  createdBy     User     @relation("CreatedAssignments", fields: [createdById], references: [id])
+
+  titleAr       String
+  titleEn       String?
+  descriptionAr String
+  descriptionEn String?
+
+  // DRAFT | PUBLISHED | CLOSED | ARCHIVED (ARCHIVED is terminal)
+  status        String   @default("DRAFT")
+
+  // Audience targeting — ids validated server-side, always in-school.
+  // ALL_TEACHERS | BRANCHES | TEACHERS
+  audienceMode         String  @default("ALL_TEACHERS")
+  targetTeacherIdsJson String?
+  targetBranchIdsJson  String?
+
+  // Deadlines and late policy. Server-side only; the client is never
+  // trusted for any date decision.
+  dueAt     DateTime
+  publishedAt DateTime?
+  allowLate Boolean   @default(false)
+  lateUntil DateTime?
+
+  // Sum of rubric criterion maxPoints — recomputed on every rubric edit.
+  totalPoints Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  criteria    AssignmentRubricCriterion[]
+  submissions AssignmentSubmission[]
+  /** Phase 9 — surveys and follow-ups linked to this assignment. */
+  surveys   Survey[]
+  followUps FollowUp[]
+
+  @@index([schoolId, status])
+  @@index([dueAt])
+  @@map("assignments")
+}
+
+model AssignmentRubricCriterion {
+  id           String     @id @default(cuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  orderIndex   Int
+  titleAr      String
+  maxPoints    Int
+
+  scores RubricScore[]
+
+  @@unique([assignmentId, orderIndex])
+  @@map("assignment_rubric_criteria")
+}
+
+model AssignmentSubmission {
+  id           String     @id @default(cuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  teacherId    String
+  teacher      User       @relation("AssignmentSubmissions", fields: [teacherId], references: [id])
+  // Denormalized tenant key — every scoping query uses this column.
+  schoolId     String
+
+  // DRAFT | SUBMITTED | UNDER_REVIEW | RETURNED | GRADED
+  status       String @default("DRAFT")
+
+  responseText String?
+
+  isLate          Boolean   @default(false)
+  submittedAt     DateTime?
+  lastSubmittedAt DateTime?
+  resubmitCount   Int       @default(0)
+
+  scoreTotal   Int?
+  feedbackText String?
+  reviewedById String?
+  reviewedBy   User?     @relation("ReviewedSubmissions", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files        SubmissionFile[]
+  revisions    SubmissionRevision[]
+  rubricScores RubricScore[]
+
+  @@unique([assignmentId, teacherId])
+  @@index([schoolId, status])
+  @@map("assignment_submissions")
+}
+
+model SubmissionFile {
+  id           String               @id @default(cuid())
+  submissionId String
+  submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  // Server-generated key (UUID under dated folders) — never user input.
+  storageKey   String @unique
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  @@map("submission_files")
+}
+
+model SubmissionRevision {
+  id           String               @id @default(cuid())
+  submissionId String
+  submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  revisionIndex Int
+  // Snapshot of the PREVIOUS version taken at resubmit time.
+  responseText String?
+  fileNamesJson String?
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@unique([submissionId, revisionIndex])
+  @@map("submission_revisions")
+}
+
+model RubricScore {
+  id           String                    @id @default(cuid())
+  submissionId String
+  submission   AssignmentSubmission      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criterionId  String
+  criterion    AssignmentRubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  points       Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([submissionId, criterionId])
+  @@map("rubric_scores")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 8 — Certificates & professional growth.
+// Certificates are ALWAYS school-owned (schoolId NOT NULL): a
+// certificate records that ONE teacher of THIS school satisfied the
+// completion requirements of a course/program, per the SAME rules the
+// server-side eligibility engine enforces at issuance time.
+//
+// Status model: ISSUED | REVOKED persisted. Expiration is DERIVED
+// from expiresAt (never a stored status), so a certificate can never
+// be simultaneously revoked and expired.
+//
+// Duplicate prevention: unique (teacherId, courseId) and
+// (teacherId, programId) at the DB level — one completion
+// certificate per teacher per qualifying content. Rows remain after
+// revocation (audit-first), so a revoked certificate still blocks
+// accidental re-issuance.
+// ─────────────────────────────────────────────────────────────────
+
+model Certificate {
+  id       String @id @default(cuid())
+  /// Owning school tenant (the ISSUING school — never null).
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  /// The certified teacher. Always an active TEACHER of the owning
+  /// school (service-enforced on every write — never client-trusted).
+  teacherId String
+  teacher   User   @relation("CertificateOwner", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  /// Human-readable serial (MQ-YYYY-XXXXXX) — unique, printed on the
+  /// certificate and accepted by the verification search.
+  certificateNumber String @unique
+  /// Public verification code (16-char Crockford base32, stored
+  /// WITHOUT dashes) — unique, collision-resistant, safe to print.
+  verificationCode String @unique
+
+  titleAr       String
+  titleEn       String?
+  descriptionAr String?
+  descriptionEn String?
+
+  /// The qualifying content. The service requires at least ONE of the
+  /// two — eligibility is always computed against real learning data.
+  programId String?
+  program   TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId  String?
+  course    Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  /// ISSUED | REVOKED — canonical key, validated with Zod on write.
+  status String @default("ISSUED")
+
+  issuedAt  DateTime
+  /// Null = the certificate never expires.
+  expiresAt DateTime?
+
+  /// Issuance audit: who issued it + issuing-authority label snapshot.
+  issuedById      String
+  issuedBy        User    @relation("CertificateIssuer", fields: [issuedById], references: [id])
+  issuerRoleLabel String?
+
+  /// Revocation audit (null while ISSUED).
+  revokedById      String?
+  revokedBy        User?     @relation("CertificateRevoker", fields: [revokedById], references: [id])
+  revokedAt        DateTime?
+  revocationReason String?
+
+  /// JSON snapshot of the eligibility rules + achieved results checked
+  /// server-side at issuance (audit of WHAT qualified the teacher).
+  criteriaSnapshotJson String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events CertificateEvent[]
+  /** Phase 9 — impact surveys linked to this certificate. */
+  surveys Survey[]
+
+  /// One completion certificate per teacher per qualifying content.
+  @@unique([teacherId, courseId])
+  @@unique([teacherId, programId])
+  @@index([schoolId, status])
+  @@index([teacherId])
+  @@map("certificates")
+}
+
+/**
+ * Append-only audit trail for certificate lifecycle events (ISSUED /
+ * REVOKED). The service never updates or deletes events — revocation
+ * ADDS a new event, preserving the full history.
+ */
+model CertificateEvent {
+  id            String      @id @default(cuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  /// ISSUED | REVOKED — canonical key, validated on write.
+  type String
+  /// Actor that performed the action (null = system).
+  actorId   String?
+  actor     User?   @relation("CertificateEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Role key snapshot at event time.
+  actorRole String?
+  /// Free-text note (the revocation reason is duplicated here).
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([certificateId])
+  @@map("certificate_events")
+}
+/* ------------------------------------------------------------------ */
+/* Phase 9 — impact surveys, follow-up & outcome measurement             */
+/*                                                                        */
+/* Tenancy: surveys and follow-ups are ALWAYS school-owned (schoolId     */
+/* NOT NULL) — SUPER_ADMIN has no operational write path, mirroring      */
+/* the Phase 7/8 rule. Statuses/audience modes are canonical English     */
+/* keys validated with Zod on every write (SQLite has no native enums).  */
+/*                                                                        */
+/* PRIVACY: anonymous surveys NEVER persist respondent identity — the    */
+/* respondentId stays null for the whole row lifetime, individual        */
+/* responses are never exposed, and small-group aggregates (fewer than   */
+/* the configured threshold) are suppressed. Where pre/post linking is   */
+/* explicitly enabled, only a pseudonymous SHA-256 key is stored — it    */
+/* cannot be reversed to a user identity from the database alone.        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * An impact survey (questionnaire). DRAFT -> PUBLISHED -> CLOSED ->
+ * ARCHIVED lifecycle. Publishing is a server-validated workflow that
+ * requires at least one question and consistent dates. An optional
+ * evaluation STAGE (before training / after training / application
+ * follow-up) plus content links let the office measure training impact;
+ * a shared linkPairCode connects pre/post surveys for change analysis.
+ */
+model Survey {
+  id       String @id @default(cuid())
+  /// Owning school tenant (never null — surveys are school work).
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// Authoring user (office manager or supervisor within their scope).
+  ownerUserId String
+  owner       User   @relation("SurveyOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  titleAr        String
+  titleEn        String?
+  descriptionAr  String?
+  descriptionEn  String?
+  /// Purpose shown to respondents before the questions.
+  purposeAr      String?
+  /// Respondent instructions shown above the first question.
+  instructionsAr String?
+
+  // Optional impact links — every linked row must belong to the same
+  // school (or be platform-wide content) and must not be archived
+  // (validated in the service on every write).
+  programId     String?
+  program       TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId      String?
+  course        Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  lessonId      String?
+  lesson        CourseLesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  assignmentId  String?
+  assignment    Assignment?      @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  certificateId String?
+  certificate   Certificate?     @relation(fields: [certificateId], references: [id], onDelete: SetNull)
+
+  /// PRE_TRAINING | AFTER_TRAINING | APPLICATION_FOLLOWUP | null
+  /// (null = a general survey with no impact-evaluation stage).
+  stage String?
+  /// Shared pairing code joining a pre-training survey with its
+  /// after-training twin (e.g. "P9-PAIR-007"). Required for stage
+  /// comparisons; never secret — it only names the pair.
+  linkPairCode String?
+
+  // Audience targeting — ids validated server-side, always in-school.
+  // ALL_TEACHERS | BRANCHES | TEACHERS (same modes as Phase 7).
+  audienceMode         String  @default("ALL_TEACHERS")
+  targetBranchIdsJson  String?
+  targetTeacherIdsJson String?
+
+  /// Anonymous surveys store NO respondent identity (respondentId stays
+  /// null forever). Individual responses and drafts are unavailable —
+  /// the create form explains this trade-off before enabling it.
+  anonymous Boolean @default(false)
+  /// Allow more than one submission from the same respondent (identified
+  /// surveys only; anonymous duplicates cannot technically be prevented
+  /// without identity — surfaced as an explicit limitation in the UI).
+  allowMultipleResponses Boolean @default(false)
+  /// Pseudonymous pre/post linking for anonymous surveys: stores a
+  /// SHA-256 respondentKey derived from linkPairCode + user id. The key
+  /// never appears in UI payloads and cannot be reversed without both
+  /// the database and the source pepper.
+  linkResponsesEnabled Boolean @default(false)
+
+  // DRAFT | PUBLISHED | CLOSED | ARCHIVED (ARCHIVED is terminal)
+  status String @default("DRAFT")
+
+  /// Response window — null opensAt = open on publish, null closesAt
+  /// = open until manually closed. Server-enforced on every submission.
+  opensAt  DateTime?
+  closesAt DateTime?
+  publishedAt DateTime?
+  closedAt   DateTime?
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions SurveyQuestion[]
+  responses SurveyResponse[]
+  events    SurveyEvent[]
+  /** Phase 9 — follow-ups that reference this survey. */
+  followUps FollowUp[]
+
+  @@index([schoolId, status])
+  @@index([ownerUserId])
+  @@index([programId])
+  @@index([courseId])
+  @@map("surveys")
+}
+
+/**
+ * One question inside a survey. Ordering is a plain integer normalized
+ * 1..N by the service on every save (no DB-unique — mirrors the Phase 5
+ * section/lesson ordering approach). Options for choice questions are
+ * stored as a JSON string[]; submissions snapshot the selected option
+ * TEXTS so later question edits cannot corrupt historical results.
+ */
+model SurveyQuestion {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  orderIndex Int
+  textAr     String
+  /// Optional helper line under the question text.
+  helpTextAr String?
+
+  /// SINGLE_CHOICE | MULTI_CHOICE | RATING | LIKERT | SHORT_TEXT |
+  /// LONG_TEXT | YES_NO — validated with Zod on every write.
+  type String
+  /// Required questions must carry an answer at submission time.
+  required Boolean @default(false)
+
+  /// JSON string[] — 2..10 options for SINGLE_CHOICE / MULTI_CHOICE.
+  optionsJson String?
+  /// RATING scale bounds (1..10); defaults to 1..5 when null.
+  minScore Int?
+  maxScore Int?
+
+  answers SurveyAnswer[]
+
+  @@index([surveyId])
+  @@map("survey_questions")
+}
+
+/**
+ * A respondent's progress on one survey. DRAFT rows (identified surveys
+ * only) save progress; SUBMITTED rows are immutable (no edit path —
+ * re-submission only when the survey explicitly allows multiple
+ * responses). For anonymous surveys respondentId is null FOREVER — the
+ /// row is created directly in SUBMITTED state.
+ */
+model SurveyResponse {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  /// Denormalized owning school for tenant-scoped queries.
+  schoolId String
+
+  /// Null for anonymous surveys — identity is never persisted.
+  respondentId String?
+  respondent   User?   @relation("SurveyRespondent", fields: [respondentId], references: [id], onDelete: SetNull)
+
+  /// Pseudonymous pairing key (SHA-256 of linkPairCode + user id +
+  /// pepper) — present ONLY for anonymous surveys with linking enabled.
+  /// Used exclusively for aggregate pre/post matching.
+  respondentKey String?
+
+  /// DRAFT | SUBMITTED
+  status      String  @default("DRAFT")
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers SurveyAnswer[]
+
+  @@index([surveyId])
+  @@index([schoolId])
+  @@index([respondentId])
+  @@index([respondentKey])
+  @@map("survey_responses")
+}
+
+/**
+ * One answer inside a response. The value column depends on the
+ * question type: valueNumber for RATING/LIKERT/YES_NO, valueText for
+ * SHORT/LONG_TEXT, selectedOptionsJson (string[]) for choice types.
+ * Enforced with Zod at submission; the service re-checks every value
+ * against its question definition (type, scale bounds, option set).
+ */
+model SurveyAnswer {
+  id         String          @id @default(cuid())
+  responseId String
+  response   SurveyResponse  @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId String
+  question   SurveyQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  valueNumber         Int?
+  valueText           String?
+  selectedOptionsJson String?
+
+  @@unique([responseId, questionId])
+  @@index([questionId])
+  @@map("survey_answers")
+}
+
+/**
+ * Append-only audit trail for survey lifecycle events (CREATED /
+ * UPDATED / PUBLISHED / CLOSED / ARCHIVED). Never updated or deleted —
+ * status changes ADD events, preserving the full history.
+ */
+model SurveyEvent {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  /// CREATED | UPDATED | PUBLISHED | CLOSED | ARCHIVED
+  type String
+  /// Actor that performed the action (null = system).
+  actorId   String?
+  actor     User?   @relation("SurveyEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([surveyId])
+  @@map("survey_events")
+}
+
+/**
+ * A follow-up record: a supervisor's structured classroom-application
+ * visit for one teacher. Internal notes (observations, challenges,
+ * support needs) are NEVER rendered to teachers; the shared view shows
+ * only the explicit subset (title, purpose, dates, status,
+ * recommendations) and only when sharedWithTeacher is true.
+ */
+model FollowUp {
+  id       String @id @default(cuid())
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// The followed-up teacher (active TEACHER of the owning school).
+  teacherId String
+  teacher   User   @relation("FollowUpTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  /// Responsible supervisor — must cover the teacher (assigned or via
+  /// branch grant); office managers may assign any school supervisor.
+  supervisorId String
+  supervisor   User   @relation("FollowUpSupervisor", fields: [supervisorId], references: [id], onDelete: Restrict)
+
+  /// Creator (manager or the supervisor themself) — audit anchor.
+  createdById String
+  createdBy   User   @relation("FollowUpCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  titleAr    String
+  purposeAr  String?
+  /// The follow-up session date.
+  followUpDate DateTime
+  /// Scheduled next follow-up (date-based workflow, optional).
+  nextFollowUpAt DateTime?
+
+  /// PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  status String @default("PLANNED")
+
+  // Optional links (same-tenant guards in the service).
+  programId    String?
+  program      TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId     String?
+  course       Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  surveyId     String?
+  survey       Survey?          @relation(fields: [surveyId], references: [id], onDelete: SetNull)
+  assignmentId String?
+  assignment   Assignment?      @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  // Internal supervisor notes — never exposed to TEACHER role.
+  observationAr  String?
+  progressAr     String?
+  challengesAr   String?
+  supportNeedsAr String?
+  /// Included in the teacher-shared view (explicitly shared content).
+  recommendationsAr String?
+  /// Master switch: teacher can see the shared subset of this record.
+  sharedWithTeacher Boolean @default(false)
+
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /** Phase 10 — soft-archive timestamp (null = active workflow). The
+   * record's status is never altered by archiving; active lists filter
+   * on archivedAt: null so archived history stays out of live queues. */
+  archivedAt   DateTime?
+  archivedById String?
+  archiver     User?   @relation("FollowUpArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
+
+  events FollowUpEvent[]
+
+  @@index([schoolId, status])
+  @@index([teacherId])
+  @@index([supervisorId])
+  @@index([schoolId, nextFollowUpAt])
+  @@index([archivedAt])
+  @@map("follow_ups")
+}
+
+/**
+ * Phase 10 — append-only audit trail for archive and restore operations
+ * across entity types that carry a safe archival lifecycle
+ * (TrainingProgram / Course / Assessment / Assignment / Survey /
+ * FollowUp). The service never updates or deletes events. Records whose
+ * phases already own an event stream (SurveyEvent, FollowUpEvent) ALSO
+ * get an entry here so the archive center shows one unified trail;
+ * entities without their own event model (programs, courses,
+ * assessments, assignments) rely on this table as their archive audit.
+ */
+model ArchiveEvent {
+  id String @id @default(cuid())
+  /// Owning school tenant. Null = platform-wide content (schoolId null
+  /// programs/courses/assessments) touched by SUPER_ADMIN.
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// PROGRAM | COURSE | ASSESSMENT | ASSIGNMENT | SURVEY | FOLLOW_UP
+  entityType String
+  entityId   String
+  /// ARCHIVED | RESTORED
+  action String
+
+  actorId   String?
+  actor     User?   @relation("ArchiveEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String?
+  /// Human-readable record title snapshot at event time.
+  entityTitle String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([schoolId])
+  @@map("archive_events")
+}
+
+/**
+ * Append-only history for follow-up records (CREATED / UPDATED /
+ * STATUS_CHANGED / SHARING_CHANGED). Gives supervisors and office
+ * managers the full modification trail without overwriting anything.
+ */
+model FollowUpEvent {
+  id         String   @id @default(cuid())
+  followUpId String
+  followUp   FollowUp @relation(fields: [followUpId], references: [id], onDelete: Cascade)
+
+  /// CREATED | UPDATED | STATUS_CHANGED | SHARING_CHANGED
+  type String
+  actorId   String?
+  actor     User?   @relation("FollowUpEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([followUpId])
+  @@map("follow_up_events")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 11 — notifications, preferences & email delivery audit.
+//
+// Recipient ownership: a notification row is PRIVATE to its user —
+// every read path filters on userId server-side (never client-trusted).
+//
+// Idempotency: event-driven notifications carry a stable eventId and
+// the DB enforces unique (userId, eventId), so retrying the same event
+// can never duplicate a notification. NULL eventIds (rare, one-shot
+// writes) are unconstrained by SQLite's NULL-aware unique semantics.
+//
+// Destination safety: destinationUrl always starts with a single "/"
+// and is validated against the internal path allow-list in
+// src/lib/notifications/urls.ts — external URLs are never stored.
+//
+// Email: delivery attempts are recorded in EmailDelivery (queue +
+// audit in one row) with provider message ids, attempt counts and
+// SANITIZED error categories only — no tokens, no message bodies,
+// no provider secrets are ever persisted here.
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * One in-app notification for ONE recipient. Arabic is the primary
+ * language; optional English mirrors exist for bilingual rendering.
+ * readAt is set by the owner's own actions only (ownership enforced
+ * in the service layer and API routes).
+ */
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NotificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Canonical event key (e.g. ASSIGNMENT_PUBLISHED) — see
+  /// src/config/notifications.ts for the full list.
+  type      String
+  /// ASSIGNMENTS | ASSESSMENTS | COURSES | SURVEYS | FOLLOWUPS |
+  /// CERTIFICATES | ACCOUNT | PLATFORM — drives preference filtering.
+  category  String
+
+  titleAr   String
+  bodyAr    String
+  titleEn   String?
+  bodyEn    String?
+
+  /// Related resource discriminator (e.g. "Assignment") + id — used for
+  /// dedupe context and future deep-links; never trusted for access.
+  resourceType String?
+  resourceId   String?
+  /// Validated INTERNAL destination (starts with "/") or null.
+  destinationUrl String?
+
+  /// Mirror of the linked email delivery status (null = no email was
+  /// part of this notification): QUEUED | SENT | FAILED | DISABLED.
+  emailStatus String?
+
+  /// Stable event identifier for idempotency (unique per recipient).
+  eventId   String?
+
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([category, createdAt])
+  @@map("notifications")
+}
+
+/**
+ * Per-user delivery preferences. Persisted and enforced SERVER-SIDE:
+ * the notification service consults this row before creating anything.
+ * Account-security messages (email verification, password reset,
+ * password changed) are NOT governed by these flags — they always
+ * proceed because secure operation depends on them.
+ */
+model NotificationPreference {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Master switches. emailEnabled gates OPTIONAL notification emails;
+  /// it never gates account-security mail.
+  inAppEnabled Boolean @default(true)
+  emailEnabled Boolean @default(false)
+
+  /// Per-category toggles (in-app + optional email together).
+  assignments Boolean @default(true)
+  assessments Boolean @default(true)
+  courses     Boolean @default(true)
+  surveys     Boolean @default(true)
+  followups   Boolean @default(true)
+  certificates Boolean @default(true)
+  platform    Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+/**
+ * Queue + audit row for ONE outbound email. Lifecycle:
+ *   QUEUED -> PROCESSING -> SENT | FAILED
+ * with bounded retries (attemptCount/maxAttempts + nextAttemptAt
+ * backoff) and optimistic claiming (conditional updateMany on status)
+ * so concurrent workers can never double-send the same row.
+ *
+ * Privacy: subject/template/category are operational metadata; raw
+ * message bodies, verification tokens and provider secrets are never
+ * stored. Recipient emails are masked on every read path exposed to
+ * the UI (local-part asterisked).
+ */
+model EmailDelivery {
+  id         String   @id @default(cuid())
+  toEmail    String
+  toUserId   String?
+  user       User?    @relation("EmailDeliveryOwner", fields: [toUserId], references: [id], onDelete: SetNull)
+
+  subject    String
+  /// Template key (e.g. "assignment-published") — see templates.ts.
+  template   String
+  /// ACCOUNT (security/account mail) or a Notification category.
+  category   String   @default("ACCOUNT")
+  /// Owning school tenant when the mail is school-scoped (null =
+  /// platform/account mail). Used for school-scoped delivery health.
+  schoolId   String?
+  notificationId String?
+
+  /// QUEUED | PROCESSING | SENT | FAILED
+  status     String   @default("QUEUED")
+  provider   String?
+  providerMessageId String?
+
+  attemptCount  Int      @default(0)
+  maxAttempts   Int      @default(4)
+  nextAttemptAt DateTime @default(now())
+  lockedAt      DateTime?
+  lockedBy      String?
+
+  /// Sanitized failure classification (NETWORK | AUTH | RATE_LIMIT |
+  /// VALIDATION | PROVIDER | NOT_CONFIGURED) + short provider message.
+  lastErrorCategory String?
+  lastErrorMessage  String?
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+
+  /// Stable idempotency key — unique at the DB level so the same
+  /// logical email can never be queued twice.
+  dedupeKey  String?  @unique
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([schoolId, createdAt])
+  @@index([toUserId, createdAt])
+  @@map("email_deliveries")
+}

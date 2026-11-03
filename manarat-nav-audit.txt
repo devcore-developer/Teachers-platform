@@ -1,0 +1,2511 @@
+################################################################################
+#  MANARAT QURTUBAH - SIDEBAR / NAVIGATION AUDIT BUNDLE
+#  Purpose  : sidebar audit + activation of implemented modules (batch 1)
+#  Generated: 11/1/2026 9:55:49 PM (local) / 11/1/2026 7:55:49 PM (UTC)
+#  Project  : D:\DevCore\Teachers-platform
+#  PowerShell: 5.1.26100.9711
+#  SECURITY : read-only; no .env values, no passwords, no secrets.
+################################################################################
+
+===== SECTION: SOURCE TREE (src) =====
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx  (lines=264)
+  src/app/academy/courses/[id]/page.tsx  (lines=252)
+  src/app/academy/loading.tsx  (lines=25)
+  src/app/academy/manage/[id]/page.tsx  (lines=171)
+  src/app/academy/manage/new/page.tsx  (lines=64)
+  src/app/academy/manage/page.tsx  (lines=272)
+  src/app/academy/page.tsx  (lines=239)
+  src/app/academy/programs/page.tsx  (lines=58)
+  src/app/account/forgot-password/forgot-password-form.tsx  (lines=64)
+  src/app/account/forgot-password/page.tsx  (lines=24)
+  src/app/account/reset-password/page.tsx  (lines=39)
+  src/app/account/reset-password/reset-password-form.tsx  (lines=73)
+  src/app/account/verify-email/page.tsx  (lines=54)
+  src/app/account/verify-email/verify-email-form.tsx  (lines=113)
+  src/app/actions/account.ts  (lines=169)
+  src/app/actions/archive.ts  (lines=109)
+  src/app/actions/assessment.ts  (lines=325)
+  src/app/actions/assignments.ts  (lines=478)
+  src/app/actions/auth.ts  (lines=201)
+  src/app/actions/certificates.ts  (lines=145)
+  src/app/actions/notifications.ts  (lines=94)
+  src/app/actions/schools.ts  (lines=129)
+  src/app/actions/surveys.ts  (lines=339)
+  src/app/actions/training.ts  (lines=461)
+  src/app/actions/users.ts  (lines=229)
+  src/app/analytics/page.tsx  (lines=203)
+  src/app/api/assignment-files/[id]/route.ts  (lines=77)
+  src/app/api/cron/dispatch/route.ts  (lines=108)
+  src/app/api/files/[id]/route.ts  (lines=107)
+  src/app/api/health/route.ts  (lines=55)
+  src/app/api/notifications/[id]/read/route.ts  (lines=30)
+  src/app/api/notifications/read-all/route.ts  (lines=22)
+  src/app/api/notifications/route.ts  (lines=35)
+  src/app/api/notifications/unread-count/route.ts  (lines=22)
+  src/app/api/reports/[reportId]/export/route.ts  (lines=90)
+  src/app/archive/archive-actions.tsx  (lines=117)
+  src/app/archive/page.tsx  (lines=263)
+  src/app/assessments/[id]/page.tsx  (lines=276)
+  src/app/assessments/[id]/take/page.tsx  (lines=132)
+  src/app/assessments/attempts/[attemptId]/page.tsx  (lines=252)
+  src/app/assessments/manage/[id]/page.tsx  (lines=367)
+  src/app/assessments/manage/new/page.tsx  (lines=52)
+  src/app/assessments/manage/page.tsx  (lines=230)
+  src/app/assessments/page.tsx  (lines=313)
+  src/app/assignments/[id]/edit/page.tsx  (lines=81)
+  src/app/assignments/[id]/page.tsx  (lines=144)
+  src/app/assignments/[id]/submissions/[submissionId]/page.tsx  (lines=188)
+  src/app/assignments/[id]/submissions/[submissionId]/review-actions.tsx  (lines=208)
+  src/app/assignments/[id]/submissions/page.tsx  (lines=145)
+  src/app/assignments/assignment-form.tsx  (lines=478)
+  src/app/assignments/assignment-status-actions.tsx  (lines=57)
+  src/app/assignments/new/page.tsx  (lines=39)
+  src/app/assignments/overview/page.tsx  (lines=170)
+  src/app/assignments/page.tsx  (lines=175)
+  src/app/assignments/review/page.tsx  (lines=141)
+  src/app/assignments/ui.tsx  (lines=147)
+  src/app/certificates/[id]/page.tsx  (lines=250)
+  src/app/certificates/certificate-sheet.tsx  (lines=178)
+  src/app/certificates/issue/page.tsx  (lines=234)
+  src/app/certificates/issue-button.tsx  (lines=62)
+  src/app/certificates/page.tsx  (lines=191)
+  src/app/certificates/print-button.tsx  (lines=18)
+  src/app/certificates/revoke-form.tsx  (lines=57)
+  src/app/certificates/ui.tsx  (lines=50)
+  src/app/dashboard/page.tsx  (lines=43)
+  src/app/dashboard/platform-view.tsx  (lines=116)
+  src/app/dashboard/school-view.tsx  (lines=152)
+  src/app/dashboard/supervisor-view.tsx  (lines=142)
+  src/app/dashboard/teacher-view.tsx  (lines=202)
+  src/app/dashboard/ui.tsx  (lines=232)
+  src/app/deputy-overview/page.tsx  (lines=103)
+  src/app/follow-ups/[id]/edit/page.tsx  (lines=100)
+  src/app/follow-ups/[id]/follow-up-actions.tsx  (lines=104)
+  src/app/follow-ups/[id]/page.tsx  (lines=175)
+  src/app/follow-ups/follow-up-form.tsx  (lines=260)
+  src/app/follow-ups/new/page.tsx  (lines=86)
+  src/app/follow-ups/page.tsx  (lines=203)
+  src/app/follow-ups/ui.tsx  (lines=33)
+  src/app/globals.css  (lines=650)
+  src/app/globals.css.bak  (lines=173)
+  src/app/globals.css.pre-repair-20261101-204517.bak  (lines=2)
+  src/app/growth/[teacherId]/page.tsx  (lines=56)
+  src/app/growth/growth-projection.tsx  (lines=241)
+  src/app/growth/page.tsx  (lines=210)
+  src/app/growth/ui.tsx  (lines=105)
+  src/app/impact/page.tsx  (lines=176)
+  src/app/integrations/page.tsx  (lines=191)
+  src/app/layout.tsx  (lines=76)
+  src/app/login/login-form.tsx  (lines=136)
+  src/app/login/page.tsx  (lines=41)
+  src/app/my-assignments/[id]/page.tsx  (lines=228)
+  src/app/my-assignments/[id]/submission-workspace.tsx  (lines=176)
+  src/app/my-assignments/page.tsx  (lines=143)
+  src/app/my-certificates/page.tsx  (lines=97)
+  src/app/my-follow-ups/page.tsx  (lines=94)
+  src/app/my-growth/page.tsx  (lines=32)
+  src/app/my-profile/page.tsx  (lines=154)
+  src/app/my-surveys/[id]/page.tsx  (lines=56)
+  src/app/my-surveys/[id]/survey-taker.tsx  (lines=325)
+  src/app/my-surveys/page.tsx  (lines=112)
+  src/app/notifications/bell.tsx  (lines=257)
+  src/app/notifications/notification-actions.tsx  (lines=57)
+  src/app/notifications/page.tsx  (lines=152)
+  src/app/notifications/preferences/page.tsx  (lines=61)
+  src/app/notifications/preferences/preferences-form.tsx  (lines=138)
+  src/app/notifications/site-header.tsx  (lines=67)
+  src/app/notifications/ui.tsx  (lines=61)
+  src/app/page.tsx  (lines=57)
+  src/app/programs/page.tsx  (lines=14)
+  src/app/reports/[reportId]/page.tsx  (lines=303)
+  src/app/reports/[reportId]/print/page.tsx  (lines=73)
+  src/app/reports/filter-form.tsx  (lines=104)
+  src/app/reports/page.tsx  (lines=70)
+  src/app/reports/print-button.tsx  (lines=18)
+  src/app/reports/report-table.tsx  (lines=152)
+  src/app/schools/[id]/not-found.tsx  (lines=25)
+  src/app/schools/[id]/page.tsx  (lines=156)
+  src/app/schools/loading.tsx  (lines=22)
+  src/app/schools/new/page.tsx  (lines=19)
+  src/app/schools/page.tsx  (lines=86)
+  src/app/settings/page.tsx  (lines=14)
+  src/app/supervision/page.tsx  (lines=153)
+  src/app/surveys/[id]/edit/page.tsx  (lines=97)
+  src/app/surveys/[id]/page.tsx  (lines=235)
+  src/app/surveys/[id]/preview/page.tsx  (lines=131)
+  src/app/surveys/[id]/responses/[responseId]/page.tsx  (lines=76)
+  src/app/surveys/[id]/results/page.tsx  (lines=236)
+  src/app/surveys/[id]/survey-status-actions.tsx  (lines=87)
+  src/app/surveys/new/page.tsx  (lines=74)
+  src/app/surveys/page.tsx  (lines=207)
+  src/app/surveys/survey-form.tsx  (lines=585)
+  src/app/surveys/ui.tsx  (lines=98)
+  src/app/teachers/page.tsx  (lines=14)
+  src/app/users/[id]/not-found.tsx  (lines=25)
+  src/app/users/[id]/page.tsx  (lines=292)
+  src/app/users/loading.tsx  (lines=14)
+  src/app/users/page.tsx  (lines=250)
+  src/app/verify/page.tsx  (lines=185)
+  src/components/assessments/assessment-filters.tsx  (lines=74)
+  src/components/assessments/assessment-form.tsx  (lines=343)
+  src/components/assessments/assessment-publish-controls.tsx  (lines=67)
+  src/components/assessments/attempt-review-form.tsx  (lines=113)
+  src/components/assessments/question-builder.tsx  (lines=613)
+  src/components/assessments/take-assessment.tsx  (lines=482)
+  src/components/auth/auth-card.tsx  (lines=102)
+  src/components/dashboard/academy-metrics.tsx  (lines=89)
+  src/components/dashboard/assessment-metrics.tsx  (lines=91)
+  src/components/dashboard/dashboard-view.tsx  (lines=110)
+  src/components/dashboard/quick-actions.tsx  (lines=67)
+  src/components/dashboard/recent-activities.tsx  (lines=77)
+  src/components/dashboard/role-dashboard.tsx  (lines=299)
+  src/components/dashboard/schools-metrics.tsx  (lines=185)
+  src/components/dashboard/stage-distribution-chart.tsx  (lines=89)
+  src/components/dashboard/training-progress-chart.tsx  (lines=123)
+  src/components/dashboard/upcoming-events.tsx  (lines=95)
+  src/components/dashboard/users-metrics.tsx  (lines=138)
+  src/components/layout/app-shell.tsx  (lines=94)
+  src/components/layout/brand-logo.tsx  (lines=61)
+  src/components/layout/mobile-nav.tsx  (lines=115)
+  src/components/layout/page-header.tsx  (lines=127)
+  src/components/layout/sidebar.tsx  (lines=113)
+  src/components/layout/topbar.tsx  (lines=310)
+  src/components/platform/empty-state.tsx  (lines=44)
+  src/components/platform/module-placeholder.tsx  (lines=88)
+  src/components/platform/module-placeholder-route.tsx  (lines=20)
+  src/components/platform/section-card.tsx  (lines=57)
+  src/components/platform/stat-card.tsx  (lines=89)
+  src/components/platform/status-badge.tsx  (lines=52)
+  src/components/platform/submit-button.tsx  (lines=30)
+  src/components/schools/branches-manager.tsx  (lines=429)
+  src/components/schools/school-form.tsx  (lines=276)
+  src/components/schools/schools-directory.tsx  (lines=288)
+  src/components/schools/school-status-toggle.tsx  (lines=65)
+  src/components/training/catalog-filters.tsx  (lines=160)
+  src/components/training/content-builder.tsx  (lines=713)
+  src/components/training/course-form.tsx  (lines=373)
+  src/components/training/cover-upload.tsx  (lines=112)
+  src/components/training/enroll-button.tsx  (lines=46)
+  src/components/training/program-manager.tsx  (lines=457)
+  src/components/training/publish-controls.tsx  (lines=123)
+  src/components/ui/alert.tsx  (lines=66)
+  src/components/ui/alert-dialog.tsx  (lines=157)
+  src/components/ui/avatar.tsx  (lines=53)
+  src/components/ui/button.tsx  (lines=59)
+  src/components/ui/card.tsx  (lines=92)
+  src/components/ui/checkbox.tsx  (lines=32)
+  src/components/ui/dialog.tsx  (lines=143)
+  src/components/ui/dropdown-menu.tsx  (lines=257)
+  src/components/ui/input.tsx  (lines=21)
+  src/components/ui/label.tsx  (lines=24)
+  src/components/ui/popover.tsx  (lines=48)
+  src/components/ui/radio-group.tsx  (lines=45)
+  src/components/ui/select.tsx  (lines=185)
+  src/components/ui/separator.tsx  (lines=28)
+  src/components/ui/sheet.tsx  (lines=139)
+  src/components/ui/skeleton.tsx  (lines=13)
+  src/components/ui/switch.tsx  (lines=31)
+  src/components/ui/table.tsx  (lines=113)
+  src/components/ui/textarea.tsx  (lines=18)
+  src/components/ui/toast.tsx  (lines=129)
+  src/components/ui/toaster.tsx  (lines=35)
+  src/components/users/directory-filters.tsx  (lines=198)
+  src/components/users/profile-name-form.tsx  (lines=71)
+  src/components/users/staff-create-form.tsx  (lines=217)
+  src/components/users/user-edit-forms.tsx  (lines=408)
+  src/components/users/user-status-toggle.tsx  (lines=67)
+  src/config/analytics.ts  (lines=109)
+  src/config/assessment.ts  (lines=140)
+  src/config/assignments.ts  (lines=132)
+  src/config/branding.ts  (lines=19)
+  src/config/certificates.ts  (lines=141)
+  src/config/navigation.ts  (lines=190)
+  src/config/notifications.ts  (lines=219)
+  src/config/surveys.ts  (lines=196)
+  src/config/training.ts  (lines=136)
+  src/hooks/use-toast.ts  (lines=194)
+  src/instrumentation.ts  (lines=63)
+  src/lib/analytics/access.ts  (lines=291)
+  src/lib/analytics/service.ts  (lines=1136)
+  src/lib/archive/service.ts  (lines=817)
+  src/lib/assessment/access.ts  (lines=124)
+  src/lib/assessment/service.ts  (lines=2206)
+  src/lib/assignments/access.ts  (lines=150)
+  src/lib/assignments/service.ts  (lines=2611)
+  src/lib/assignments/storage.ts  (lines=78)
+  src/lib/auth/dev-admin.ts  (lines=84)
+  src/lib/auth/one-time-tokens.ts  (lines=161)
+  src/lib/auth/password.ts  (lines=30)
+  src/lib/auth/rate-limit.ts  (lines=70)
+  src/lib/auth/roles.ts  (lines=106)
+  src/lib/auth/session.ts  (lines=112)
+  src/lib/auth/token.ts  (lines=68)
+  src/lib/auth/tokens.ts  (lines=323)
+  src/lib/certificates/access.ts  (lines=149)
+  src/lib/certificates/qr.ts  (lines=22)
+  src/lib/certificates/service.ts  (lines=1369)
+  src/lib/db.ts  (lines=13)
+  src/lib/followups/service.ts  (lines=941)
+  src/lib/growth/service.ts  (lines=943)
+  src/lib/impact/service.ts  (lines=211)
+  src/lib/integrations/email/provider.ts  (lines=193)
+  src/lib/integrations/email/templates.ts  (lines=361)
+  src/lib/integrations/status.ts  (lines=184)
+  src/lib/mail/mailer.ts  (lines=161)
+  src/lib/mock-data.ts  (lines=235)
+  src/lib/notifications/dispatcher.ts  (lines=257)
+  src/lib/notifications/emails.ts  (lines=237)
+  src/lib/notifications/hooks.ts  (lines=366)
+  src/lib/notifications/reminders.ts  (lines=183)
+  src/lib/notifications/service.ts  (lines=423)
+  src/lib/notifications/urls.ts  (lines=73)
+  src/lib/reports/export.ts  (lines=221)
+  src/lib/reports/service.ts  (lines=1788)
+  src/lib/schools/dto.ts  (lines=85)
+  src/lib/schools/service.ts  (lines=460)
+  src/lib/security/rate-limit.ts  (lines=80)
+  src/lib/storage/index.ts  (lines=151)
+  src/lib/surveys/access.ts  (lines=165)
+  src/lib/surveys/rate-limit.ts  (lines=13)
+  src/lib/surveys/service.ts  (lines=2459)
+  src/lib/training/access.ts  (lines=138)
+  src/lib/training/content.ts  (lines=654)
+  src/lib/training/service.ts  (lines=1107)
+  src/lib/types.ts  (lines=154)
+  src/lib/users/directory.ts  (lines=1066)
+  src/lib/users/service.ts  (lines=606)
+  src/lib/utils.ts  (lines=6)
+  src/lib/validation/assessment.ts  (lines=409)
+  src/lib/validation/assignments.ts  (lines=296)
+  src/lib/validation/auth.ts  (lines=138)
+  src/lib/validation/certificates.ts  (lines=174)
+  src/lib/validation/schools.ts  (lines=197)
+  src/lib/validation/surveys.ts  (lines=445)
+  src/lib/validation/training.ts  (lines=409)
+  src/lib/validation/user-fields.ts  (lines=43)
+  src/lib/validation/users.ts  (lines=202)
+  src/types/qrcode.d.ts  (lines=28)
+
+  Text files: 277   Binary/skipped: 0
+
+  tests\ tree (names only):
+    tests/analytics.test.ts
+    tests/assessments.test.ts
+    tests/assignments.test.ts
+    tests/auth.test.ts
+    tests/certificates.test.ts
+    tests/schools.test.ts
+    tests/surveys.test.ts
+    tests/training.test.ts
+    tests/tsconfig.json
+    tests/users.test.ts
+    tests/zz-security-isolation.test.ts
+===== END SECTION =====
+
+===== SECTION: ROUTE INVENTORY (src/app/**/page.*) =====
+  /academy/courses/[id]/lessons/[lessonId]                 <- src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx  (lines=264)
+  /academy/courses/[id]                                    <- src/app/academy/courses/[id]/page.tsx  (lines=252)
+  /academy/manage/[id]                                     <- src/app/academy/manage/[id]/page.tsx  (lines=171)
+  /academy/manage/new                                      <- src/app/academy/manage/new/page.tsx  (lines=64)
+  /academy/manage                                          <- src/app/academy/manage/page.tsx  (lines=272)
+  /academy                                                 <- src/app/academy/page.tsx  (lines=239)
+  /academy/programs                                        <- src/app/academy/programs/page.tsx  (lines=58)
+  /account/forgot-password                                 <- src/app/account/forgot-password/page.tsx  (lines=24)
+  /account/reset-password                                  <- src/app/account/reset-password/page.tsx  (lines=39)
+  /account/verify-email                                    <- src/app/account/verify-email/page.tsx  (lines=54)
+  /analytics                                               <- src/app/analytics/page.tsx  (lines=203)
+  /archive                                                 <- src/app/archive/page.tsx  (lines=263)
+  /assessments/[id]                                        <- src/app/assessments/[id]/page.tsx  (lines=276)
+  /assessments/[id]/take                                   <- src/app/assessments/[id]/take/page.tsx  (lines=132)
+  /assessments/attempts/[attemptId]                        <- src/app/assessments/attempts/[attemptId]/page.tsx  (lines=252)
+  /assessments/manage/[id]                                 <- src/app/assessments/manage/[id]/page.tsx  (lines=367)
+  /assessments/manage/new                                  <- src/app/assessments/manage/new/page.tsx  (lines=52)
+  /assessments/manage                                      <- src/app/assessments/manage/page.tsx  (lines=230)
+  /assessments                                             <- src/app/assessments/page.tsx  (lines=313)
+  /assignments/[id]/edit                                   <- src/app/assignments/[id]/edit/page.tsx  (lines=81)
+  /assignments/[id]                                        <- src/app/assignments/[id]/page.tsx  (lines=144)
+  /assignments/[id]/submissions/[submissionId]             <- src/app/assignments/[id]/submissions/[submissionId]/page.tsx  (lines=188)
+  /assignments/[id]/submissions                            <- src/app/assignments/[id]/submissions/page.tsx  (lines=145)
+  /assignments/new                                         <- src/app/assignments/new/page.tsx  (lines=39)
+  /assignments/overview                                    <- src/app/assignments/overview/page.tsx  (lines=170)
+  /assignments                                             <- src/app/assignments/page.tsx  (lines=175)
+  /assignments/review                                      <- src/app/assignments/review/page.tsx  (lines=141)
+  /certificates/[id]                                       <- src/app/certificates/[id]/page.tsx  (lines=250)
+  /certificates/issue                                      <- src/app/certificates/issue/page.tsx  (lines=234)
+  /certificates                                            <- src/app/certificates/page.tsx  (lines=191)
+  /dashboard                                               <- src/app/dashboard/page.tsx  (lines=43)
+  /deputy-overview                                         <- src/app/deputy-overview/page.tsx  (lines=103)
+  /follow-ups/[id]/edit                                    <- src/app/follow-ups/[id]/edit/page.tsx  (lines=100)
+  /follow-ups/[id]                                         <- src/app/follow-ups/[id]/page.tsx  (lines=175)
+  /follow-ups/new                                          <- src/app/follow-ups/new/page.tsx  (lines=86)
+  /follow-ups                                              <- src/app/follow-ups/page.tsx  (lines=203)
+  /growth/[teacherId]                                      <- src/app/growth/[teacherId]/page.tsx  (lines=56)
+  /growth                                                  <- src/app/growth/page.tsx  (lines=210)
+  /impact                                                  <- src/app/impact/page.tsx  (lines=176)
+  /integrations                                            <- src/app/integrations/page.tsx  (lines=191)
+  /login                                                   <- src/app/login/page.tsx  (lines=41)
+  /my-assignments/[id]                                     <- src/app/my-assignments/[id]/page.tsx  (lines=228)
+  /my-assignments                                          <- src/app/my-assignments/page.tsx  (lines=143)
+  /my-certificates                                         <- src/app/my-certificates/page.tsx  (lines=97)
+  /my-follow-ups                                           <- src/app/my-follow-ups/page.tsx  (lines=94)
+  /my-growth                                               <- src/app/my-growth/page.tsx  (lines=32)
+  /my-profile                                              <- src/app/my-profile/page.tsx  (lines=154)
+  /my-surveys/[id]                                         <- src/app/my-surveys/[id]/page.tsx  (lines=56)
+  /my-surveys                                              <- src/app/my-surveys/page.tsx  (lines=112)
+  /notifications                                           <- src/app/notifications/page.tsx  (lines=152)
+  /notifications/preferences                               <- src/app/notifications/preferences/page.tsx  (lines=61)
+  /                                                        <- src/app/page.tsx  (lines=57)
+  /programs                                                <- src/app/programs/page.tsx  (lines=14)
+  /reports/[reportId]                                      <- src/app/reports/[reportId]/page.tsx  (lines=303)
+  /reports/[reportId]/print                                <- src/app/reports/[reportId]/print/page.tsx  (lines=73)
+  /reports                                                 <- src/app/reports/page.tsx  (lines=70)
+  /schools/[id]                                            <- src/app/schools/[id]/page.tsx  (lines=156)
+  /schools/new                                             <- src/app/schools/new/page.tsx  (lines=19)
+  /schools                                                 <- src/app/schools/page.tsx  (lines=86)
+  /settings                                                <- src/app/settings/page.tsx  (lines=14)
+  /supervision                                             <- src/app/supervision/page.tsx  (lines=153)
+  /surveys/[id]/edit                                       <- src/app/surveys/[id]/edit/page.tsx  (lines=97)
+  /surveys/[id]                                            <- src/app/surveys/[id]/page.tsx  (lines=235)
+  /surveys/[id]/preview                                    <- src/app/surveys/[id]/preview/page.tsx  (lines=131)
+  /surveys/[id]/responses/[responseId]                     <- src/app/surveys/[id]/responses/[responseId]/page.tsx  (lines=76)
+  /surveys/[id]/results                                    <- src/app/surveys/[id]/results/page.tsx  (lines=236)
+  /surveys/new                                             <- src/app/surveys/new/page.tsx  (lines=74)
+  /surveys                                                 <- src/app/surveys/page.tsx  (lines=207)
+  /teachers                                                <- src/app/teachers/page.tsx  (lines=14)
+  /users/[id]                                              <- src/app/users/[id]/page.tsx  (lines=292)
+  /users                                                   <- src/app/users/page.tsx  (lines=250)
+  /verify                                                  <- src/app/verify/page.tsx  (lines=185)
+  Total page files: 72
+===== END SECTION =====
+
+===== FILE: src/config/navigation.ts =====
+
+import {
+  Award,
+  BarChart3,
+  BookOpen,
+  ClipboardCheck,
+  ClipboardList,
+  Eye,
+  GraduationCap,
+  Landmark,
+  LayoutDashboard,
+  MonitorPlay,
+  Settings,
+  UserCheck,
+  UserRound,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
+import type { NavItem } from "@/lib/types";
+
+/**
+ * Central navigation configuration.
+ *
+ * Phase 2 introduced real URL routes: every item now resolves to an
+ * actual page. "Schools & branches" is the first fully implemented
+ * administrative module; the remaining items render a clearly labelled
+ * placeholder until their phases begin.
+ */
+export const navItems: NavItem[] = [
+  {
+    id: "home",
+    label: "الرئيسية",
+    href: "/",
+    description: "نظرة عامة على حالة التنمية المهنية ومؤشرات الأداء الرئيسية.",
+    icon: LayoutDashboard,
+    plannedFeatures: [],
+  },
+  {
+    id: "academy",
+    label: "الأكاديمية التدريبية",
+    href: "/academy",
+    description: "الدورات التدريبية المنشورة والمتاحة لك — تصفّح، سجّل، وابدأ التعلّم.",
+    icon: BookOpen,
+    plannedFeatures: [],
+  },
+  {
+    id: "schools",
+    label: "المدارس والفروع",
+    href: "/schools",
+    description: "إدارة المدارس المسجلة في المنصة وفروعها ومراحلها التعليمية.",
+    icon: Landmark,
+    plannedFeatures: [],
+  },
+  {
+    id: "users",
+    label: "دليل المستخدمين",
+    href: "/users",
+    description: "حسابات المنصة: الأدوار والحالات والإسنادات داخل نطاق صلاحيتك.",
+    icon: Users,
+    plannedFeatures: [],
+  },
+  {
+    id: "teachers",
+    label: "إدارة المعلمين",
+    href: "/teachers",
+    description: "سجل المعلمين، بياناتهم المهنية، وحالة مشاركتهم في البرامج.",
+    icon: Users,
+    badge: "قريباً",
+    plannedFeatures: [
+      "سجل مركزي لبيانات المعلمين وبياناتهم المهنية",
+      "تصنيف المعلمين حسب المرحلة والتخصص والفرع",
+      "متابعة ساعات التدريب المكتملة لكل معلم",
+    ],
+  },
+  {
+    id: "supervision",
+    label: "معلموّي",
+    href: "/supervision",
+    description: "المعلمون المسندون إليك وفروعك المصرّح بها — داخل نطاقك فقط.",
+    icon: UserCheck,
+    plannedFeatures: [],
+  },
+  {
+    id: "programs",
+    label: "البرامج التدريبية",
+    href: "/academy/programs",
+    description: "البرامج التي تُنظّم الدورات التدريبية — إنشاء ونشر وأرشفة.",
+    icon: GraduationCap,
+    plannedFeatures: [],
+  },
+  {
+    id: "course-management",
+    label: "إدارة الدورات",
+    href: "/academy/manage",
+    description: "إنشاء الدورات وبناء محتواها ونشرها لجمهورها المصرح له.",
+    icon: MonitorPlay,
+    plannedFeatures: [],
+  },
+  {
+    id: "assessments",
+    label: "الاختبارات والتقييم",
+    href: "/assessments",
+    description: "اختبارات مرتبطة بالدورات التدريبية — أدِ الاختبار وتابع نتائجك، أو أدر اختبارات مدرستك.",
+    icon: ClipboardCheck,
+    plannedFeatures: [],
+  },
+  {
+    id: "deputy-overview",
+    label: "نطاق اطلاعي",
+    href: "/deputy-overview",
+    description: "المدارس والفروع الممنوحة لك للاطلاع فقط مع مؤشراتها.",
+    icon: Eye,
+    plannedFeatures: [],
+  },
+  {
+    id: "assignments",
+    label: "التكليفات والمتابعة",
+    href: "/assignments",
+    description: "التكليفات التربوية والمتابعات المعلقة وحالتها.",
+    icon: ClipboardList,
+    badge: "قريباً",
+    plannedFeatures: [
+      "إسناد التكليفات التربوية للمعلمين ومتابعة تنفيذها",
+      "سجل المتابعات المعلقة وتواريخ استحقاقها",
+      "إشعارات التذكير بالمتابعات المتأخرة",
+    ],
+  },
+  {
+    id: "certificates",
+    label: "الشهادات",
+    href: "/certificates",
+    description: "إصدار الشهادات للمشاركين والتحقق من صحتها.",
+    icon: Award,
+    badge: "قريباً",
+    plannedFeatures: [
+      "إصدار شهادات إتمام البرامج التدريبية",
+      "التحقق من صحة الشهادة عبر رمز فريد",
+      "أرشيف الشهادات الصادرة لكل معلم",
+    ],
+  },
+  {
+    id: "reports",
+    label: "التقارير",
+    href: "/reports",
+    description: "تقارير تحليلية عن التدريب والمشاركة وأثرها.",
+    icon: BarChart3,
+    badge: "قريباً",
+    plannedFeatures: [
+      "تقارير نسب الإنجاز ومعدلات المشاركة",
+      "تصدير التقارير بصيغ متعددة",
+      "لوحات مقارنة بين المراحل والأقسام",
+    ],
+  },
+  {
+    id: "my-profile",
+    label: "ملفي الشخصي",
+    href: "/my-profile",
+    description: "بيانات حسابك ومدرستك وحالة توثيق بريدك.",
+    icon: UserRound,
+    plannedFeatures: [],
+  },
+  {
+    id: "settings",
+    label: "الإعدادات",
+    href: "/settings",
+    description: "إعدادات المنصة وهوية المدرسة والصلاحيات.",
+    icon: Settings,
+    badge: "قريباً",
+    plannedFeatures: [
+      "تخصيص هوية المدرسة والشعار والمراحل التعليمية",
+      "إدارة الصلاحيات والأدوار",
+      "الإعدادات العامة للمنصة",
+    ],
+  },
+];
+
+/** Find a nav item by its stable id. */
+export function getNavItemId(id: string): NavItem | undefined {
+  return navItems.find((item) => item.id === id);
+}
+
+/**
+ * Route-aware active state for the sidebar/mobile navigation.
+ * The dashboard matches exactly; module roots also match their
+ * sub-routes (e.g. /schools matches /schools/new and /schools/{id}).
+ */
+export function isNavItemActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+===== END FILE =====
+
+===== FILE: src/config/navigation.tsx =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: src/lib/navigation.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: src/lib/types.ts =====
+
+import type { LucideIcon } from "lucide-react";
+
+/* ------------------------------------------------------------------ */
+/* Platform identity & multi-school readiness                          */
+/* ------------------------------------------------------------------ */
+
+/** Educational stages a school can serve (used by future school config). */
+export type EducationalStage =
+  | "المرحلة الابتدائية"
+  | "المرحلة الإعدادية"
+  | "المرحلة الثانوية";
+
+/**
+ * Identity of a single school. In later phases each school tenant will
+ * provide its own identity instead of relying on the platform defaults.
+ */
+export interface SchoolIdentity {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  branches: string[];
+  stages: EducationalStage[];
+}
+
+/**
+ * Branding shown in the application shell. The platform ships with
+ * default branding; per-school overrides arrive with multi-tenancy.
+ */
+export interface PlatformBranding {
+  productName: string;
+  subtitle: string;
+  shortName: string;
+  logoUrl?: string;
+  /** The school workspace currently active. Undefined until tenant config lands. */
+  currentSchool?: SchoolIdentity;
+}
+
+/* ------------------------------------------------------------------ */
+/* Navigation                                                          */
+/* ------------------------------------------------------------------ */
+
+export interface NavItem {
+  /** Stable identifier used for active-state tracking. */
+  id: string;
+  label: string;
+  /** Final route once the module is implemented in a later phase. */
+  href: string;
+  /** Short contextual description shown on the module page header. */
+  description: string;
+  icon: LucideIcon;
+  /** Features planned for the module — surfaced honestly on placeholder pages. */
+  plannedFeatures: string[];
+  /** Optional small badge (e.g. "قريباً") rendered next to the label. */
+  badge?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* User & notifications                                                */
+/* ------------------------------------------------------------------ */
+
+export interface CurrentUser {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  initials: string;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  description?: string;
+  time: string;
+  read: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dashboard                                                           */
+/* ------------------------------------------------------------------ */
+
+export type TrendDirection = "up" | "down" | "flat";
+
+export interface StatTrend {
+  value: number;
+  direction: TrendDirection;
+  label: string;
+}
+
+export type AccentColor = "primary" | "info" | "success" | "warning";
+
+export interface OverviewStat {
+  id: string;
+  label: string;
+  value: number;
+  suffix?: string;
+  icon: LucideIcon;
+  accent: AccentColor;
+  trend: StatTrend;
+  /** Nav item id the card navigates to. */
+  targetModuleId: string;
+}
+
+export interface TrainingProgressPoint {
+  month: string;
+  /** Completed training hours for the month. */
+  completed: number;
+  /** Target training hours for the month. */
+  target: number;
+}
+
+export interface StageDistributionPoint {
+  stage: EducationalStage;
+  count: number;
+}
+
+export type ActivityType =
+  | "completed"
+  | "enrolled"
+  | "certificate"
+  | "assessment"
+  | "followup";
+
+export interface RecentActivity {
+  id: string;
+  type: ActivityType;
+  title: string;
+  actor: string;
+  time: string;
+}
+
+export type TrainingEventType = "workshop" | "course" | "meeting";
+
+export type EventStatus = "upcoming" | "ongoing" | "completed";
+
+export interface UpcomingEvent {
+  id: string;
+  title: string;
+  day: string;
+  date: string;
+  time: string;
+  location: string;
+  type: TrainingEventType;
+  status: EventStatus;
+  seatsLeft?: number;
+}
+
+export interface QuickAction {
+  id: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  /** Nav item id the action navigates to. */
+  targetModuleId: string;
+}
+
+===== END FILE =====
+
+===== FILE: src/components/layout/sidebar.tsx =====
+
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Landmark } from "lucide-react";
+
+import { BrandLogo } from "@/components/layout/brand-logo";
+import { isNavItemActive } from "@/config/navigation";
+import { cn } from "@/lib/utils";
+import type { NavItem, PlatformBranding } from "@/lib/types";
+
+interface SidebarProps {
+  branding: PlatformBranding;
+  items: NavItem[];
+  className?: string;
+}
+
+/**
+ * Desktop application sidebar. Rendered on the inline-start side, which
+ * in the RTL layout is the right edge of the screen. Hidden on mobile
+ * (the mobile navigation Sheet takes over below lg).
+ *
+ * Phase 2: items are real <Link>s and the active state follows the
+ * current URL instead of client-side module state.
+ */
+export function Sidebar({ branding, items, className }: SidebarProps) {
+  const pathname = usePathname();
+
+  return (
+    <aside
+      className={cn(
+        "hidden lg:flex lg:w-72 lg:shrink-0 lg:flex-col",
+        "sticky top-0 h-screen bg-sidebar text-sidebar-foreground",
+        className
+      )}
+    >
+      {/* Brand */}
+      <div className="flex h-16 items-center border-b border-sidebar-border px-5">
+        <BrandLogo branding={branding} variant="sidebar" />
+      </div>
+
+      {/* Navigation */}
+      <nav
+        aria-label="التنقل الرئيسي"
+        className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4"
+      >
+        <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+          القائمة الرئيسية
+        </p>
+        <ul className="space-y-1" role="list">
+          {items.map((item) => {
+            const active = isNavItemActive(pathname, item.href);
+            const Icon = item.icon;
+            return (
+              <li key={item.id}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                    active
+                      ? "bg-gradient-to-l from-brand-600 to-brand-500 text-white shadow-md shadow-brand-900/30"
+                      : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "size-4.5 shrink-0",
+                      active
+                        ? "text-white"
+                        : "text-sidebar-foreground/60 group-hover:text-sidebar-accent-foreground"
+                    )}
+                    strokeWidth={active ? 2.2 : 1.8}
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1 text-start">{item.label}</span>
+                  {item.badge && !active && (
+                    <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold text-sidebar-foreground/70 ring-1 ring-white/10">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* School workspace card — placeholder until tenant config arrives */}
+      <div className="border-t border-sidebar-border p-4">
+        <div className="rounded-xl bg-white/5 p-3.5 ring-1 ring-white/10">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-white/10">
+              <Landmark className="size-4 text-brand-100" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-xs font-bold text-sidebar-foreground">
+                {branding.currentSchool?.name ?? "مساحة عمل المدرسة"}
+              </p>
+              <p className="text-[11px] text-sidebar-foreground/60">
+                تخصيص هوية المدرسة — قريباً
+              </p>
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 text-center text-[11px] text-sidebar-foreground/40">
+          {branding.productName} · الإصدار 0.2.0
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/components/layout/topbar.tsx =====
+
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  Bell,
+  CheckCheck,
+  ChevronDown,
+  LogOut,
+  Menu,
+  Search,
+  Settings,
+  UserRound,
+} from "lucide-react";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { logoutAction } from "@/app/actions/auth";
+import { mockNotifications } from "@/lib/mock-data";
+import type {
+  AppNotification,
+  CurrentUser,
+  NavItem,
+} from "@/lib/types";
+
+interface TopbarProps {
+  user: CurrentUser;
+  items: NavItem[];
+  onOpenMobileNav: () => void;
+}
+
+/**
+ * Top application bar: module search, notifications, and user menu.
+ * Every visible control performs a real action (navigation, local
+ * state change, or an explicit "coming in a later phase" notice) —
+ * no dead buttons.
+ *
+ * Phase 2: search results navigate to real routes via the router.
+ */
+export function Topbar({
+  user,
+  items,
+  onOpenMobileNav,
+}: TopbarProps) {
+  const { toast } = useToast();
+  const router = useRouter();
+  const [query, setQuery] = React.useState("");
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [notificationList, setNotificationList] =
+    React.useState<AppNotification[]>(mockNotifications);
+  const unreadCount = notificationList.filter((n) => !n.read).length;
+
+  const normalizedQuery = query.trim();
+  const searchResults =
+    normalizedQuery.length > 0
+      ? items.filter(
+          (item) =>
+            item.label.includes(normalizedQuery) ||
+            item.description.includes(normalizedQuery)
+        )
+      : items;
+
+  function handleNavigate(href: string) {
+    setSearchOpen(false);
+    setQuery("");
+    router.push(href);
+  }
+
+  function markAllRead() {
+    setNotificationList((prev) => prev.map((n) => ({ ...n, read: true })));
+  }
+
+  const laterPhaseNotice = (feature: string) =>
+    toast({
+      title: `${feature} — قيد التطوير`,
+      description: "هذه الميزة جزء من مرحلة لاحقة من خطة التطوير.",
+    });
+
+  return (
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-card/85 px-4 backdrop-blur-md sm:gap-3 sm:px-6">
+      {/* Mobile menu */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="lg:hidden"
+        onClick={onOpenMobileNav}
+        aria-label="فتح قائمة التنقل"
+      >
+        <Menu className="size-5" />
+      </Button>
+
+      {/* Module search */}
+      <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+        <PopoverAnchor asChild>
+          <div className="relative hidden flex-1 md:block md:max-w-md">
+            <Search
+              className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="ابحث عن صفحة أو ميزة…"
+              className="bg-muted/60 border-transparent ps-10"
+              aria-label="البحث في المنصة"
+            />
+          </div>
+        </PopoverAnchor>
+        <PopoverContent
+          align="start"
+          className="w-[min(24rem,90vw)] p-0"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <ul className="scrollbar-thin max-h-72 overflow-y-auto p-1.5" role="listbox">
+            {searchResults.length === 0 ? (
+              <li className="px-3 py-6 text-center text-sm text-muted-foreground">
+                لا توجد نتائج مطابقة لـ «{normalizedQuery}»
+              </li>
+            ) : (
+              searchResults.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected="false"
+                      onClick={() => handleNavigate(item.href)}
+                      className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-start transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                    >
+                      <Icon className="size-4 shrink-0 text-brand-600" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">
+                          {item.label}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {item.description}
+                        </span>
+                      </span>
+                      {item.badge && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </PopoverContent>
+      </Popover>
+
+      {/* Flank (start side): balances the end flank so the search + notifications group stays centered (RTL-safe). */}
+      <div className="flex-1" aria-hidden="true" />
+
+      {/* Notifications */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            aria-label={`الإشعارات${unreadCount > 0 ? ` (${unreadCount} غير مقروءة)` : ""}`}
+          >
+            <Bell className="size-5" />
+            {unreadCount > 0 && (
+              <span
+                className="absolute end-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-error text-[10px] font-bold text-white"
+                aria-hidden="true"
+              >
+                {unreadCount}
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-[min(22rem,92vw)] p-0">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <p className="text-sm font-bold">الإشعارات</p>
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={markAllRead}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
+              >
+                <CheckCheck className="size-3.5" aria-hidden="true" />
+                تحديد الكل كمقروء
+              </button>
+            )}
+          </div>
+          <ul className="scrollbar-thin max-h-80 overflow-y-auto" role="list">
+            {notificationList.length === 0 ? (
+              <li className="px-4 py-8 text-center text-sm text-muted-foreground">
+                لا توجد إشعارات حالياً
+              </li>
+            ) : (
+              notificationList.map((n) => (
+                <li
+                  key={n.id}
+                  className={cn(
+                    "border-b px-4 py-3 last:border-b-0",
+                    !n.read && "bg-brand-50/70"
+                  )}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span
+                      className={cn(
+                        "mt-1.5 size-2 shrink-0 rounded-full",
+                        n.read ? "bg-muted" : "bg-brand-600"
+                      )}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug">{n.title}</p>
+                      {n.description && (
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                          {n.description}
+                        </p>
+                      )}
+                      <p className="mt-1 text-[11px] text-muted-foreground/70">{n.time}</p>
+                    </div>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="border-t px-4 py-2.5 text-center">
+            <span className="text-xs text-muted-foreground">
+              بيانات إشعارات تجريبية — الإشعارات الفعلية في مرحلة لاحقة
+            </span>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* يدفع قائمة المستخدم لأقصى شمال الصفحة (نهاية اتجاه RTL) */}
+      <div className="flex-1" />
+
+      <Separator orientation="vertical" className="hidden h-8 sm:block" />
+
+      {/* User menu */}      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="قائمة المستخدم"
+          >
+            <Avatar className="size-9">
+              <AvatarFallback className="bg-gradient-to-br from-brand-600 to-brand-800 text-xs font-bold text-white">
+                {user.initials}
+              </AvatarFallback>
+            </Avatar>
+            <span className="hidden min-w-0 text-start leading-tight sm:block">
+              <span className="block truncate text-sm font-bold">{user.name}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {user.role}
+              </span>
+            </span>
+            <ChevronDown className="hidden size-4 text-muted-foreground sm:block" aria-hidden="true" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuLabel>
+            <p className="text-sm font-bold">{user.name}</p>
+            <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link href="/my-profile" className="cursor-pointer">
+              <UserRound className="size-4" aria-hidden="true" />
+              الملف الشخصي
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleNavigate("/settings")}>
+            <Settings className="size-4" aria-hidden="true" />
+            الإعدادات
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {/* Real logout: the server action clears the session cookie. */}
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent focus:bg-accent"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+              تسجيل الخروج
+            </button>
+          </form>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </header>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/components/layout/mobile-nav.tsx =====
+
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Landmark } from "lucide-react";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { BrandLogo } from "@/components/layout/brand-logo";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { isNavItemActive } from "@/config/navigation";
+import { cn } from "@/lib/utils";
+import type { CurrentUser, NavItem, PlatformBranding } from "@/lib/types";
+
+interface MobileNavProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  branding: PlatformBranding;
+  user: CurrentUser;
+  items: NavItem[];
+}
+
+/**
+ * Mobile navigation drawer. Slides from the inline-start edge (right
+ * side in RTL) and mirrors the desktop sidebar navigation.
+ *
+ * Phase 2: items are real <Link>s; the drawer closes itself when a
+ * link is clicked and the active state follows the current URL.
+ */
+export function MobileNav({
+  open,
+  onOpenChange,
+  branding,
+  user,
+  items,
+}: MobileNavProps) {
+  const pathname = usePathname();
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-80 flex-col bg-sidebar p-0 text-sidebar-foreground [&>button]:text-white/70"
+      >
+        <SheetHeader className="border-b border-sidebar-border px-5 py-4 text-start">
+          <SheetTitle asChild>
+            <div>
+              <BrandLogo branding={branding} variant="sidebar" />
+            </div>
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            قائمة التنقل الرئيسية
+          </SheetDescription>
+        </SheetHeader>
+
+        <nav aria-label="التنقل الرئيسي" className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4">
+          <ul className="space-y-1" role="list">
+            {items.map((item) => {
+              const active = isNavItemActive(pathname, item.href);
+              const Icon = item.icon;
+              return (
+                <li key={item.id}>
+                  <Link
+                    href={item.href}
+                    onClick={() => onOpenChange(false)}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                      active
+                        ? "bg-gradient-to-l from-brand-600 to-brand-500 text-white shadow-md shadow-brand-900/30"
+                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <Icon className="size-4.5 shrink-0" strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
+                    <span className="flex-1 text-start">{item.label}</span>
+                    {item.badge && !active && (
+                      <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold text-sidebar-foreground/70 ring-1 ring-white/10">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="border-t border-sidebar-border p-4">
+          <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+            <Avatar className="size-9">
+              <AvatarFallback className="bg-brand-600 text-xs font-bold text-white">
+                {user.initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-sm font-bold text-sidebar-foreground">
+                {user.name}
+              </p>
+              <p className="truncate text-[11px] text-sidebar-foreground/60">
+                {user.role}
+              </p>
+            </div>
+            <Landmark className="size-4 shrink-0 text-sidebar-foreground/40" aria-hidden="true" />
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/components/layout/brand-logo.tsx =====
+
+import { GraduationCap } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import type { PlatformBranding } from "@/lib/types";
+
+interface BrandLogoProps {
+  branding: PlatformBranding;
+  /** "sidebar" renders on the navy sidebar, "light" on light surfaces. */
+  variant?: "sidebar" | "light";
+  withSubtitle?: boolean;
+  className?: string;
+}
+
+/**
+ * Platform wordmark. Uses the configured branding (never a hardcoded
+ * school name) so a future tenant can swap name/logo seamlessly.
+ */
+export function BrandLogo({
+  branding,
+  variant = "sidebar",
+  withSubtitle = true,
+  className,
+}: BrandLogoProps) {
+  const light = variant === "light";
+
+  return (
+    <div className={cn("flex items-center gap-3", className)}>
+      <div
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-xl shadow-sm",
+          light
+            ? "bg-gradient-to-br from-brand-600 to-brand-800 text-white"
+            : "bg-white/10 text-white ring-1 ring-white/15"
+        )}
+        aria-hidden="true"
+      >
+        <GraduationCap className="size-5.5" strokeWidth={1.8} />
+      </div>
+      <div className="min-w-0 text-start leading-tight">
+        <p
+          className={cn(
+            "truncate text-base font-extrabold tracking-tight",
+            light ? "text-foreground" : "text-white"
+          )}
+        >
+          {branding.productName}
+        </p>
+        {withSubtitle && (
+          <p
+            className={cn(
+              "truncate text-xs font-medium",
+              light ? "text-muted-foreground" : "text-sidebar-foreground/70"
+            )}
+          >
+            {branding.subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/components/dashboard/dashboard-view.tsx =====
+
+"use client";
+
+import { useRouter } from "next/navigation";
+import { CalendarDays } from "lucide-react";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { QuickActions } from "@/components/dashboard/quick-actions";
+import { RecentActivities } from "@/components/dashboard/recent-activities";
+import { StageDistributionChart } from "@/components/dashboard/stage-distribution-chart";
+import { TrainingProgressChart } from "@/components/dashboard/training-progress-chart";
+import { UpcomingEvents } from "@/components/dashboard/upcoming-events";
+import { StatCard } from "@/components/platform/stat-card";
+import { StatusBadge } from "@/components/platform/status-badge";
+import { getNavItemId } from "@/config/navigation";
+import { mockOverviewStats } from "@/lib/mock-data";
+import type { NavItem } from "@/lib/types";
+
+interface DashboardViewProps {
+  /**
+   * Server-rendered slot for the real (persisted) schools & branches
+   * metrics section — passed from the server page so the dashboard
+   * client bundle never touches the database directly.
+   */
+  schoolsSlot?: React.ReactNode;
+}
+
+const todayLabel = new Intl.DateTimeFormat("ar-EG", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+}).format(new Date());
+
+/**
+ * The dashboard: overview statistics, training progress visualization,
+ * recent activities, upcoming events and quick actions.
+ *
+ * Phase 2: navigation goes through real routes via the router, and the
+ * schools metrics section renders data straight from the database.
+ */
+export function DashboardView({ schoolsSlot }: DashboardViewProps) {
+  const router = useRouter();
+  const homeModule = getNavItemId("home") as NavItem;
+
+  function handleModuleNavigation(moduleId: string) {
+    router.push(getNavItemId(moduleId)?.href ?? "/");
+  }
+
+  return (
+    <div>
+      <PageHeader
+        module={homeModule}
+        title="لوحة المعلومات"
+        description="تابع حالة التنمية المهنية في مساحة عمل مدرستك: المعلمون، البرامج التدريبية، والمتابعات التربوية."
+        meta={
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-border">
+              <CalendarDays className="size-3.5 text-brand-600" aria-hidden="true" />
+              {todayLabel}
+            </span>
+            <StatusBadge tone="info" withDot={false}>
+              بيانات تجريبية للمرحلة الأولى
+            </StatusBadge>
+          </>
+        }
+      />
+
+      {/* Overview statistics */}
+      <div
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        role="list"
+        aria-label="إحصائيات عامة"
+      >
+        {mockOverviewStats.map((stat) => (
+          <StatCard
+            key={stat.id}
+            stat={stat}
+            onClick={() => handleModuleNavigation(stat.targetModuleId)}
+          />
+        ))}
+      </div>
+
+      {/* Real schools & branches metrics (persisted data) */}
+      {schoolsSlot && <div className="mt-6">{schoolsSlot}</div>}
+
+      {/* Progress visualization */}
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="xl:col-span-2">
+          <TrainingProgressChart />
+        </div>
+        <StageDistributionChart />
+      </div>
+
+      {/* Activities & events */}
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-5">
+        <div className="xl:col-span-3">
+          <RecentActivities />
+        </div>
+        <div className="xl:col-span-2">
+          <UpcomingEvents />
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className="mt-6">
+        <QuickActions onNavigate={handleModuleNavigation} />
+      </div>
+    </div>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/components/dashboard/role-dashboard.tsx =====
+
+import {
+  ArrowLeft,
+  Eye,
+  GraduationCap,
+  KeyRound,
+  Landmark,
+  Link2,
+  MapPin,
+  ShieldCheck,
+  UserRound,
+  UserCheck,
+} from "lucide-react";
+
+import Link from "next/link";
+
+import { SectionCard } from "@/components/platform/section-card";
+import { StatusBadge } from "@/components/platform/status-badge";
+import { branchStageLabel } from "@/lib/validation/schools";
+import { roleLabel } from "@/lib/auth/roles";
+import type { SafeUser } from "@/lib/auth/session";
+import {
+  listDeputyGrants,
+  listSupervisorAssignments,
+} from "@/lib/users/service";
+import {
+  getOwnProfileView,
+  getSupervisorWorkspace,
+} from "@/lib/users/directory";
+
+/**
+ * Role-aware dashboard for the non-administrative roles. Each role sees
+ * ONLY the data its server-side boundary allows:
+ *   - supervisor: branches assigned to them + teachers inside them;
+ *   - deputy: explicitly granted schools/branches, read-only notice;
+ *   - teacher: own real profile (school/branch/supervisor) + honest
+ *     placeholders for the future professional modules.
+ */
+export async function RoleDashboard({ user }: { user: SafeUser }) {
+  if (user.role === "EDUCATIONAL_SUPERVISOR") {
+    const [workspace, assignments] = await Promise.all([
+      getSupervisorWorkspace(user.id),
+      listSupervisorAssignments(user.id),
+    ]);
+    const teachers = workspace?.teachers ?? [];
+
+    return (
+      <div className="space-y-6">
+        <WelcomeHeader user={user} />
+        <SectionCard
+          title="الفروع المسندة إليك"
+          description="يمكنك متابعة معلمي هذه الفروع فقط — الإسناد يتم من إدارة مكتب التطوير في مدرستك."
+          action={
+            <Link
+              href="/supervision"
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+            >
+              مساحة المشرف الكاملة
+              <ArrowLeft className="size-3.5" aria-hidden="true" />
+            </Link>
+          }
+        >
+          {assignments.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              لا توجد فروع مسندة إليك بعد — تواصل مع إدارة مكتب التطوير.
+            </p>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2" role="list">
+              {assignments.map((assignment) => (
+                <li
+                  key={assignment.id}
+                  className="flex items-center gap-3 rounded-xl border bg-background/60 p-4"
+                >
+                  <span className="flex size-10 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+                    <MapPin className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold">
+                      {assignment.branch.nameAr}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {branchStageLabel(assignment.branch.stage)}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title={`المعلمون داخل نطاقك (${teachers.length})`}
+          description="إسناد مباشر أو عبر تغطية الفروع — محصور دائمًا داخل مدرستك وبفروقك المصرّح بها."
+        >
+          {teachers.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              لا يوجد معلمون في نطاقك حتى الآن.
+            </p>
+          ) : (
+            <ul className="divide-y rounded-xl border" role="list">
+              {teachers.map((teacher) => (
+                <li
+                  key={teacher.id}
+                  className="flex flex-wrap items-center justify-between gap-3 p-3.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">{teacher.name}</p>
+                    <p className="truncate text-xs text-muted-foreground" dir="ltr">
+                      {teacher.email}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {teacher.branchName ?? "بدون فرع"}
+                    </span>
+                    <StatusBadge
+                      tone={teacher.source === "explicit" ? "info" : "neutral"}
+                      withDot={false}
+                    >
+                      {teacher.source === "explicit" ? "إسناد مباشر" : "عبر الفرع"}
+                    </StatusBadge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+    );
+  }
+
+  if (user.role === "EDUCATIONAL_DEPUTY") {
+    const grants = await listDeputyGrants(user.id);
+
+    return (
+      <div className="space-y-6">
+        <WelcomeHeader user={user} />
+        <SectionCard
+          title="صلاحيات الاطلاع الممنوحة لك"
+          description="وصول قراءة فقط على المدارس والفروع الممنوحة صراحة — لا تملك صلاحيات إنشاء أو تعديل أو حذف."
+          action={
+            <Link
+              href="/deputy-overview"
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+            >
+              <Eye className="size-3.5" aria-hidden="true" />
+              نطاق اطلاعي الكامل
+            </Link>
+          }
+        >
+          {grants.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              لا توجد صلاحيات اطلاع ممنوحة لك بعد — تواصل مع إدارة مكتب التطوير.
+            </p>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2" role="list">
+              {grants.map((grant) => (
+                <li
+                  key={grant.id}
+                  className="flex items-center gap-3 rounded-xl border bg-background/60 p-4"
+                >
+                  <span className="flex size-10 items-center justify-center rounded-lg bg-info-soft text-info">
+                    <Landmark className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold">
+                      {grant.school.nameAr}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {grant.branch
+                        ? `فرع: ${grant.branch.nameAr}`
+                        : "اطلاع على المدرسة كاملة"}
+                    </span>
+                  </span>
+                  <span className="ms-auto shrink-0">
+                    <StatusBadge tone="info">قراءة فقط</StatusBadge>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+    );
+  }
+
+  // TEACHER — real own profile data (school, branch, supervisor) via the
+  // session-bound reader; no other user's data is reachable here.
+  const profile = await getOwnProfileView(user.id);
+
+  return (
+    <div className="space-y-6">
+      <WelcomeHeader user={user} />
+      <SectionCard
+        title="ملفي الشخصي"
+        description="بيانات حسابك الحقيقية — وحدات التدريب والتقييم والشهادات الخاصة بك ستتوفر في مراحل لاحقة."
+        action={
+          <Link
+            href="/my-profile"
+            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+          >
+            ملفي الكامل
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+          </Link>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ProfileRow icon={UserRound} label="الاسم" value={user.name} />
+          <ProfileRow icon={KeyRound} label="البريد الإلكتروني" value={user.email} ltr />
+          <ProfileRow
+            icon={Landmark}
+            label="المدرسة"
+            value={profile?.school?.nameAr ?? "— غير محددة"}
+          />
+          <ProfileRow
+            icon={MapPin}
+            label="الفرع"
+            value={profile?.branch?.nameAr ?? "— بدون فرع"}
+          />
+          {profile?.supervisor && (
+            <ProfileRow
+              icon={UserCheck}
+              label="المشرف التربوي"
+              value={profile.supervisor.name}
+            />
+          )}
+          <div className="flex items-center gap-3 rounded-xl border bg-background/60 p-3.5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-success-soft text-success">
+              <ShieldCheck className="size-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 leading-tight">
+              <span className="block text-xs font-medium text-muted-foreground">
+                حالة التوثيق
+              </span>
+              <span className="mt-1 block">
+                <StatusBadge tone={user.emailVerifiedAt ? "success" : "warning"}>
+                  {user.emailVerifiedAt ? "بريد موثّق" : "بانتظار التأكيد"}
+                </StatusBadge>
+              </span>
+            </span>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="رحلتي المهنية"
+        description="قيد التطوير — ستشمل برامجك التدريبية واختباراتك وشهاداتك في مراحل قادمة."
+      >
+        <div className="flex items-center gap-3 rounded-xl border bg-muted/40 p-4">
+          <span className="flex size-10 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+            <GraduationCap className="size-5" aria-hidden="true" />
+          </span>
+          <p className="text-sm text-muted-foreground">
+            لا توجد وحدات مهنية متاحة بعد — سيصلك إشعار عند إطلاقها.
+          </p>
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+function WelcomeHeader({ user }: { user: SafeUser }) {
+  return (
+    <div className="rounded-2xl border bg-card p-5 shadow-xs">
+      <p className="text-sm text-muted-foreground">أهلًا بك في منارة قرطبة</p>
+      <p className="mt-0.5 text-lg font-extrabold">
+        {user.name}{" "}
+        <span className="ms-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">
+          {roleLabel(user.role)}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function ProfileRow({
+  icon: Icon,
+  label,
+  value,
+  ltr,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  ltr?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border bg-background/60 p-3.5">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+        <Icon className="size-5" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 leading-tight">
+        <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="mt-0.5 block truncate text-sm font-bold" dir={ltr ? "ltr" : undefined}>
+          {value}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/roles.ts =====
+
+/* ------------------------------------------------------------------ */
+/* Canonical role keys — stored in the DB `User.role` column and        */
+/* validated with Zod on every write. Arabic labels are UI-only and    */
+/* never persisted.                                                    */
+/* ------------------------------------------------------------------ */
+
+export const ROLE_KEYS = [
+  "SUPER_ADMIN",
+  "DEVELOPMENT_OFFICE_MANAGER",
+  "EDUCATIONAL_DEPUTY",
+  "EDUCATIONAL_SUPERVISOR",
+  "TEACHER",
+] as const;
+
+export type Role = (typeof ROLE_KEYS)[number];
+
+/** User-facing Arabic role labels. */
+export const ROLE_LABELS: Record<Role, string> = {
+  SUPER_ADMIN: "مدير المنصة",
+  DEVELOPMENT_OFFICE_MANAGER: "مدير مكتب التطوير",
+  EDUCATIONAL_DEPUTY: "الوكيل التعليمي",
+  EDUCATIONAL_SUPERVISOR: "المشرف التربوي",
+  TEACHER: "معلم",
+};
+
+export function roleLabel(role: string): string {
+  return ROLE_LABELS[role as Role] ?? role;
+}
+
+/* ------------------------------------------------------------------ */
+/* Centralized capabilities — the single source of role semantics.      */
+/* Server code must ask these functions instead of comparing role       */
+/* strings ad-hoc (no scattered authorization logic).                   */
+/* ------------------------------------------------------------------ */
+
+/** Platform-wide administrative area (directory, account management). */
+export function canManagePlatform(role: string): boolean {
+  return role === "SUPER_ADMIN";
+}
+
+/**
+ * School-level administration. Office managers are confined to their
+ * own school by the service layer (their schoolId comes from the DB,
+ * never from the client).
+ */
+export function canAdministerSchool(role: string): boolean {
+  return role === "SUPER_ADMIN" || role === "DEVELOPMENT_OFFICE_MANAGER";
+}
+
+/** Read-only authorized views — never operational mutations. */
+export function isReadOnlyRole(role: string): boolean {
+  return role === "EDUCATIONAL_DEPUTY";
+}
+
+/** Only teachers must verify their email before first sign-in. */
+export function requiresEmailVerification(role: string): boolean {
+  return role === "TEACHER";
+}
+
+/* ------------------------------------------------------------------ */
+/* Role-aware navigation                                                */
+/* ------------------------------------------------------------------ */
+
+/** Which nav modules each role may see. Unlisted roles see only "home". */
+const NAV_ROLES: Record<string, Role[]> = {
+  home: [...ROLE_KEYS],
+  // Phase 5 — training academy catalog (published courses, scoped by
+  // school; publishing controls live behind separate admin modules)
+  academy: [...ROLE_KEYS],
+  // Platform + school administration
+  schools: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 4 — user directory (school-scoped for office managers)
+  users: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Teacher professional records module (later phase) — admins only
+  teachers: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 4 — supervisor workspace (assigned teachers only)
+  supervision: ["EDUCATIONAL_SUPERVISOR"],
+  // Phase 4 — deputy read-only scope overview
+  "deputy-overview": ["EDUCATIONAL_DEPUTY"],
+  // Phase 5 — program + course management (admin pair only)
+  programs: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  "course-management": ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 6 — assessments: teachers take them; managers administer;
+  // supervisors/deputies get read-only results inside their scope
+  assessments: [...ROLE_KEYS],
+  assignments: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "EDUCATIONAL_SUPERVISOR"],
+  certificates: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "EDUCATIONAL_SUPERVISOR"],
+  reports: [...ROLE_KEYS],
+  settings: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 4 — self-service profile (every role, own data only)
+  "my-profile": [...ROLE_KEYS],
+};
+
+/**
+ * Module ids visible to a role, computed on the SERVER. Server
+ * components pass these serializable ids to client shells, which resolve
+ * the full NavItem objects (icons are component references and cannot
+ * cross the RSC serialization boundary). Page-level guards remain the
+ * real security boundary; this only shapes navigation.
+ */
+export function navIdsForRole(role: string | undefined): string[] {
+  if (!role) return [];
+  return Object.entries(NAV_ROLES)
+    .filter(([, roles]) => (roles as string[]).includes(role as Role))
+    .map(([id]) => id);
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/session.ts =====
+
+import { cache } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+import { db } from "@/lib/db";
+import {
+  createSessionToken,
+  verifySessionToken,
+  SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
+} from "@/lib/auth/token";
+
+/* ------------------------------------------------------------------ */
+/* Server-side session handling.                                        */
+/*                                                                      */
+/* The cookie is httpOnly + SameSite=Lax (+ Secure in production) and   */
+/* holds a stateless JWT. Every authorization decision re-reads the     */
+/* user from the database — role/activation/verification changes apply  */
+/* on the very next request. localStorage is never a security boundary. */
+/* ------------------------------------------------------------------ */
+
+export { SESSION_COOKIE };
+
+/** Session-safe user projection — passwordHash NEVER leaves this module. */
+export interface SafeUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  schoolId: string | null;
+  branchId: string | null;
+  isActive: boolean;
+  emailVerifiedAt: Date | null;
+  tokenVersion: number;
+}
+
+/** Issue a session token for the user and set the auth cookie. */
+export async function createSessionCookie(
+  userId: string,
+  tokenVersion: number
+): Promise<void> {
+  const token = await createSessionToken({ sub: userId, tv: tokenVersion });
+  const store = await cookies();
+  store.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  });
+}
+
+/** Clear the auth cookie (logout). */
+export async function destroySessionCookie(): Promise<void> {
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+}
+
+/**
+ * Resolve the current signed-in user from the session cookie, with all
+ * security state re-checked against the database. Returns null for any
+ * failure: no cookie, invalid/expired token, unknown user, deactivated
+ * account, or stale tokenVersion (revoked sessions).
+ *
+ * cache() keeps one DB read per request even when several components ask.
+ */
+export const getCurrentUser = cache(async (): Promise<SafeUser | null> => {
+  try {
+    const store = await cookies();
+    const claims = await verifySessionToken(store.get(SESSION_COOKIE)?.value);
+    if (!claims) return null;
+
+    const user = await db.user.findUnique({ where: { id: claims.sub } });
+    if (!user || !user.isActive) return null;
+    if (user.tokenVersion !== claims.tv) return null;
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      schoolId: user.schoolId,
+      branchId: user.branchId,
+      isActive: user.isActive,
+      emailVerifiedAt: user.emailVerifiedAt,
+      tokenVersion: user.tokenVersion,
+    };
+  } catch {
+    // A missing AUTH_SECRET or a database hiccup means "not signed in"
+    // rather than a crashed page; the provisioning/login flows surface
+    // configuration errors explicitly.
+    return null;
+  }
+});
+
+/** Require a signed-in user or redirect to the Arabic login page. */
+export async function requireUser(nextPath?: string): Promise<SafeUser> {
+  const user = await getCurrentUser();
+  if (!user) {
+    const query = nextPath
+      ? `?next=${encodeURIComponent(sanitizeNextPath(nextPath))}`
+      : "";
+    redirect(`/login${query}`);
+  }
+  return user;
+}
+
+/** Whitelist internal redirects coming from the ?next= parameter. */
+export function sanitizeNextPath(value: string | undefined | null): string {
+  if (value && value.startsWith("/") && !value.startsWith("//")) return value;
+  return "/";
+}
+
+===== END FILE =====
+
+===== FILE: middleware.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: src/middleware.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== SECTION: GREP 1: COMING-SOON FLAGS AND LABELS =====
+  Pattern: (?i)(قريباً|قريبا|coming\s*[-_]?soon|comingsoon|\bsoon\b)
+
+    src/components/layout/sidebar.tsx:100:               </p>
+    src/components/layout/sidebar.tsx:101:               <p className="text-[11px] text-sidebar-foreground/60">
+  > src/components/layout/sidebar.tsx:102:                 تخصيص هوية المدرسة — قريباً
+    src/components/layout/sidebar.tsx:103:               </p>
+    src/components/layout/sidebar.tsx:104:             </div>
+  ---
+    src/config/navigation.ts:66:     description: "سجل المعلمين، بياناتهم المهنية، وحالة مشاركتهم في البرامج.",
+    src/config/navigation.ts:67:     icon: Users,
+  > src/config/navigation.ts:68:     badge: "قريباً",
+    src/config/navigation.ts:69:     plannedFeatures: [
+    src/config/navigation.ts:70:       "سجل مركزي لبيانات المعلمين وبياناتهم المهنية",
+  ---
+    src/config/navigation.ts:119:     description: "التكليفات التربوية والمتابعات المعلقة وحالتها.",
+    src/config/navigation.ts:120:     icon: ClipboardList,
+  > src/config/navigation.ts:121:     badge: "قريباً",
+    src/config/navigation.ts:122:     plannedFeatures: [
+    src/config/navigation.ts:123:       "إسناد التكليفات التربوية للمعلمين ومتابعة تنفيذها",
+  ---
+    src/config/navigation.ts:132:     description: "إصدار الشهادات للمشاركين والتحقق من صحتها.",
+    src/config/navigation.ts:133:     icon: Award,
+  > src/config/navigation.ts:134:     badge: "قريباً",
+    src/config/navigation.ts:135:     plannedFeatures: [
+    src/config/navigation.ts:136:       "إصدار شهادات إتمام البرامج التدريبية",
+  ---
+    src/config/navigation.ts:145:     description: "تقارير تحليلية عن التدريب والمشاركة وأثرها.",
+    src/config/navigation.ts:146:     icon: BarChart3,
+  > src/config/navigation.ts:147:     badge: "قريباً",
+    src/config/navigation.ts:148:     plannedFeatures: [
+    src/config/navigation.ts:149:       "تقارير نسب الإنجاز ومعدلات المشاركة",
+  ---
+    src/config/navigation.ts:166:     description: "إعدادات المنصة وهوية المدرسة والصلاحيات.",
+    src/config/navigation.ts:167:     icon: Settings,
+  > src/config/navigation.ts:168:     badge: "قريباً",
+    src/config/navigation.ts:169:     plannedFeatures: [
+    src/config/navigation.ts:170:       "تخصيص هوية المدرسة والشعار والمراحل التعليمية",
+  ---
+    src/lib/types.ts:51:   /** Features planned for the module — surfaced honestly on placeholder pages. */
+    src/lib/types.ts:52:   plannedFeatures: string[];
+  > src/lib/types.ts:53:   /** Optional small badge (e.g. "قريباً") rendered next to the label. */
+    src/lib/types.ts:54:   badge?: string;
+    src/lib/types.ts:55: }
+  ---
+
+  Matches: 7
+===== END SECTION =====
+
+===== SECTION: GREP 2: INTERNAL HREF TARGETS =====
+  Pattern: href\s*=
+
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:91:   const prevHref = navHref(course.id, prevLessonId);
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:92:   const nextHref = navHref(course.id, nextLessonId);
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:144:                     href={lesson.videoUrl}
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:171:                   href={`/api/files/${lesson.attachmentId}`}
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:192:               href={prevHref}
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:203:               href={nextHref}
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:211:               href={`/academy/courses/${course.id}`}
+  src/app/academy/courses/[id]/lessons/[lessonId]/page.tsx:241:                             href={`/academy/courses/${course.id}/lessons/${item.id}`}
+  src/app/academy/courses/[id]/page.tsx:125:               href={`/academy/manage/${course.id}`}
+  src/app/academy/courses/[id]/page.tsx:164:                     href={`/academy/courses/${course.id}/lessons/${firstLessonId}`}
+  src/app/academy/courses/[id]/page.tsx:217:                               href={`/academy/courses/${course.id}/lessons/${lesson.id}`}
+  src/app/academy/manage/[id]/page.tsx:115:               href={`/academy/courses/${course.id}`}
+  src/app/academy/manage/page.tsx:84:               href="/academy/programs"
+  src/app/academy/manage/page.tsx:91:               href="/academy/manage/new"
+  src/app/academy/manage/page.tsx:121:                     href="/academy/manage/new"
+  src/app/academy/manage/page.tsx:208:                                 href={`/academy/manage/${course.id}`}
+  src/app/academy/manage/page.tsx:216:                                   href={`/academy/courses/${course.id}`}
+  src/app/academy/manage/page.tsx:239:                           href={pageHref(result.data.page - 1)}
+  src/app/academy/manage/page.tsx:248:                           href={pageHref(result.data.page + 1)}
+  src/app/academy/page.tsx:90:               href="/academy/manage"
+  src/app/academy/page.tsx:138:                       href={`/academy/courses/${course.id}`}
+  src/app/academy/page.tsx:207:                         href={pageHref(result.data.page - 1)}
+  src/app/academy/page.tsx:216:                         href={pageHref(result.data.page + 1)}
+  src/app/account/verify-email/page.tsx:39:             href="/"
+  src/app/account/verify-email/verify-email-form.tsx:52:           href="/dashboard"
+  src/app/account/verify-email/verify-email-form.tsx:70:           href="/dashboard"
+  src/app/archive/page.tsx:105:             href={`/archive${type ? `?type=${type}` : ""}`}
+  src/app/assessments/[id]/page.tsx:182:                 href="/academy"
+  src/app/assessments/[id]/page.tsx:267:             href="/assessments"
+  src/app/assessments/attempts/[attemptId]/page.tsx:237:             href="/assessments"
+  src/app/assessments/attempts/[attemptId]/page.tsx:243:             href={`/assessments/${assessment.id}`}
+  src/app/assessments/manage/[id]/page.tsx:358:             href="/assessments/manage"
+  src/app/assessments/manage/page.tsx:72:             href="/assessments/manage/new"
+  src/app/assessments/manage/page.tsx:93:                     href="/assessments/manage/new"
+  src/app/assessments/manage/page.tsx:176:                               href={`/assessments/manage/${assessment.id}`}
+  src/app/assessments/manage/page.tsx:197:                           href={pageHref(result.data.page - 1)}
+  src/app/assessments/manage/page.tsx:206:                           href={pageHref(result.data.page + 1)}
+  src/app/assessments/page.tsx:159:                         href={`/assessments/${assessment.id}`}
+  src/app/assessments/page.tsx:226:                             href={`/assessments/${attempt.assessmentId}/take`}
+  src/app/assessments/page.tsx:233:                             href={`/assessments/attempts/${attempt.id}`}
+  src/app/assignments/[id]/page.tsx:52:                 href={`/assignments/${assignment.id}/edit`}
+  src/app/assignments/[id]/page.tsx:136:           href={`/assignments/${assignment.id}/submissions`}
+  src/app/assignments/[id]/submissions/[submissionId]/page.tsx:53:             <Link href={`/assignments/${id}/submissions`} className="text-[#1D5BD6] hover:underline">
+  src/app/assignments/[id]/submissions/[submissionId]/page.tsx:99:                         href={`/api/assignment-files/${file.id}`}
+  src/app/assignments/[id]/submissions/page.tsx:56:             href={`/assignments/${id}`}
+  src/app/assignments/[id]/submissions/page.tsx:130:                         href={`/assignments/${id}/submissions/${row.id}`}
+  src/app/assignments/assignment-form.tsx:339:           <Link href="/assignments" className="text-sm font-medium text-slate-500 hover:text-slate-700">
+  src/app/assignments/overview/page.tsx:154:                           href={`/assignments/${row.id}/submissions`}
+  src/app/assignments/page.tsx:51:             href="/assignments/new"
+  src/app/assignments/page.tsx:139:                         <Link href={`/assignments/${row.id}`} className="text-xs font-medium text-[#1D5BD6] hover:underline">
+  src/app/assignments/page.tsx:143:                           <Link href={`/assignments/${row.id}/edit`} className="text-xs font-medium text-slate-500 hover:underline">
+  src/app/assignments/page.tsx:147:                         <Link href={`/assignments/${row.id}/submissions`} className="text-xs font-medium text-slate-500 hover:underline">
+  src/app/assignments/page.tsx:164:                 <Link href={`/assignments?page=${currentPage - 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">السابق</Link>
+  src/app/assignments/page.tsx:167:                 <Link href={`/assignments?page=${currentPage + 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">التالي</Link>
+  src/app/assignments/review/page.tsx:101:                         href={`/assignments/${row.assignmentId}/submissions`}
+  src/app/assignments/review/page.tsx:126:                         href={`/assignments/${row.assignmentId}/submissions/${row.submissionId}`}
+  src/app/certificates/[id]/page.tsx:74:                   href="/my-certificates"
+  src/app/certificates/[id]/page.tsx:81:                   href="/certificates"
+  src/app/certificates/issue/page.tsx:62:               href="/certificates"
+  src/app/certificates/issue/page.tsx:85:                       href={`/certificates/issue?type=COURSE&id=${course.id}`}
+  src/app/certificates/issue/page.tsx:110:                       href={`/certificates/issue?type=PROGRAM&id=${program.id}`}
+  src/app/certificates/issue/page.tsx:139:             href="/certificates/issue"
+  src/app/certificates/issue/page.tsx:209:                             href={`/certificates/${row.alreadyIssued.certificateId}`}
+  src/app/certificates/page.tsx:57:             href="/certificates/issue"
+  src/app/certificates/page.tsx:156:                         href={`/certificates/${row.id}`}
+  src/app/certificates/page.tsx:176:                 <Link href={`/certificates?page=${currentPage - 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">
+  src/app/certificates/page.tsx:181:                 <Link href={`/certificates?page=${currentPage + 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">
+  src/app/dashboard/school-view.tsx:145:         <Link href="/reports" className="font-semibold text-[#1D5BD6]">
+  src/app/dashboard/supervisor-view.tsx:72:                   <Link href="/assignments/review" className="text-xs font-semibold text-[#1D5BD6]">
+  src/app/dashboard/teacher-view.tsx:160:           <Link href="/my-certificates" className="mt-3 inline-block text-xs font-semibold text-[#1D5BD6]">
+  src/app/dashboard/teacher-view.tsx:170:               <Link href="/my-follow-ups" className="text-xs font-semibold text-[#1D5BD6]">
+  src/app/dashboard/ui.tsx:195:           href={link.href}
+  src/app/follow-ups/[id]/edit/page.tsx:79:           <Link href={`/follow-ups/${id}`} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+  src/app/follow-ups/[id]/page.tsx:57:                 href={`/follow-ups/${id}/edit`}
+  src/app/follow-ups/[id]/page.tsx:64:               href="/follow-ups"
+  src/app/follow-ups/[id]/page.tsx:107:                     <Link href={`/surveys/${view.surveyId}/results`} className="mr-2 text-xs font-medium text-[#1D5BD6] hover:underline">
+  src/app/follow-ups/new/page.tsx:66:           <Link href="/follow-ups" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+  src/app/follow-ups/page.tsx:79:               href="/follow-ups/new"
+  src/app/follow-ups/page.tsx:176:                       <Link href={`/follow-ups/${row.id}`} className="text-xs font-medium text-[#1D5BD6] hover:underline">
+  src/app/follow-ups/page.tsx:192:                 <Link href={`/follow-ups?page=${currentPage - 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">السابق</Link>
+  src/app/follow-ups/page.tsx:195:                 <Link href={`/follow-ups?page=${currentPage + 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">التالي</Link>
+  src/app/growth/growth-projection.tsx:194:               href="/certificates"
+  src/app/growth/growth-projection.tsx:214:                       href={`/certificates/${certificate.id}`}
+  src/app/growth/page.tsx:195:                         href={`/growth/${row.teacherId}`}
+  src/app/impact/page.tsx:164:                   href={`/surveys/${row.surveyId}/results`}
+  src/app/integrations/page.tsx:134:             href="/notifications"
+  src/app/login/login-form.tsx:90:             href="/forgot-password"
+  src/app/my-assignments/[id]/page.tsx:60:             href="/my-assignments"
+  src/app/my-assignments/[id]/page.tsx:193:                       href={`/api/assignment-files/${file.id}`}
+  src/app/my-assignments/[id]/submission-workspace.tsx:151:                 <a href={`/api/assignment-files/${file.id}`} className="text-slate-700 hover:text-[#1D5BD6] hover:underline">
+  src/app/my-assignments/page.tsx:97:                       href={`/my-assignments/${row.id}`}
+  src/app/my-assignments/page.tsx:117:                   href={`/my-assignments/${row.id}`}
+  src/app/my-assignments/page.tsx:132:                 <Link href={`/my-assignments?page=${currentPage - 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">السابق</Link>
+  src/app/my-assignments/page.tsx:135:                 <Link href={`/my-assignments?page=${currentPage + 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">التالي</Link>
+  src/app/my-certificates/page.tsx:66:                       href={`/certificates/${row.id}`}
+  src/app/my-certificates/page.tsx:84:                     href={`/certificates/${row.id}`}
+  src/app/my-surveys/[id]/page.tsx:46:             href="/my-surveys"
+  src/app/my-surveys/page.tsx:100:                   href={`/my-surveys/${row.id}`}
+  src/app/notifications/bell.tsx:182:               <Link href="/notifications" className="font-semibold text-slate-500 hover:text-[#1D5BD6]">
+  src/app/notifications/bell.tsx:249:             <Link href="/notifications/preferences" className="text-[11px] font-semibold text-slate-500 hover:text-[#1D5BD6]">
+  src/app/notifications/page.tsx:43:       href={nextUnread === "1" ? "/notifications?unread=1" : "/notifications"}
+  src/app/notifications/page.tsx:57:         href={`/notifications?${unreadOnly ? "unread=1&" : ""}page=${targetPage}`}
+  src/app/notifications/page.tsx:79:               href="/notifications/preferences"
+  src/app/notifications/page.tsx:124:                         href={item.destinationUrl}
+  src/app/notifications/preferences/page.tsx:37:             href="/notifications"
+  src/app/notifications/site-header.tsx:39:           <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2">
+  src/app/reports/[reportId]/page.tsx:82:         <Link href="/reports" className="mt-4 inline-block text-xs font-semibold text-[#1D5BD6]">
+  src/app/reports/[reportId]/page.tsx:161:   const printHref = `/reports/${reportId}/print${exportQs ? `?${exportQs}` : ""}`;
+  src/app/reports/[reportId]/page.tsx:162:   const csvHref = `/api/reports/${reportId}/export?format=csv${exportQs ? `&${exportQs}` : ""}`;
+  src/app/reports/[reportId]/page.tsx:163:   const xlsHref = `/api/reports/${reportId}/export?format=xls${exportQs ? `&${exportQs}` : ""}`;
+  src/app/reports/[reportId]/page.tsx:178:             <Link href="/reports" className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+  src/app/reports/[reportId]/page.tsx:181:             <Link href={printHref} className="rounded-lg border border-[#1D5BD6] px-3 py-1.5 text-xs font-semibold text-[#1D5BD6] hover:bg-blue-50">
+  src/app/reports/[reportId]/page.tsx:184:             <a href={csvHref} className="rounded-lg border border-[#1D5BD6] px-3 py-1.5 text-xs font-semibold text-[#1D5BD6] hover:bg-blue-50">
+  src/app/reports/[reportId]/page.tsx:187:             <a href={xlsHref} className="rounded-lg bg-[#1D5BD6] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#174bb3]">
+  src/app/reports/[reportId]/page.tsx:211:               <Link href={pageLink(safePage - 1)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+  src/app/reports/[reportId]/page.tsx:216:               <Link href={pageLink(safePage + 1)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+  src/app/reports/[reportId]/print/page.tsx:60:         <Link href={`/reports/${reportId}`} className="text-xs font-semibold text-[#1D5BD6]">
+  src/app/reports/page.tsx:48:             href={`/reports/${report.id}`}
+  src/app/schools/[id]/not-found.tsx:18:               <Link href="/schools">العودة إلى دليل المدارس</Link>
+  src/app/schools/page.tsx:73:             <Link href="/schools/new">
+  src/app/surveys/[id]/edit/page.tsx:89:           <Link href={`/surveys/${id}`} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+  src/app/surveys/[id]/page.tsx:68:                 href={`/surveys/${id}/results`}
+  src/app/surveys/[id]/page.tsx:76:                 href={`/surveys/${id}/edit`}
+  src/app/surveys/[id]/page.tsx:84:                 href={`/surveys/${id}/preview`}
+  src/app/surveys/[id]/preview/page.tsx:50:             href={`/surveys/${id}`}
+  src/app/surveys/[id]/responses/[responseId]/page.tsx:53:             href={`/surveys/${id}/results`}
+  src/app/surveys/[id]/results/page.tsx:64:           <Link href={`/surveys/${id}`} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+  src/app/surveys/[id]/results/page.tsx:218:                         <Link href={`/surveys/${id}/responses/${response.id}`} className="text-xs font-medium text-[#1D5BD6] hover:underline">
+  src/app/surveys/new/page.tsx:66:           <Link href="/surveys" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+  src/app/surveys/page.tsx:82:               href="/surveys/new"
+  src/app/surveys/page.tsx:178:                         href={`/surveys/${row.id}`}
+  src/app/surveys/page.tsx:196:                 <Link href={`/surveys?page=${currentPage - 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">السابق</Link>
+  src/app/surveys/page.tsx:199:                 <Link href={`/surveys?page=${currentPage + 1}`} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">التالي</Link>
+  src/app/users/[id]/not-found.tsx:21:         <Link href="/users">العودة إلى دليل المستخدمين</Link>
+  src/app/users/[id]/page.tsx:253:               <Link href="/supervision" className="font-bold text-brand-600 hover:underline">
+  src/app/users/page.tsx:178:                               href={`/users/${user.id}`}
+  src/app/users/page.tsx:200:                         href={pageHref(result.data.page - 1)}
+  src/app/users/page.tsx:218:                         href={pageHref(result.data.page + 1)}
+  src/components/auth/auth-card.tsx:94:           <Link href="/" className="transition-colors hover:text-brand-600">
+  src/components/dashboard/role-dashboard.tsx:54:               href="/supervision"
+  src/components/dashboard/role-dashboard.tsx:142:               href="/deputy-overview"
+  src/components/dashboard/role-dashboard.tsx:198:             href="/my-profile"
+  src/components/dashboard/schools-metrics.tsx:148:           href="/schools"
+  src/components/dashboard/users-metrics.tsx:91:           href="/users"
+  src/components/layout/mobile-nav.tsx:69:                     href={item.href}
+  src/components/layout/page-header.tsx:58:               <Link href="/" className={cn(crumbLinkClass, legacyIsHome && "text-foreground")} aria-current={legacyIsHome ? "page" : undefined}>
+  src/components/layout/page-header.tsx:94:                   <Link href={crumb.href} className={crumbLinkClass}>
+  src/components/layout/sidebar.tsx:57:                   href={item.href}
+  src/components/layout/topbar.tsx:286:             <Link href="/my-profile" className="cursor-pointer">
+  src/components/schools/branches-manager.tsx:420:           href="/schools"
+  src/components/schools/school-form.tsx:265:           <Link href={mode === "edit" ? `/schools/${initial?.id}` : "/schools"}>إلغاء</Link>
+  src/components/schools/schools-directory.tsx:130:                 <Link href="/schools/new">
+  src/components/schools/schools-directory.tsx:179:                         href={`/schools/${school.id}`}
+  src/components/schools/schools-directory.tsx:222:                         href={`/schools/${school.id}`}
+  src/components/schools/schools-directory.tsx:240:                   href={`/schools/${school.id}`}
+  src/components/training/catalog-filters.tsx:151:           href={action}
+  src/config/navigation.ts:188:   if (href === "/") return pathname === "/";
+  src/lib/integrations/email/templates.ts:54:     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto 0"><tr><td style="border-radius:10px;background:${BRAND_BLUE}"><a href="${escapeHtml(cta.url)}" style="display:inline-block;padding:12px 28px;font-family:Tahoma,Arial,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:10px">${escapeHtml(cta.label)}</a></td></tr></table>`
+  src/lib/mail/mailer.ts:125:     <a href="${url}" style="display:inline-block;background:#1D5BD6;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">
+
+  Matches: 159
+===== END SECTION =====
+
+===== SECTION: GREP 3: ROLE-NAV WIRING (navIdsForRole / NAV_ROLES / allowedModuleIds) =====
+  Pattern: navIdsForRole|NAV_ROLES|allowedModuleIds
+
+  src/app/layout.tsx:7: import { navIdsForRole } from "@/lib/auth/roles";
+  src/app/layout.tsx:54:   // session role (navIdsForRole) — the client only receives serializable
+  src/app/layout.tsx:65:   const allowedModuleIds = navIdsForRole(user?.role);
+  src/app/layout.tsx:70:         <AppShell user={shellUser} allowedModuleIds={allowedModuleIds}>
+  src/components/layout/app-shell.tsx:20:   allowedModuleIds: string[];
+  src/components/layout/app-shell.tsx:41: export function AppShell({ children, user, allowedModuleIds }: AppShellProps) {
+  src/components/layout/app-shell.tsx:46:     () => navItems.filter((item) => allowedModuleIds.includes(item.id)),
+  src/components/layout/app-shell.tsx:47:     [allowedModuleIds]
+  src/lib/auth/roles.ts:65: const NAV_ROLES: Record<string, Role[]> = {
+  src/lib/auth/roles.ts:101: export function navIdsForRole(role: string | undefined): string[] {
+  src/lib/auth/roles.ts:103:   return Object.entries(NAV_ROLES)
+
+  Matches: 11
+===== END SECTION =====
+
+===== SECTION: GREP 4: MOCK / PLACEHOLDER / TODO MARKERS =====
+  Pattern: (?i)(بيانات\ تجريبية|mock|placeholder|TODO|FIXME|not implemented|phase 1)
+
+  src/app/account/forgot-password/forgot-password-form.tsx:4:  * Phase 11 — forgot-password form (client). Shows the neutral response
+  src/app/account/forgot-password/forgot-password-form.tsx:36:             placeholder="name@school.example"
+  src/app/account/forgot-password/page.tsx:2:  * Phase 11 — /account/forgot-password — public password-reset request.
+  src/app/account/reset-password/page.tsx:2:  * Phase 11 — /account/reset-password — public single-use reset flow.
+  src/app/account/reset-password/reset-password-form.tsx:4:  * Phase 11 — reset-password form (client). Validates match/length inline,
+  src/app/account/verify-email/page.tsx:2:  * Phase 11/12 — /account/verify-email — public single-use email
+  src/app/account/verify-email/page.tsx:5:  * Phase 12 change: the page NO LONGER consumes the token during GET
+  src/app/account/verify-email/verify-email-form.tsx:4:  * Phase 12 — email-verification confirmation form (client).
+  src/app/actions/account.ts:4:  * Phase 11 — account security server actions (forgot/reset password).
+  src/app/actions/account.ts:10:  * Phase 12 — abuse controls:
+  src/app/actions/account.ts:140: /* Phase 12 — email verification consumed via POST, never GET          */
+  src/app/actions/archive.ts:4:  * Phase 10 — "use server" wrappers around the archive service.
+  src/app/actions/assessment.ts:44: /** Select placeholders submit the sentinel "none" — map it to empty. */
+  src/app/actions/notifications.ts:4:  * Phase 11 — notification server actions.
+  src/app/actions/training.ts:51: /** Select placeholders submit the sentinel "none" — map it to empty. */
+  src/app/actions/users.ts:48:  * Select placeholders submit the sentinel "none" — map it to empty so
+  src/app/analytics/page.tsx:2:  * Phase 10 — التحليلات والمؤشرات: the chart-heavy analytics view.
+  src/app/api/cron/dispatch/route.ts:2:  * Phase 11 — secured scheduled-job trigger: POST|GET /api/cron/dispatch
+  src/app/api/cron/dispatch/route.ts:10:  *     (Phase 12: the URL query-parameter channel was REMOVED — secrets in
+  src/app/api/cron/dispatch/route.ts:14:  *   - Phase 12: any step that THROWS turns the response into HTTP 500
+  src/app/api/health/route.ts:2:  * Phase 12 — public health check: GET /api/health
+  src/app/api/notifications/[id]/read/route.ts:2:  * Phase 11 — POST /api/notifications/[id]/read
+  src/app/api/notifications/read-all/route.ts:2:  * Phase 11 — POST /api/notifications/read-all
+  src/app/api/notifications/route.ts:2:  * Phase 11 — GET /api/notifications
+  src/app/api/notifications/unread-count/route.ts:2:  * Phase 11 — GET /api/notifications/unread-count
+  src/app/api/reports/[reportId]/export/route.ts:2:  * Phase 10 — authenticated report export endpoint.
+  src/app/archive/archive-actions.tsx:4:  * Phase 10 — archive/restore action forms (client). Each button posts
+  src/app/archive/page.tsx:2:  * Phase 10 — الأرشيف: unified archive center.
+  src/app/assignments/[id]/submissions/[submissionId]/review-actions.tsx:107:           placeholder="اكتب ملاحظات واضحة توجّه المعلم لما يجب تحسينه…"
+  src/app/assignments/assignment-form.tsx:425:                 placeholder={`عنصر التقييم ${index + 1}`}
+  src/app/assignments/assignment-form.tsx:439:                 placeholder="الدرجة"
+  src/app/assignments/page.tsx:67:               placeholder="اكتب جزءًا من العنوان…"
+  src/app/assignments/ui.tsx:108:   /** Phase 10 — optional denominator/definition note under the value. */
+  src/app/certificates/page.tsx:84:               placeholder="رقم الشهادة أو العنوان أو اسم المعلم…"
+  src/app/certificates/revoke-form.tsx:40:         placeholder="مثال: تبين عدم استيفاء متطلبات الإتمام بعد إعادة التدقيق"
+  src/app/dashboard/page.tsx:2:  * Phase 10 — لوحة التحكم role-adaptive dashboard router.
+  src/app/dashboard/platform-view.tsx:2:  * Phase 10 — SUPER_ADMIN platform dashboard: read-only platform-wide
+  src/app/dashboard/school-view.tsx:2:  * Phase 10 — school dashboard for DEVELOPMENT_OFFICE_MANAGER (full
+  src/app/dashboard/supervisor-view.tsx:2:  * Phase 10 — EDUCATIONAL_SUPERVISOR dashboard: restricted to assigned
+  src/app/dashboard/teacher-view.tsx:2:  * Phase 10 — TEACHER personal dashboard. Every query is bound to the
+  src/app/dashboard/ui.tsx:2:  * Phase 10 — server-safe chart & indicator primitives for dashboards
+  src/app/globals.css:541:    sidebar, restrained blue accents. Light theme only in Phase 1.
+  src/app/globals.css.bak:64:    sidebar, restrained blue accents. Light theme only in Phase 1.
+  src/app/integrations/page.tsx:2:  * Phase 11 — /integrations — حالة التكاملات (role-scoped, secret-free).
+  src/app/login/login-form.tsx:73:             placeholder="name@school.edu"
+  src/app/login/login-form.tsx:107:             placeholder="••••••••"
+  src/app/my-assignments/[id]/submission-workspace.tsx:89:           placeholder="اكتب إجابتك أو وصف العمل المرفق…"
+  src/app/my-assignments/page.tsx:63:               placeholder="اكتب جزءًا من العنوان…"
+  src/app/notifications/bell.tsx:4:  * Phase 11 — notification bell with dropdown (client component).
+  src/app/notifications/notification-actions.tsx:4:  * Phase 11 — notification read-state controls (client).
+  src/app/notifications/page.tsx:2:  * Phase 11 — /notifications — the complete notification history.
+  src/app/notifications/preferences/page.tsx:2:  * Phase 11 — /notifications/preferences — user preference management.
+  src/app/notifications/preferences/preferences-form.tsx:4:  * Phase 11 — notification preferences form (client).
+  src/app/notifications/site-header.tsx:2:  * Phase 11 — site header (server component) with the notification bell.
+  src/app/notifications/ui.tsx:2:  * Phase 11 — notification UI primitives (server-safe presentational).
+  src/app/page.tsx:21:  * Phase 1 mock sections keep their honest "بيانات تجريبية" labels.
+  src/app/programs/page.tsx:1: import { ModulePlaceholderRoute } from "@/components/platform/module-placeholder-route";
+  src/app/programs/page.tsx:8:  * Route wrapper for a Phase-1 placeholder module. The real module UI
+  src/app/programs/page.tsx:13:   return <ModulePlaceholderRoute moduleId="programs" />;
+  src/app/reports/[reportId]/page.tsx:2:  * Phase 10 — report preview page: server-validated filters, the same
+  src/app/reports/[reportId]/page.tsx:111:       placeholder: "اختر مدرسة",
+  src/app/reports/[reportId]/print/page.tsx:2:  * Phase 10 — print-friendly report view. Minimal chrome, @page A4 with
+  src/app/reports/filter-form.tsx:4:  * Phase 10 — report filter form (client). Builds a URL query from the
+  src/app/reports/filter-form.tsx:21:   placeholder?: string;
+  src/app/reports/filter-form.tsx:66:                 <option value="">{field.placeholder ?? "الكل"}</option>
+  src/app/reports/page.tsx:2:  * Phase 10 — مركز التقارير: report catalog. Only back-office roles see
+  src/app/reports/print-button.tsx:4:  * Phase 10 — print trigger: opens the browser print dialog for the
+  src/app/reports/report-table.tsx:2:  * Phase 10 — shared server-safe report renderer: meta block, summary
+  src/app/settings/page.tsx:1: import { ModulePlaceholderRoute } from "@/components/platform/module-placeholder-route";
+  src/app/settings/page.tsx:8:  * Route wrapper for a Phase-1 placeholder module. The real module UI
+  src/app/settings/page.tsx:13:   return <ModulePlaceholderRoute moduleId="settings" />;
+  src/app/surveys/page.tsx:112:               placeholder="عنوان الاستبيان…"
+  src/app/surveys/survey-form.tsx:311:             <input className={inputClass} dir="ltr" placeholder="P9-PAIR-001" value={linkPairCode} onChange={(event) => setLinkPairCode(event.target.value)} />
+  src/app/surveys/survey-form.tsx:507:                             placeholder={`الخيار ${optionIndex + 1}`}
+  src/app/teachers/page.tsx:1: import { ModulePlaceholderRoute } from "@/components/platform/module-placeholder-route";
+  src/app/teachers/page.tsx:8:  * Route wrapper for a Phase-1 placeholder module. The real module UI
+  src/app/teachers/page.tsx:13:   return <ModulePlaceholderRoute moduleId="teachers" />;
+  src/app/verify/page.tsx:99:               placeholder="MQ-2026-XXXXXX أو XXXX-XXXX-XXXX-XXXX"
+  src/components/assessments/assessment-filters.tsx:42:           placeholder="اكتب جزءًا من عنوان الاختبار…"
+  src/components/assessments/assessment-filters.tsx:55:             <SelectValue placeholder="كل الحالات" />
+  src/components/assessments/assessment-form.tsx:202:                     <SelectValue placeholder="اختر المدرسة" />
+  src/components/assessments/assessment-form.tsx:244:               <SelectValue placeholder="بدون ربط بدورة" />
+  src/components/assessments/assessment-form.tsx:289:             placeholder="بدون تحديد = اختبار غير مؤقت"
+  src/components/assessments/assessment-form.tsx:303:             placeholder="بدون تحديد = محاولات غير محدودة"
+  src/components/assessments/question-builder.tsx:519:                 placeholder={`نص الخيار ${index + 1}`}
+  src/components/dashboard/academy-metrics.tsx:13:  * from the database on every request — no mock values.
+  src/components/dashboard/dashboard-view.tsx:15: import { mockOverviewStats } from "@/lib/mock-data";
+  src/components/dashboard/dashboard-view.tsx:62:               بيانات تجريبية للمرحلة الأولى
+  src/components/dashboard/dashboard-view.tsx:74:         {mockOverviewStats.map((stat) => (
+  src/components/dashboard/quick-actions.tsx:5: import { mockQuickActions } from "@/lib/mock-data";
+  src/components/dashboard/quick-actions.tsx:32:         {mockQuickActions.map((action) => {
+  src/components/dashboard/recent-activities.tsx:3: import { activityIcons, mockRecentActivities } from "@/lib/mock-data";
+  src/components/dashboard/recent-activities.tsx:35:           {mockRecentActivities.length} نشاطات
+  src/components/dashboard/recent-activities.tsx:40:         {mockRecentActivities.map((activity, index) => {
+  src/components/dashboard/recent-activities.tsx:42:           const isLast = index === mockRecentActivities.length - 1;
+  src/components/dashboard/role-dashboard.tsx:36:  *     placeholders for the future professional modules.
+  src/components/dashboard/schools-metrics.tsx:17:  * Mock Phase-1 sections keep their honest "بيانات تجريبية" label; this
+  src/components/dashboard/stage-distribution-chart.tsx:6: import { mockTeachersByStage } from "@/lib/mock-data";
+  src/components/dashboard/stage-distribution-chart.tsx:32:  * directly from the centralized mock dataset.
+  src/components/dashboard/stage-distribution-chart.tsx:35:   const total = mockTeachersByStage.reduce((sum, p) => sum + p.count, 0);
+  src/components/dashboard/stage-distribution-chart.tsx:47:               data={mockTeachersByStage as StageDistributionPoint[]}
+  src/components/dashboard/stage-distribution-chart.tsx:56:               {mockTeachersByStage.map((entry, index) => (
+  src/components/dashboard/stage-distribution-chart.tsx:69:         {mockTeachersByStage.map((entry, index) => {
+  src/components/dashboard/training-progress-chart.tsx:15: import { mockTrainingProgress } from "@/lib/mock-data";
+  src/components/dashboard/training-progress-chart.tsx:55:  * centralized mock dataset.
+  src/components/dashboard/training-progress-chart.tsx:58:   const totalCompleted = mockTrainingProgress.reduce((sum, p) => sum + p.completed, 0);
+  src/components/dashboard/training-progress-chart.tsx:59:   const totalTarget = mockTrainingProgress.reduce((sum, p) => sum + p.target, 0);
+  src/components/dashboard/training-progress-chart.tsx:74:           <ComposedChart data={mockTrainingProgress} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+  src/components/dashboard/upcoming-events.tsx:7: import { mockUpcomingEvents } from "@/lib/mock-data";
+  src/components/dashboard/upcoming-events.tsx:18:  * mock dataset; when no events exist the shared EmptyState is shown.
+  src/components/dashboard/upcoming-events.tsx:21:   const events = mockUpcomingEvents;
+  src/components/layout/page-header.tsx:28:   /** Legacy home-crumb click handler (Phase 1 dashboard). */
+  src/components/layout/page-header.tsx:73:           {/* Legacy module crumb (Phase 1 usage) */}
+  src/components/layout/sidebar.tsx:90:       {/* School workspace card — placeholder until tenant config arrives */}
+  src/components/layout/topbar.tsx:38: import { mockNotifications } from "@/lib/mock-data";
+  src/components/layout/topbar.tsx:69:     React.useState<AppNotification[]>(mockNotifications);
+  src/components/layout/topbar.tsx:123:               placeholder="ابحث عن صفحة أو ميزة…"
+  src/components/platform/module-placeholder.tsx:11: interface ModulePlaceholderProps {
+  src/components/platform/module-placeholder.tsx:17:  * Honest placeholder for modules scheduled in later phases. It explains
+  src/components/platform/module-placeholder.tsx:21: export function ModulePlaceholder({
+  src/components/platform/module-placeholder.tsx:24: }: ModulePlaceholderProps) {
+  src/components/platform/module-placeholder-route.tsx:3: import { ModulePlaceholder } from "@/components/platform/module-placeholder";
+  src/components/platform/module-placeholder-route.tsx:6: interface ModulePlaceholderRouteProps {
+  src/components/platform/module-placeholder-route.tsx:11:  * Client bridge for placeholder module routes. Server pages resolve the
+  src/components/platform/module-placeholder-route.tsx:16: export function ModulePlaceholderRoute({ moduleId }: ModulePlaceholderRouteProps) {
+  src/components/platform/module-placeholder-route.tsx:19:   return <ModulePlaceholder module={navItem} />;
+  src/components/schools/branches-manager.tsx:339:                 placeholder="مثال: فرع المنطقة الأولى"
+  src/components/schools/branches-manager.tsx:360:                   placeholder="First District Branch"
+  src/components/schools/branches-manager.tsx:372:                     <SelectValue placeholder="اختر المرحلة" />
+  src/components/schools/school-form.tsx:99:             placeholder="مثال: مدرسة قرطبة النموذجية"
+  src/components/schools/school-form.tsx:120:             placeholder="Qurtuba Model School"
+  src/components/schools/school-form.tsx:145:           placeholder="qurtuba-school"
+  src/components/schools/school-form.tsx:193:               placeholder="https://example.com/logo.png"
+  src/components/schools/school-form.tsx:223:               placeholder="#1D5BD6"
+  src/components/schools/schools-directory.tsx:91:             placeholder="ابحث باسم المدرسة أو الرابط المختصر…"
+  src/components/training/catalog-filters.tsx:65:               placeholder="ابحث بعنوان الدورة…"
+  src/components/training/content-builder.tsx:119:             placeholder="مثال: الوحدة الأولى — المداخل النظرية"
+  src/components/training/content-builder.tsx:135:             placeholder="اختياري"
+  src/components/training/content-builder.tsx:347:                 placeholder="مثال: مقدمة في التعلم النشط"
+  src/components/training/content-builder.tsx:380:               placeholder="اختياري"
+  src/components/training/content-builder.tsx:392:                 placeholder="اكتب محتوى الدرس كنص عادي — يُعرض بأمان دون أي HTML."
+  src/components/training/content-builder.tsx:410:                 placeholder="https://www.youtube.com/watch?v=…"
+  src/components/training/course-form.tsx:155:               placeholder="مثال: استراتيجيات التعلم النشط"
+  src/components/training/course-form.tsx:171:               placeholder="Optional English title"
+  src/components/training/course-form.tsx:185:               placeholder="ماذا سيتعلم المعلم من هذه الدورة؟"
+  src/components/training/course-form.tsx:202:               placeholder="Optional English description"
+  src/components/training/course-form.tsx:212:                 <SelectValue placeholder="اختر التصنيف" />
+  src/components/training/course-form.tsx:236:                 <SelectValue placeholder="بدون برنامج" />
+  src/components/training/course-form.tsx:254:                 <SelectValue placeholder="غير محدد" />
+  src/components/training/course-form.tsx:276:               placeholder="مثال: 6"
+  src/components/training/course-form.tsx:314:                     <SelectValue placeholder="اختر المدرسة" />
+  src/components/training/course-form.tsx:338:                 <SelectValue placeholder="بدون مدرّب" />
+  src/components/training/program-manager.tsx:85:             placeholder="مثال: برنامج التطوير المهني الشامل"
+  src/components/training/program-manager.tsx:100:             placeholder="Optional English name"
+  src/components/training/program-manager.tsx:114:             placeholder="ماذا يقدم هذا البرنامج للمعلمين؟"
+  src/components/training/program-manager.tsx:130:             placeholder="Optional English description"
+  src/components/training/program-manager.tsx:142:             <SelectValue placeholder="اختر التصنيف" />
+  src/components/training/program-manager.tsx:233:                     <SelectValue placeholder="اختر المدرسة" />
+  src/components/ui/input.tsx:11:         "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+  src/components/ui/select.tsx:40:         "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  src/components/ui/textarea.tsx:10:         "border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+  src/components/users/directory-filters.tsx:90:                 placeholder="اكتب اسمًا أو بريدًا…"
+  src/components/users/directory-filters.tsx:103:                 <SelectValue placeholder="جميع الأدوار" />
+  src/components/users/directory-filters.tsx:124:                   <SelectValue placeholder="جميع المدارس" />
+  src/components/users/directory-filters.tsx:146:                   <SelectValue placeholder="جميع الفروع" />
+  src/components/users/directory-filters.tsx:174:                 <SelectValue placeholder="جميع الحالات" />
+  src/components/users/staff-create-form.tsx:91:             <Input id="staff-name" name="name" required placeholder="اسم المستخدم" />
+  src/components/users/staff-create-form.tsx:107:               placeholder="staff@school.edu"
+  src/components/users/staff-create-form.tsx:124:               placeholder="8 أحرف على الأقل + رقم"
+  src/components/users/staff-create-form.tsx:137:                 <SelectValue placeholder="اختر الدور" />
+  src/components/users/staff-create-form.tsx:159:                   <SelectValue placeholder="اختر المدرسة" />
+  src/components/users/staff-create-form.tsx:185:                   <SelectValue placeholder="بدون فرع" />
+  src/components/users/user-edit-forms.tsx:105:                 <SelectValue placeholder="بدون فرع" />
+  src/components/users/user-edit-forms.tsx:252:                 <SelectValue placeholder="اختر المشرف" />
+  src/config/analytics.ts:2:  * Phase 10 — canonical keys, numeric limits and Arabic UI labels for
+  src/config/navigation.ts:27:  * placeholder until their phases begin.
+  src/config/notifications.ts:2:  * Phase 11 — Notifications, email delivery and integration configuration.
+  src/instrumentation.ts:2:  * Phase 11 — optional in-process scheduler (FALLBACK ONLY).
+  src/lib/analytics/access.ts:2:  * Phase 10 — pure access predicates and tenant scoping for role-based
+  src/lib/analytics/service.ts:2:  * Phase 10 — role-based dashboard & analytics service.
+  src/lib/archive/service.ts:2:  * Phase 10 — safe archiving & restoration service.
+  src/lib/archive/service.ts:4:  * Principles (per the Phase 10 brief):
+  src/lib/assignments/service.ts:554:  * Phase 12 — content sniffing (defense in depth).
+  src/lib/assignments/service.ts:1303:     // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/assignments/service.ts:1835:   // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/assignments/service.ts:2213:   // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/assignments/service.ts:2333:   // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/auth/tokens.ts:2:  * Phase 11 — account-security token flows.
+  src/lib/auth/tokens.ts:167:  * Phase 12 — per-email flood control for "forgot password".
+  src/lib/certificates/service.ts:784:       // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/certificates/service.ts:858:   // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/certificates/service.ts:1162:   // Phase 12 — brute-force friction: certificate NUMBERS carry only
+  src/lib/followups/service.ts:213:   // Phase 11 — event notification (best-effort, post-commit; teacher-facing
+  src/lib/followups/service.ts:238:   // Phase 10 — archived records are outside every active workflow. Any
+  src/lib/followups/service.ts:367:   // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/followups/service.ts:428:   // Phase 11 — event notification (best-effort, post-commit).
+  src/lib/followups/service.ts:478:   // Phase 11 — event notification: the teacher gains visibility exactly
+  src/lib/integrations/email/provider.ts:2:  * Phase 11 — transactional email provider abstraction.
+  src/lib/integrations/email/templates.ts:2:  * Phase 11 — Arabic RTL transactional email templates.
+  src/lib/integrations/status.ts:2:  * Phase 11 — integrations status & delivery health (role-scoped, secret-free).
+  src/lib/mock-data.ts:25: /* MOCK DATA — Phase 1 only                                            */
+  src/lib/mock-data.ts:33: /** Mock signed-in user. Real authentication arrives in a later phase. */
+  src/lib/mock-data.ts:34: export const mockCurrentUser: CurrentUser = {
+  src/lib/mock-data.ts:43: export const mockOverviewStats: OverviewStat[] = [
+  src/lib/mock-data.ts:83: export const mockTrainingProgress: TrainingProgressPoint[] = [
+  src/lib/mock-data.ts:93: export const mockTeachersByStage: StageDistributionPoint[] = [
+  src/lib/mock-data.ts:99: export const mockRecentActivities: RecentActivity[] = [
+  src/lib/mock-data.ts:137: export const mockUpcomingEvents: UpcomingEvent[] = [
+  src/lib/mock-data.ts:172: export const mockNotifications: AppNotification[] = [
+  src/lib/mock-data.ts:197: export const mockQuickActions: QuickAction[] = [
+  src/lib/notifications/dispatcher.ts:2:  * Phase 11 — email outbox dispatcher (bounded, idempotent, multi-worker safe).
+  src/lib/notifications/dispatcher.ts:89:  * (mock provider); production resolves from environment variables.
+  src/lib/notifications/emails.ts:2:  * Phase 11 — email queueing & sending orchestration.
+  src/lib/notifications/hooks.ts:2:  * Phase 11 — event hooks: the ONE place where product events become
+  src/lib/notifications/hooks.ts:16:  * Phase 12 — every hook still swallows its own errors (a notification
+  src/lib/notifications/hooks.ts:72:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:113:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:138:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:165:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:193:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:218:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:250:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:282:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:309:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:338:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/hooks.ts:363:     // failure is logged (Phase 12) instead of vanishing silently.
+  src/lib/notifications/reminders.ts:2:  * Phase 11 — scheduled reminder scans (idempotent, bounded).
+  src/lib/notifications/service.ts:2:  * Phase 11 — core in-app notification service.
+  src/lib/notifications/service.ts:327:   // Phase 12: bound the page index — an unbounded ?page= produces huge
+  src/lib/notifications/urls.ts:2:  * Phase 11 — safe internal notification destinations.
+  src/lib/reports/export.ts:2:  * Phase 10 — report export builders.
+  src/lib/reports/service.ts:2:  * Phase 10 — report center service: catalog, server-side filter
+  src/lib/security/rate-limit.ts:2:  * Phase 12 — shared lightweight rate limiting (moved from
+  src/lib/surveys/rate-limit.ts:2:  * Phase 12 — moved to lib/security/rate-limit.ts so every sensitive
+  src/lib/surveys/service.ts:248:  * Phase 12 honesty note: SURVEY_LINK_PEPPER has a built-in fallback so
+  src/lib/surveys/service.ts:286:  * Phase 10: exported for reuse by the report center so response-rate
+  src/lib/types.ts:51:   /** Features planned for the module — surfaced honestly on placeholder pages. */
+
+  Matches: 237
+===== END SECTION =====
+
+===== SECTION: COLLECTION SUMMARY =====
+  Source files scanned : 277
+  Page files found     : 72
+  Grep sections        : 4
+
+  Requested dumps that were NOT FOUND (diagnostic by itself):
+    - src/config/navigation.tsx
+    - src/lib/navigation.ts
+    - middleware.ts
+    - src/middleware.ts
+
+===== END SECTION =====
+
+################################################################################
+#  END OF NAVIGATION AUDIT BUNDLE
+################################################################################

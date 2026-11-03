@@ -1,0 +1,672 @@
+/* ==================================================================
+   Manarat Qurtubah — Tailwind v4 entry stylesheet (design system v2).
+   Single-file design system: the animation layer (tw-animate-css
+   v1.4.0, MIT) stays INLINED below — the whole design system lives in
+   this one file and builds offline. Token section carries the premium
+   shell refresh:
+   - same token names (nothing downstream breaks); tuned values
+   - slightly deeper navy sidebar surfaces
+   - new soft blue accents brand-200 / brand-300
+   - new secondary cyan accent brand-cyan / brand-cyan-soft (programs,
+     charts, highlights) — blue identity kept, no purple anywhere
+   - typography polish: balanced headings, smooth scrolling
+   ================================================================== */
+@import "tailwindcss";
+/* ---- tw-animate-css v1.4.0 (MIT) — inlined animation layer ---- */
+
+@property --tw-animation-delay {
+syntax:"*";
+inherits:false;
+initial-value:0s
+}
+@property --tw-animation-direction {
+syntax:"*";
+inherits:false;
+initial-value:normal
+}
+@property --tw-animation-duration {
+syntax:"*";
+inherits:false
+}
+@property --tw-animation-fill-mode {
+syntax:"*";
+inherits:false;
+initial-value:none
+}
+@property --tw-animation-iteration-count {
+syntax:"*";
+inherits:false;
+initial-value:1
+}
+@property --tw-enter-blur {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@property --tw-enter-opacity {
+syntax:"*";
+inherits:false;
+initial-value:1
+}
+@property --tw-enter-rotate {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@property --tw-enter-scale {
+syntax:"*";
+inherits:false;
+initial-value:1
+}
+@property --tw-enter-translate-x {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@property --tw-enter-translate-y {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@property --tw-exit-blur {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@property --tw-exit-opacity {
+syntax:"*";
+inherits:false;
+initial-value:1
+}
+@property --tw-exit-rotate {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@property --tw-exit-scale {
+syntax:"*";
+inherits:false;
+initial-value:1
+}
+@property --tw-exit-translate-x {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@property --tw-exit-translate-y {
+syntax:"*";
+inherits:false;
+initial-value:0
+}
+@theme inline {
+--animation-delay-0: 0s;
+--animation-delay-75: 75ms;
+--animation-delay-100: .1s;
+--animation-delay-150: .15s;
+--animation-delay-200: .2s;
+--animation-delay-300: .3s;
+--animation-delay-500: .5s;
+--animation-delay-700: .7s;
+--animation-delay-1000: 1s;
+--animation-repeat-0: 0;
+--animation-repeat-1: 1;
+--animation-repeat-infinite: infinite;
+--animation-direction-normal: normal;
+--animation-direction-reverse: reverse;
+--animation-direction-alternate: alternate;
+--animation-direction-alternate-reverse: alternate-reverse;
+--animation-fill-mode-none: none;
+--animation-fill-mode-forwards: forwards;
+--animation-fill-mode-backwards: backwards;
+--animation-fill-mode-both: both;
+--percentage-0: 0;
+--percentage-5: .05;
+--percentage-10: .1;
+--percentage-15: .15;
+--percentage-20: .2;
+--percentage-25: .25;
+--percentage-30: .3;
+--percentage-35: .35;
+--percentage-40: .4;
+--percentage-45: .45;
+--percentage-50: .5;
+--percentage-55: .55;
+--percentage-60: .6;
+--percentage-65: .65;
+--percentage-70: .7;
+--percentage-75: .75;
+--percentage-80: .8;
+--percentage-85: .85;
+--percentage-90: .9;
+--percentage-95: .95;
+--percentage-100: 1;
+--percentage-translate-full: 1;
+--animate-in: enter var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+--animate-out: exit var(--tw-animation-duration,var(--tw-duration,.15s))var(--tw-ease,ease)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+@keyframes enter {
+from {
+opacity: var(--tw-enter-opacity,1);
+transform: translate3d(var(--tw-enter-translate-x,0),var(--tw-enter-translate-y,0),0)scale3d(var(--tw-enter-scale,1),var(--tw-enter-scale,1),var(--tw-enter-scale,1))rotate(var(--tw-enter-rotate,0));
+filter: blur(var(--tw-enter-blur,0));
+}
+}
+@keyframes exit {
+to {
+opacity: var(--tw-exit-opacity,1);
+transform: translate3d(var(--tw-exit-translate-x,0),var(--tw-exit-translate-y,0),0)scale3d(var(--tw-exit-scale,1),var(--tw-exit-scale,1),var(--tw-exit-scale,1))rotate(var(--tw-exit-rotate,0));
+filter: blur(var(--tw-exit-blur,0));
+}
+}
+--animate-accordion-down: accordion-down var(--tw-animation-duration,var(--tw-duration,.2s))var(--tw-ease,ease-out)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+--animate-accordion-up: accordion-up var(--tw-animation-duration,var(--tw-duration,.2s))var(--tw-ease,ease-out)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+--animate-collapsible-down: collapsible-down var(--tw-animation-duration,var(--tw-duration,.2s))var(--tw-ease,ease-out)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+--animate-collapsible-up: collapsible-up var(--tw-animation-duration,var(--tw-duration,.2s))var(--tw-ease,ease-out)var(--tw-animation-delay,0s)var(--tw-animation-iteration-count,1)var(--tw-animation-direction,normal)var(--tw-animation-fill-mode,none);
+@keyframes accordion-down {
+from {
+height: 0;
+}
+to {
+height: var(--radix-accordion-content-height,var(--bits-accordion-content-height,var(--reka-accordion-content-height,var(--kb-accordion-content-height,var(--ngp-accordion-content-height,auto)))));
+}
+}
+@keyframes accordion-up {
+from {
+height: var(--radix-accordion-content-height,var(--bits-accordion-content-height,var(--reka-accordion-content-height,var(--kb-accordion-content-height,var(--ngp-accordion-content-height,auto)))));
+}
+to {
+height: 0;
+}
+}
+@keyframes collapsible-down {
+from {
+height: 0;
+}
+to {
+height: var(--radix-collapsible-content-height,var(--bits-collapsible-content-height,var(--reka-collapsible-content-height,var(--kb-collapsible-content-height,auto))));
+}
+}
+@keyframes collapsible-up {
+from {
+height: var(--radix-collapsible-content-height,var(--bits-collapsible-content-height,var(--reka-collapsible-content-height,var(--kb-collapsible-content-height,auto))));
+}
+to {
+height: 0;
+}
+}
+--animate-caret-blink: caret-blink 1.25s ease-out infinite;
+@keyframes caret-blink {
+0%,70%,100% {
+opacity: 1;
+}
+20%,50% {
+opacity: 0;
+}
+}
+}
+@utility animation-duration-* {
+--tw-animation-duration: calc(--value(number)*1ms);
+--tw-animation-duration: --value(--animation-duration-*,[duration],"initial",[*]);
+animation-duration: calc(--value(number)*1ms);
+animation-duration: --value(--animation-duration-*,[duration],"initial",[*]);
+}
+@utility delay-* {
+animation-delay: calc(--value(number)*1ms);
+animation-delay: --value(--animation-delay-*,[duration],"initial",[*]);
+--tw-animation-delay: calc(--value(number)*1ms);
+--tw-animation-delay: --value(--animation-delay-*,[duration],"initial",[*]);
+}
+@utility repeat-* {
+animation-iteration-count: --value(--animation-repeat-*,number,"initial",[*]);
+--tw-animation-iteration-count: --value(--animation-repeat-*,number,"initial",[*]);
+}
+@utility direction-* {
+animation-direction: --value(--animation-direction-*,"initial",[*]);
+--tw-animation-direction: --value(--animation-direction-*,"initial",[*]);
+}
+@utility fill-mode-* {
+animation-fill-mode: --value(--animation-fill-mode-*,"initial",[*]);
+--tw-animation-fill-mode: --value(--animation-fill-mode-*,"initial",[*]);
+}
+@utility running {
+animation-play-state: running;
+}
+@utility paused {
+animation-play-state: paused;
+}
+@utility play-state-* {
+animation-play-state: --value("initial",[*]);
+}
+@utility blur-in {
+--tw-enter-blur: 20px;
+}
+@utility blur-in-* {
+--tw-enter-blur: calc(--value(number)*1px);
+--tw-enter-blur: --value(--blur-*,[*]);
+}
+@utility blur-out {
+--tw-exit-blur: 20px;
+}
+@utility blur-out-* {
+--tw-exit-blur: calc(--value(number)*1px);
+--tw-exit-blur: --value(--blur-*,[*]);
+}
+@utility fade-in {
+--tw-enter-opacity: 0;
+}
+@utility fade-in-* {
+--tw-enter-opacity: calc(--value(number)/100);
+--tw-enter-opacity: --value(--percentage-*,[*]);
+}
+@utility fade-out {
+--tw-exit-opacity: 0;
+}
+@utility fade-out-* {
+--tw-exit-opacity: calc(--value(number)/100);
+--tw-exit-opacity: --value(--percentage-*,[*]);
+}
+@utility zoom-in {
+--tw-enter-scale: 0;
+}
+@utility zoom-in-* {
+--tw-enter-scale: calc(--value(number)*1%);
+--tw-enter-scale: calc(--value(ratio));
+--tw-enter-scale: --value(--percentage-*,[*]);
+}
+@utility -zoom-in-* {
+--tw-enter-scale: calc(--value(number)*-1%);
+--tw-enter-scale: calc(--value(ratio)*-1);
+--tw-enter-scale: --value(--percentage-*,[*]);
+}
+@utility zoom-out {
+--tw-exit-scale: 0;
+}
+@utility zoom-out-* {
+--tw-exit-scale: calc(--value(number)*1%);
+--tw-exit-scale: calc(--value(ratio));
+--tw-exit-scale: --value(--percentage-*,[*]);
+}
+@utility -zoom-out-* {
+--tw-exit-scale: calc(--value(number)*-1%);
+--tw-exit-scale: calc(--value(ratio)*-1);
+--tw-exit-scale: --value(--percentage-*,[*]);
+}
+@utility spin-in {
+--tw-enter-rotate: 30deg;
+}
+@utility spin-in-* {
+--tw-enter-rotate: calc(--value(number)*1deg);
+--tw-enter-rotate: calc(--value(ratio)*360deg);
+--tw-enter-rotate: --value(--rotate-*,[*]);
+}
+@utility -spin-in {
+--tw-enter-rotate: -30deg;
+}
+@utility -spin-in-* {
+--tw-enter-rotate: calc(--value(number)*-1deg);
+--tw-enter-rotate: calc(--value(ratio)*-360deg);
+--tw-enter-rotate: --value(--rotate-*,[*]);
+}
+@utility spin-out {
+--tw-exit-rotate: 30deg;
+}
+@utility spin-out-* {
+--tw-exit-rotate: calc(--value(number)*1deg);
+--tw-exit-rotate: calc(--value(ratio)*360deg);
+--tw-exit-rotate: --value(--rotate-*,[*]);
+}
+@utility -spin-out {
+--tw-exit-rotate: -30deg;
+}
+@utility -spin-out-* {
+--tw-exit-rotate: calc(--value(number)*-1deg);
+--tw-exit-rotate: calc(--value(ratio)*-360deg);
+--tw-exit-rotate: --value(--rotate-*,[*]);
+}
+@utility slide-in-from-top {
+--tw-enter-translate-y: -100%;
+}
+@utility slide-in-from-top-* {
+--tw-enter-translate-y: calc(--value(integer)*var(--spacing)*-1);
+--tw-enter-translate-y: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-enter-translate-y: calc(--value(ratio)*-100%);
+--tw-enter-translate-y: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+@utility slide-in-from-bottom {
+--tw-enter-translate-y: 100%;
+}
+@utility slide-in-from-bottom-* {
+--tw-enter-translate-y: calc(--value(integer)*var(--spacing));
+--tw-enter-translate-y: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-enter-translate-y: calc(--value(ratio)*100%);
+--tw-enter-translate-y: --value(--translate-*,[percentage],[length]);
+}
+@utility slide-in-from-left {
+--tw-enter-translate-x: -100%;
+}
+@utility slide-in-from-left-* {
+--tw-enter-translate-x: calc(--value(integer)*var(--spacing)*-1);
+--tw-enter-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-enter-translate-x: calc(--value(ratio)*-100%);
+--tw-enter-translate-x: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+@utility slide-in-from-right {
+--tw-enter-translate-x: 100%;
+}
+@utility slide-in-from-right-* {
+--tw-enter-translate-x: calc(--value(integer)*var(--spacing));
+--tw-enter-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-enter-translate-x: calc(--value(ratio)*100%);
+--tw-enter-translate-x: --value(--translate-*,[percentage],[length]);
+}
+@utility slide-in-from-start {
+&:dir(ltr) {
+--tw-enter-translate-x: -100%;
+}
+&:dir(rtl) {
+--tw-enter-translate-x: 100%;
+}
+}
+@utility slide-in-from-start-* {
+&:where(:dir(ltr),[dir="ltr"],[dir="ltr"]*) {
+--tw-enter-translate-x: calc(--value(integer)*var(--spacing)*-1);
+--tw-enter-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-enter-translate-x: calc(--value(ratio)*-100%);
+--tw-enter-translate-x: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+&:where(:dir(rtl),[dir="rtl"],[dir="rtl"]*) {
+--tw-enter-translate-x: calc(--value(integer)*var(--spacing));
+--tw-enter-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-enter-translate-x: calc(--value(ratio)*100%);
+--tw-enter-translate-x: --value(--translate-*,[percentage],[length]);
+}
+}
+@utility slide-in-from-end {
+&:dir(ltr) {
+--tw-enter-translate-x: 100%;
+}
+&:dir(rtl) {
+--tw-enter-translate-x: -100%;
+}
+}
+@utility slide-in-from-end-* {
+&:where(:dir(ltr),[dir="ltr"],[dir="ltr"]*) {
+--tw-enter-translate-x: calc(--value(integer)*var(--spacing));
+--tw-enter-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-enter-translate-x: calc(--value(ratio)*100%);
+--tw-enter-translate-x: --value(--translate-*,[percentage],[length]);
+}
+&:where(:dir(rtl),[dir="rtl"],[dir="rtl"]*) {
+--tw-enter-translate-x: calc(--value(integer)*var(--spacing)*-1);
+--tw-enter-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-enter-translate-x: calc(--value(ratio)*-100%);
+--tw-enter-translate-x: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+}
+@utility slide-out-to-top {
+--tw-exit-translate-y: -100%;
+}
+@utility slide-out-to-top-* {
+--tw-exit-translate-y: calc(--value(integer)*var(--spacing)*-1);
+--tw-exit-translate-y: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-exit-translate-y: calc(--value(ratio)*-100%);
+--tw-exit-translate-y: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+@utility slide-out-to-bottom {
+--tw-exit-translate-y: 100%;
+}
+@utility slide-out-to-bottom-* {
+--tw-exit-translate-y: calc(--value(integer)*var(--spacing));
+--tw-exit-translate-y: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-exit-translate-y: calc(--value(ratio)*100%);
+--tw-exit-translate-y: --value(--translate-*,[percentage],[length]);
+}
+@utility slide-out-to-left {
+--tw-exit-translate-x: -100%;
+}
+@utility slide-out-to-left-* {
+--tw-exit-translate-x: calc(--value(integer)*var(--spacing)*-1);
+--tw-exit-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-exit-translate-x: calc(--value(ratio)*-100%);
+--tw-exit-translate-x: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+@utility slide-out-to-right {
+--tw-exit-translate-x: 100%;
+}
+@utility slide-out-to-right-* {
+--tw-exit-translate-x: calc(--value(integer)*var(--spacing));
+--tw-exit-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-exit-translate-x: calc(--value(ratio)*100%);
+--tw-exit-translate-x: --value(--translate-*,[percentage],[length]);
+}
+@utility slide-out-to-start {
+&:dir(ltr) {
+--tw-exit-translate-x: -100%;
+}
+&:dir(rtl) {
+--tw-exit-translate-x: 100%;
+}
+}
+@utility slide-out-to-start-* {
+&:where(:dir(ltr),[dir="ltr"],[dir="ltr"]*) {
+--tw-exit-translate-x: calc(--value(integer)*var(--spacing)*-1);
+--tw-exit-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-exit-translate-x: calc(--value(ratio)*-100%);
+--tw-exit-translate-x: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+&:where(:dir(rtl),[dir="rtl"],[dir="rtl"]*) {
+--tw-exit-translate-x: calc(--value(integer)*var(--spacing));
+--tw-exit-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-exit-translate-x: calc(--value(ratio)*100%);
+--tw-exit-translate-x: --value(--translate-*,[percentage],[length]);
+}
+}
+@utility slide-out-to-end {
+&:dir(ltr) {
+--tw-exit-translate-x: 100%;
+}
+&:dir(rtl) {
+--tw-exit-translate-x: -100%;
+}
+}
+@utility slide-out-to-end-* {
+&:where(:dir(ltr),[dir="ltr"],[dir="ltr"]*) {
+--tw-exit-translate-x: calc(--value(integer)*var(--spacing));
+--tw-exit-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*100%);
+--tw-exit-translate-x: calc(--value(ratio)*100%);
+--tw-exit-translate-x: --value(--translate-*,[percentage],[length]);
+}
+&:where(:dir(rtl),[dir="rtl"],[dir="rtl"]*) {
+--tw-exit-translate-x: calc(--value(integer)*var(--spacing)*-1);
+--tw-exit-translate-x: calc(--value(--percentage-*,--percentage-translate-*)*-100%);
+--tw-exit-translate-x: calc(--value(ratio)*-100%);
+--tw-exit-translate-x: calc(--value(--translate-*,[percentage],[length])*-1);
+}
+}
+
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-cairo), "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-cyan: var(--brand-cyan);
+  --color-brand-cyan-soft: var(--brand-cyan-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-error: var(--error);
+  --color-error-soft: var(--error-soft);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ==================================================================
+   Manarat Qurtubah design tokens — professional blue-based palette.
+   Soft blue-tinted neutrals, deep navy sidebar, restrained blue +
+   cyan accents. Light theme only.
+   ================================================================== */
+:root {
+  --radius: 0.75rem;
+
+  /* Base surfaces */
+  --background: oklch(0.977 0.006 247);          /* soft cool page background */
+  --foreground: oklch(0.26 0.025 262);           /* deep blue-grey text */
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.26 0.025 262);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.26 0.025 262);
+
+  /* Brand blue */
+  --primary: oklch(0.535 0.185 261.8);           /* brand blue ~ #2563eb */
+  --primary-foreground: oklch(0.985 0.005 250);
+
+  --secondary: oklch(0.955 0.014 250);           /* tinted soft surface */
+  --secondary-foreground: oklch(0.38 0.06 262);
+
+  --muted: oklch(0.962 0.009 250);
+  --muted-foreground: oklch(0.53 0.025 258);
+
+  --accent: oklch(0.945 0.022 251);              /* hovered / highlighted surface */
+  --accent-foreground: oklch(0.38 0.07 262);
+
+  --destructive: oklch(0.577 0.215 27.3);
+  --border: oklch(0.915 0.012 252);
+  --input: oklch(0.915 0.012 252);
+  --ring: oklch(0.6 0.16 261);
+
+  /* Charts — blue family with supporting hues */
+  --chart-1: oklch(0.535 0.185 261.8);           /* brand blue */
+  --chart-2: oklch(0.68 0.13 230);               /* light blue */
+  --chart-3: oklch(0.66 0.12 190);               /* teal */
+  --chart-4: oklch(0.75 0.14 80);                /* amber */
+  --chart-5: oklch(0.55 0.03 258);               /* slate */
+
+  /* Sidebar — deep navy (slightly deepened for the premium shell) */
+  --sidebar: oklch(0.28 0.055 264);
+  --sidebar-foreground: oklch(0.92 0.015 250);
+  --sidebar-primary: oklch(0.68 0.15 255);
+  --sidebar-primary-foreground: oklch(0.985 0.005 250);
+  --sidebar-accent: oklch(0.35 0.06 263);
+  --sidebar-accent-foreground: oklch(0.97 0.01 250);
+  --sidebar-border: oklch(0.34 0.05 263);
+  --sidebar-ring: oklch(0.6 0.16 261);
+
+  /* Brand shades */
+  --brand-50: oklch(0.965 0.016 248);
+  --brand-100: oklch(0.925 0.035 250);
+  --brand-200: oklch(0.895 0.052 250);           /* soft blue accent surface */
+  --brand-300: oklch(0.83 0.085 251);            /* mid-soft blue accent */
+  --brand-500: oklch(0.6 0.175 260);
+  --brand-600: oklch(0.535 0.185 261.8);
+  --brand-700: oklch(0.47 0.175 263);
+  --brand-800: oklch(0.395 0.14 264);
+  --brand-900: oklch(0.33 0.095 265);
+
+  /* Secondary cyan accent — programs / charts / highlights */
+  --brand-cyan: oklch(0.7 0.11 212);
+  --brand-cyan-soft: oklch(0.955 0.028 212);
+
+  /* Status colors */
+  --success: oklch(0.55 0.14 155);
+  --success-soft: oklch(0.955 0.03 155);
+  --warning: oklch(0.62 0.14 70);
+  --warning-soft: oklch(0.965 0.045 80);
+  --info: oklch(0.58 0.12 235);
+  --info-soft: oklch(0.955 0.025 235);
+  --error: oklch(0.577 0.215 27.3);
+  --error-soft: oklch(0.955 0.03 27);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "kern", "liga";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Arabic-first headings: balanced line breaks */
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: oklch(from var(--brand-500) l c h / 0.22);
+  }
+}
+
+/* Thin styled scrollbars for panel and list areas */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

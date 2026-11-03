@@ -1,0 +1,32 @@
+# Phase 12 — dependency & artifact hygiene (platform/).
+# NOTE: files already tracked in git stay tracked until explicitly
+# untracked (git rm --cached) — see docs/production-deployment.md.
+
+# dependencies / build output
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# environment files — NEVER commit real secrets
+.env
+.env.*
+!.env.example
+
+# local databases (contain seeded personal data)
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
+prisma/prisma/
+*.bak
+
+# uploaded submission files / local backup output
+.data/
+backups/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log

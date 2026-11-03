@@ -1,0 +1,4175 @@
+################################################################################
+#  MANARAT QURTUBAH - DIAGNOSTIC BUNDLE
+#  Purpose  : diagnosis of (1) UI/Tailwind problem, (2) authentication problem
+#  Generated: 11/1/2026 8:30:30 PM (local) / 11/1/2026 6:30:30 PM (UTC)
+#  Project  : D:\DevCore\Teachers-platform
+#  PowerShell: 5.1.26100.9711
+#  SECURITY : no .env values are included (variable names only, [REDACTED]).
+#             no passwords are requested or included.
+#  MODE     : read-only collection; no project file was modified.
+################################################################################
+
+===== SECTION: INSTALLED PACKAGE VERSIONS =====
+  installed : tailwindcss @ 4.3.3
+  installed : @tailwindcss/postcss @ 4.3.3
+  missing   : @tailwindcss/vite (not present in node_modules)
+  installed : postcss @ 8.5.32
+  installed : autoprefixer @ 10.6.2
+  installed : next @ 16.4.2
+  installed : react @ 19.3.1
+  installed : react-dom @ 19.3.1
+  missing   : next-auth (not present in node_modules)
+  installed : bcryptjs @ 3.0.3
+  installed : @prisma/client @ 6.19.3
+  installed : prisma @ 6.19.3
+  missing   : drizzle-orm (not present in node_modules)
+  installed : jose @ 6.2.13
+  missing   : jsonwebtoken (not present in node_modules)
+  installed : zod @ 3.25.76
+  installed : clsx @ 2.1.1
+  installed : tailwind-merge @ 3.7.0
+===== END SECTION =====
+
+===== SECTION: LOCKFILES PRESENT =====
+  package-lock.json
+===== END SECTION =====
+
+===== SECTION: ENVIRONMENT VARIABLE NAMES (VALUES [REDACTED]) =====
+#  For safety, values are stripped. Only variable NAMES are listed.
+
+  --- .env : variable names only ---
+      DATABASE_URL=[REDACTED]
+      AUTH_SECRET=[REDACTED]
+      EMAIL_MODE=[REDACTED]
+      ASSIGNMENTS_STORAGE_DIR=[REDACTED]
+
+  --- .env.example : variable names only ---
+      DATABASE_URL=[REDACTED]
+      RESEND_API_KEY=[REDACTED]
+      EMAIL_FROM=[REDACTED]
+      EMAIL_REPLY_TO=[REDACTED]
+      CRON_SECRET=[REDACTED]
+      APP_PUBLIC_ORIGIN=[REDACTED]
+      ENABLE_INTERNAL_SCHEDULER=[REDACTED]
+      ASSIGNMENTS_STORAGE_DIR=[REDACTED]
+      SURVEY_LINK_PEPPER=[REDACTED]
+
+===== END SECTION =====
+
+===== FILE: package.json =====
+
+{
+  "name": "manarat-qurtubah-platform",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.tests.json",
+    "test": "bun test",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:deploy": "prisma migrate deploy",
+    "backup": "bun scripts/backup/backup-database.ts",
+    "backup:verify": "bun scripts/backup/verify-backup.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@radix-ui/react-alert-dialog": "^1.2.1",
+    "@radix-ui/react-avatar": "^1.3.1",
+    "@radix-ui/react-checkbox": "^1.4.1",
+    "@radix-ui/react-dialog": "^1.3.1",
+    "@radix-ui/react-dropdown-menu": "^2.2.1",
+    "@radix-ui/react-label": "^2.1.17",
+    "@radix-ui/react-popover": "^1.3.1",
+    "@radix-ui/react-radio-group": "^1.5.1",
+    "@radix-ui/react-select": "^2.4.1",
+    "@radix-ui/react-separator": "^1.2.0",
+    "@radix-ui/react-slot": "^1.5.0",
+    "@radix-ui/react-switch": "^1.4.1",
+    "@radix-ui/react-toast": "^1.3.1",
+    "bcryptjs": "^3.0.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "jose": "^6.2.13",
+    "lucide-react": "^0.545.0",
+    "next": "^16.1.1",
+    "nodemailer": "^6.10.1",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^2.15.4",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24",
+    "@types/nodemailer": "^6.4.24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.6.2",
+    "bun-types": "^1.2.23",
+    "postcss": "^8.5.32",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3"
+  }
+}
+
+===== END FILE =====
+
+===== FILE: next.config.ts =====
+
+import type { NextConfig } from "next";
+
+/**
+ * Phase 12 — production hardening configuration.
+ *
+ * Security headers are applied to every route. The Content-Security-Policy
+ * is intentionally pragmatic: the App Router ships inline flight/bootstrap
+ * scripts that require 'unsafe-inline', and dev mode requires 'unsafe-eval'
+ * for React refresh. Everything else is locked to 'self' (no third-party
+ * script/style/frame origins are used anywhere in the platform).
+ *
+ * frame-ancestors 'none' + X-Frame-Options DENY also protect the
+ * certificate print sheet from clickjacking while keeping window.print().
+ */
+const isDev = process.env.NODE_ENV !== "production";
+
+const csp = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-src 'none'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: csp },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-DNS-Prefetch-Control", value: "off" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  },
+  // Only meaningful over HTTPS — ignored by browsers on plain HTTP dev.
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=15552000; includeSubDomains",
+  },
+];
+
+const nextConfig: NextConfig = {
+  // Do not advertise the framework version.
+  poweredByHeader: false,
+  // Explicit bound on server-action bodies (the default is already 1MB;
+  // making it explicit documents the zod CVE-2026-style DoS mitigation:
+  // every z.array() in the validation layer is also .max()-bounded).
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "1mb",
+    },
+  },
+  async headers() {
+    return [
+      { source: "/:path*", headers: securityHeaders },
+    ];
+  },
+};
+
+export default nextConfig;
+
+===== END FILE =====
+
+===== FILE: next.config.mjs =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: next.config.js =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: tsconfig.json =====
+
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests",
+    "scripts"
+  ]
+}
+
+===== END FILE =====
+
+===== FILE: postcss.config.mjs =====
+
+const config = {
+  plugins: ["@tailwindcss/postcss"],
+};
+
+export default config;
+
+===== END FILE =====
+
+===== FILE: postcss.config.js =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: postcss.config.cjs =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: tailwind.config.ts =====
+
+import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
+
+const config: Config = {
+    darkMode: "class",
+    content: [
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+  	extend: {
+  		colors: {
+  			background: 'hsl(var(--background))',
+  			foreground: 'hsl(var(--foreground))',
+  			card: {
+  				DEFAULT: 'hsl(var(--card))',
+  				foreground: 'hsl(var(--card-foreground))'
+  			},
+  			popover: {
+  				DEFAULT: 'hsl(var(--popover))',
+  				foreground: 'hsl(var(--popover-foreground))'
+  			},
+  			primary: {
+  				DEFAULT: 'hsl(var(--primary))',
+  				foreground: 'hsl(var(--primary-foreground))'
+  			},
+  			secondary: {
+  				DEFAULT: 'hsl(var(--secondary))',
+  				foreground: 'hsl(var(--secondary-foreground))'
+  			},
+  			muted: {
+  				DEFAULT: 'hsl(var(--muted))',
+  				foreground: 'hsl(var(--muted-foreground))'
+  			},
+  			accent: {
+  				DEFAULT: 'hsl(var(--accent))',
+  				foreground: 'hsl(var(--accent-foreground))'
+  			},
+  			destructive: {
+  				DEFAULT: 'hsl(var(--destructive))',
+  				foreground: 'hsl(var(--destructive-foreground))'
+  			},
+  			border: 'hsl(var(--border))',
+  			input: 'hsl(var(--input))',
+  			ring: 'hsl(var(--ring))',
+  			chart: {
+  				'1': 'hsl(var(--chart-1))',
+  				'2': 'hsl(var(--chart-2))',
+  				'3': 'hsl(var(--chart-3))',
+  				'4': 'hsl(var(--chart-4))',
+  				'5': 'hsl(var(--chart-5))'
+  			}
+  		},
+  		borderRadius: {
+  			lg: 'var(--radius)',
+  			md: 'calc(var(--radius) - 2px)',
+  			sm: 'calc(var(--radius) - 4px)'
+  		}
+  	}
+  },
+  plugins: [tailwindcssAnimate],
+};
+export default config;
+
+===== END FILE =====
+
+===== FILE: tailwind.config.js =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: components.json =====
+
+{
+  "style": "new-york",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/app/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "iconLibrary": "lucide"
+}
+
+===== END FILE =====
+
+===== FILE: src/app/globals.css =====
+
+/* Tailwind v4 entry (manarat-qurtubah) */
+@import "tailwindcss";
+
+===== END FILE =====
+
+===== FILE: src/app/globals.css.bak =====
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-cairo), "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-error: var(--error);
+  --color-error-soft: var(--error-soft);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ==================================================================
+   Manarat Qurtuba design tokens — professional blue-based palette.
+   Soft blue-tinted neutrals instead of plain white/grey, deep navy
+   sidebar, restrained blue accents. Light theme only in Phase 1.
+   ================================================================== */
+:root {
+  --radius: 0.75rem;
+
+  /* Base surfaces */
+  --background: oklch(0.977 0.006 247);          /* soft cool page background */
+  --foreground: oklch(0.26 0.025 262);           /* deep blue-grey text */
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.26 0.025 262);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.26 0.025 262);
+
+  /* Brand blue */
+  --primary: oklch(0.535 0.185 261.8);           /* brand blue ~ #2563eb */
+  --primary-foreground: oklch(0.985 0.005 250);
+
+  --secondary: oklch(0.955 0.014 250);           /* tinted soft surface */
+  --secondary-foreground: oklch(0.38 0.06 262);
+
+  --muted: oklch(0.962 0.009 250);
+  --muted-foreground: oklch(0.53 0.025 258);
+
+  --accent: oklch(0.945 0.022 251);              /* hovered / highlighted surface */
+  --accent-foreground: oklch(0.38 0.07 262);
+
+  --destructive: oklch(0.577 0.215 27.3);
+  --border: oklch(0.915 0.012 252);
+  --input: oklch(0.915 0.012 252);
+  --ring: oklch(0.6 0.16 261);
+
+  /* Charts — blue family with supporting hues */
+  --chart-1: oklch(0.535 0.185 261.8);           /* brand blue */
+  --chart-2: oklch(0.68 0.13 230);               /* light blue */
+  --chart-3: oklch(0.66 0.12 190);               /* teal */
+  --chart-4: oklch(0.75 0.14 80);                /* amber */
+  --chart-5: oklch(0.55 0.03 258);               /* slate */
+
+  /* Sidebar — deep navy */
+  --sidebar: oklch(0.29 0.055 264);
+  --sidebar-foreground: oklch(0.92 0.015 250);
+  --sidebar-primary: oklch(0.68 0.15 255);
+  --sidebar-primary-foreground: oklch(0.985 0.005 250);
+  --sidebar-accent: oklch(0.36 0.065 263);
+  --sidebar-accent-foreground: oklch(0.97 0.01 250);
+  --sidebar-border: oklch(0.35 0.055 263);
+  --sidebar-ring: oklch(0.6 0.16 261);
+
+  /* Brand shades */
+  --brand-50: oklch(0.965 0.016 248);
+  --brand-100: oklch(0.925 0.035 250);
+  --brand-500: oklch(0.6 0.175 260);
+  --brand-600: oklch(0.535 0.185 261.8);
+  --brand-700: oklch(0.47 0.175 263);
+  --brand-800: oklch(0.395 0.14 264);
+  --brand-900: oklch(0.33 0.095 265);
+
+  /* Status colors */
+  --success: oklch(0.55 0.14 155);
+  --success-soft: oklch(0.955 0.03 155);
+  --warning: oklch(0.62 0.14 70);
+  --warning-soft: oklch(0.965 0.045 80);
+  --info: oklch(0.58 0.12 235);
+  --info-soft: oklch(0.955 0.025 235);
+  --error: oklch(0.577 0.215 27.3);
+  --error-soft: oklch(0.955 0.03 27);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "kern", "liga";
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: oklch(from var(--brand-500) l c h / 0.22);
+  }
+}
+
+/* Thin styled scrollbars for panel and list areas */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+===== END FILE =====
+
+===== FILE: src/app/layout.tsx =====
+
+import "./globals.css";
+import type { Metadata } from "next";
+import { SiteHeader } from "@/app/notifications/site-header";
+
+export const metadata: Metadata = { title: "منارة قرطبة" };
+
+// Every page in this platform is session-driven; rendering is dynamic
+// end-to-end (all pages already export force-dynamic themselves).
+export const dynamic = "force-dynamic";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ar" dir="rtl">
+      <body className="min-h-screen bg-slate-50">
+        <SiteHeader />
+        {children}
+      </body>
+    </html>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/app/page.tsx =====
+
+import { SchoolsMetricsSection } from "@/components/dashboard/schools-metrics";
+import { UsersMetricsSection } from "@/components/dashboard/users-metrics";
+import { AcademyMetricsSection } from "@/components/dashboard/academy-metrics";
+import { AssessmentMetricsSection } from "@/components/dashboard/assessment-metrics";
+import { DashboardView } from "@/components/dashboard/dashboard-view";
+import { RoleDashboard } from "@/components/dashboard/role-dashboard";
+import { requireUser } from "@/lib/auth/session";
+
+export const metadata = {
+  title: "لوحة المعلومات",
+};
+
+/**
+ * Role-aware dashboard (server component). The session user comes from
+ * the DB — never from the client:
+ *   SUPER_ADMIN                -> platform dashboard + schools + users + academy metrics
+ *   DEVELOPMENT_OFFICE_MANAGER -> same shell + THEIR school's metrics
+ *                                 (schoolId from the session only)
+ *   deputy / supervisor / teacher -> scoped role dashboard
+ *
+ * Phase 1 mock sections keep their honest "بيانات تجريبية" labels.
+ */
+export default async function HomePage() {
+  const user = await requireUser();
+
+  if (user.role === "SUPER_ADMIN") {
+    return (
+      <DashboardView
+        schoolsSlot={
+          <div className="space-y-6">
+            <SchoolsMetricsSection />
+            <UsersMetricsSection />
+            <AcademyMetricsSection />
+            <AssessmentMetricsSection />
+          </div>
+        }
+      />
+    );
+  }
+
+  if (user.role === "DEVELOPMENT_OFFICE_MANAGER" && user.schoolId) {
+    return (
+      <DashboardView
+        schoolsSlot={
+          <div className="space-y-6">
+            <SchoolsMetricsSection schoolId={user.schoolId} />
+            <UsersMetricsSection schoolId={user.schoolId} />
+            <AcademyMetricsSection schoolId={user.schoolId} />
+            <AssessmentMetricsSection schoolId={user.schoolId} />
+          </div>
+        }
+      />
+    );
+  }
+
+  return <RoleDashboard user={user} />;
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/utils.ts =====
+
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+===== END FILE =====
+
+===== FILE: src/config/branding.ts =====
+
+import type { PlatformBranding } from "@/lib/types";
+
+/**
+ * Default platform branding.
+ *
+ * The platform is designed as a multi-school system: every school will
+ * eventually carry its own name, logo, branches and educational stages.
+ * The object below is the fallback identity used until per-school
+ * configuration is introduced in a later phase. No component should
+ * hardcode a school name — always read from this config (or, in the
+ * future, from the active tenant context).
+ */
+export const defaultBranding: PlatformBranding = {
+  productName: "منارة قرطبة",
+  subtitle: "منصة التنمية المهنية للمعلمين",
+  shortName: "منارة",
+  logoUrl: undefined,
+  currentSchool: undefined,
+};
+
+===== END FILE =====
+
+===== FILE: src/components/layout/app-shell.tsx =====
+
+"use client";
+
+import * as React from "react";
+import { usePathname } from "next/navigation";
+
+import { MobileNav } from "@/components/layout/mobile-nav";
+import { Sidebar } from "@/components/layout/sidebar";
+import { Topbar } from "@/components/layout/topbar";
+import { defaultBranding } from "@/config/branding";
+import { navItems } from "@/config/navigation";
+import type { CurrentUser, NavItem } from "@/lib/types";
+
+interface AppShellProps {
+  children: React.ReactNode;
+  /** Session identity — null for unauthenticated visitors. */
+  user: CurrentUser | null;
+  /** Module ids allowed for this role, computed on the SERVER. The
+   * full items (with icons) are resolved here on the client because
+   * icon components cannot cross the RSC serialization boundary. */
+  allowedModuleIds: string[];
+}
+
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/register",
+  "/verify-email",
+  "/forgot-password",
+  "/reset-password",
+  "/forbidden",
+];
+
+/**
+ * Application shell: RTL sidebar (desktop), sticky topbar with
+ * search/notifications/user menu (with real logout), mobile navigation
+ * drawer and a sticky footer.
+ *
+ * Gate screens (login, registration, verification, recovery) render in
+ * a minimal bare layout — this is presentation only; every security
+ * decision is enforced on the server (middleware + per-page guards).
+ */
+export function AppShell({ children, user, allowedModuleIds }: AppShellProps) {
+  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const pathname = usePathname();
+
+  const items: NavItem[] = React.useMemo(
+    () => navItems.filter((item) => allowedModuleIds.includes(item.id)),
+    [allowedModuleIds]
+  );
+
+  const isPublicRoute =
+    !user || PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+  if (isPublicRoute) {
+    return <div className="min-h-screen">{children}</div>;
+  }
+
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar branding={defaultBranding} items={items} />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar
+          user={user}
+          items={items}
+          onOpenMobileNav={() => setMobileNavOpen(true)}
+        />
+
+        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        </main>
+
+        {/* Sticky footer: mt-auto keeps it at the bottom on short pages */}
+        <footer className="mt-auto border-t bg-card/60 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-1.5 text-center sm:flex-row sm:text-start">
+            <p className="text-xs text-muted-foreground">
+              {defaultBranding.productName} — {defaultBranding.subtitle}
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              بيئة تطوير — المرحلة الثالثة © 2025
+            </p>
+          </div>
+        </footer>
+      </div>
+
+      <MobileNav
+        open={mobileNavOpen}
+        onOpenChange={setMobileNavOpen}
+        branding={defaultBranding}
+        user={user}
+        items={items}
+      />
+    </div>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/components/ui/button.tsx =====
+
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  {
+    variants: {
+      variant: {
+        default:
+          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+        outline:
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
+        ghost:
+          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
+        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-9",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  ...props
+}: React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean
+  }) {
+  const Comp = asChild ? Slot : "button"
+
+  return (
+    <Comp
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
+}
+
+export { Button, buttonVariants }
+
+===== END FILE =====
+
+===== FILE: middleware.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: src/middleware.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: src/app/login/page.tsx =====
+
+import type { Metadata } from "next";
+
+import { AuthCard } from "@/components/auth/auth-card";
+import { LoginForm } from "./login-form";
+
+export const metadata: Metadata = {
+  title: "تسجيل الدخول",
+};
+
+interface LoginPageProps {
+  searchParams: Promise<{ next?: string; reset?: string }>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { next, reset } = await searchParams;
+
+  return (
+    <AuthCard
+      title="تسجيل الدخول"
+      description="ادخل بيانات حسابك للوصول إلى مساحة عملك في منصة منارة قرطبة."
+      footer={
+        <span>
+          معلم جديد؟ التسجيل يتم عبر رابط مدرستك —
+          <span className="mx-1 text-muted-foreground/70" dir="ltr">
+            /register/اسم-المدرسة
+          </span>
+        </span>
+      }
+    >
+      {reset === "1" && (
+        <div
+          className="mb-4 rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-sm font-semibold text-success"
+          role="status"
+        >
+          تم تغيير كلمة المرور بنجاح — سجّل الدخول بكلمة المرور الجديدة.
+        </div>
+      )}
+      <LoginForm nextPath={next} />
+    </AuthCard>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/app/login/login-form.tsx =====
+
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useFormStatus } from "react-dom";
+import { LogIn } from "lucide-react";
+
+import { loginAction, type AuthFormState } from "@/app/actions/auth";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} className="w-full">
+      <LogIn className="size-4" aria-hidden="true" />
+      {pending ? "جارٍ التحقق…" : "تسجيل الدخول"}
+    </Button>
+  );
+}
+
+interface LoginFormProps {
+  nextPath?: string;
+}
+
+/** Arabic RTL login form — validation and rate limiting run on the server. */
+export function LoginForm({ nextPath }: LoginFormProps) {
+  const router = useRouter();
+  const [state, formAction] = React.useActionState<AuthFormState | null, FormData>(
+    loginAction,
+    null
+  );
+
+  // loginAction redirects on success; refresh guarantees the shell
+  // re-renders with the fresh session (role-aware navigation).
+  React.useEffect(() => {
+    if (state?.ok) router.refresh();
+  }, [state?.ok, router]);
+
+  return (
+    <form action={formAction} className="space-y-4" noValidate>
+      {nextPath && <input type="hidden" name="next" value={nextPath} />}
+
+      {state && !state.ok && state.message && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="email">البريد الإلكتروني</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          dir="ltr"
+          autoComplete="email"
+          placeholder="name@school.edu"
+          required
+          aria-invalid={Boolean(state?.fieldErrors?.email)}
+        />
+        {state?.fieldErrors?.email && (
+          <p className="text-xs font-semibold text-destructive">
+            {state.fieldErrors.email}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password">كلمة المرور</Label>
+          <Link
+            href="/forgot-password"
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+          >
+            نسيت كلمة المرور؟
+          </Link>
+        </div>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          dir="ltr"
+          autoComplete="current-password"
+          placeholder="••••••••"
+          required
+          aria-invalid={Boolean(state?.fieldErrors?.password)}
+        />
+        {state?.fieldErrors?.password && (
+          <p className="text-xs font-semibold text-destructive">
+            {state.fieldErrors.password}
+          </p>
+        )}
+      </div>
+
+      <SubmitButton />
+    </form>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/components/auth/auth-card.tsx =====
+
+import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
+
+import { BrandLogo } from "@/components/layout/brand-logo";
+import { defaultBranding } from "@/config/branding";
+import { cn } from "@/lib/utils";
+
+interface AuthCardProps {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  /** Narrower card for verification result screens. */
+  compact?: boolean;
+  className?: string;
+}
+
+/**
+ * Shared card for the gate screens (login, registration, verification,
+ * password recovery): brand logo, RTL Arabic-first layout, blue identity
+ * and consistent spacing with the rest of the platform.
+ */
+export function AuthCard({
+  title,
+  description,
+  children,
+  footer,
+  compact,
+  className,
+}: AuthCardProps) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 px-4 py-10">
+      <div className={cn("w-full", compact ? "max-w-md" : "max-w-lg", className)}>
+        <div className="mb-6 flex flex-col items-center gap-2">
+          <div className="flex h-12 items-center rounded-xl bg-card px-4 shadow-xs">
+            <BrandLogo branding={defaultBranding} variant="sidebar" />
+          </div>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5 text-brand-600" aria-hidden="true" />
+            جلسة آمنة ومحمية على الخادم
+          </p>
+        </div>
+
+        <div className="rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
+          <h1 className="text-xl font-extrabold text-foreground">{title}</h1>
+          {description && (
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              {description}
+            </p>
+          )}
+          <div className="mt-6">{children}</div>
+        </div>
+
+        {footer && (
+          <div className="mt-4 text-center text-sm text-muted-foreground">{footer}</div>
+        )}
+
+        <p className="mt-8 text-center text-xs text-muted-foreground/70">
+          <Link href="/" className="transition-colors hover:text-brand-600">
+            {defaultBranding.productName}
+          </Link>{" "}
+          — بوابة الدخول الموحدة
+        </p>
+      </div>
+    </div>
+  );
+}
+
+===== END FILE =====
+
+===== FILE: src/app/actions/auth.ts =====
+
+"use server";
+
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+import { isRateLimited, recordLoginFailure, recordLoginSuccess, retryAfterSeconds } from "@/lib/auth/rate-limit";
+import {
+  createSessionCookie,
+  destroySessionCookie,
+  sanitizeNextPath,
+} from "@/lib/auth/session";
+import {
+  authenticateCredentials,
+  registerTeacher,
+  requestPasswordReset,
+  resetPassword,
+  resendVerificationEmail,
+} from "@/lib/users/service";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  zodAuthFieldErrors,
+} from "@/lib/validation/auth";
+
+/* ------------------------------------------------------------------ */
+/* Auth server actions — thin, non-testable wrappers around             */
+/* src/lib/users/service.ts (all rules live in the service layer).      */
+/* Client components get typed state objects; security decisions are    */
+/* never delegated to the client.                                       */
+/* ------------------------------------------------------------------ */
+
+export interface AuthFormState {
+  ok: boolean;
+  message?: string;
+  fieldErrors?: Record<string, string>;
+  /** Extra flag for the pending-verification screen (email not sent). */
+  emailSent?: boolean;
+  email?: string;
+}
+
+/** Derive the absolute app base URL from request headers (no env needed). */
+async function appBaseUrl(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
+function clientIp(h: Awaited<ReturnType<typeof headers>>): string {
+  return h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+}
+
+/* ------------------------------- Login ---------------------------- */
+
+export async function loginAction(
+  _prevState: AuthFormState | null,
+  formData: FormData
+): Promise<AuthFormState> {
+  const parsed = loginSchema.safeParse({
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "تحقق من الحقول المدخلة ثم أعد المحاولة",
+      fieldErrors: zodAuthFieldErrors(parsed.error),
+    };
+  }
+
+  const h = await headers();
+  const ip = clientIp(h);
+  if (isRateLimited(parsed.data.email, ip)) {
+    const wait = retryAfterSeconds(parsed.data.email, ip);
+    return {
+      ok: false,
+      message: `محاولات كثيرة خاطئة — حاول مجددًا بعد ${Math.ceil(wait / 60)} دقيقة تقريبًا`,
+    };
+  }
+
+  const result = await authenticateCredentials(parsed.data.email, parsed.data.password);
+  if (!result.ok) {
+    if (result.code === "INVALID_CREDENTIALS") {
+      recordLoginFailure(parsed.data.email, ip);
+    }
+    return { ok: false, message: result.message };
+  }
+
+  recordLoginSuccess(parsed.data.email, ip);
+  await createSessionCookie(result.userId, result.tokenVersion);
+
+  const next = sanitizeNextPath(String(formData.get("next") ?? ""));
+  redirect(next);
+}
+
+/* ------------------------------- Logout --------------------------- */
+
+export async function logoutAction(): Promise<void> {
+  await destroySessionCookie();
+  redirect("/login");
+}
+
+/* ------------------------ Teacher registration -------------------- */
+
+export async function registerAction(
+  _prevState: AuthFormState | null,
+  formData: FormData
+): Promise<AuthFormState> {
+  const result = await registerTeacher(
+    {
+      slug: String(formData.get("slug") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+      confirmPassword: String(formData.get("confirmPassword") ?? ""),
+      branchId: String(formData.get("branchId") ?? ""),
+    },
+    { appBaseUrl: await appBaseUrl() }
+  );
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.message,
+      fieldErrors: result.fieldErrors,
+    };
+  }
+
+  // Both "created" and "duplicate_suppressed" lead to the SAME generic
+  // pending screen — no account-existence disclosure.
+  const email = String(formData.get("email") ?? "").trim();
+  redirect(
+    `/verify-email/pending?email=${encodeURIComponent(email)}&sent=${result.emailSent ? "1" : "0"}`
+  );
+}
+
+/* ------------------------ Resend verification --------------------- */
+
+export async function resendVerificationAction(
+  _prevState: AuthFormState | null,
+  formData: FormData
+): Promise<AuthFormState> {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) {
+    return { ok: false, message: "أدخل بريدك الإلكتروني أولًا" };
+  }
+  await resendVerificationEmail(email, await appBaseUrl());
+  // Always generic — never reveal whether the address has an account.
+  return {
+    ok: true,
+    message: "إذا كان البريد مسجلًا وغير مُوثّق فستصلك رسالة تأكيد جديدة خلال دقائق",
+  };
+}
+
+/* --------------------------- Forgot password ---------------------- */
+
+export async function forgotPasswordAction(
+  _prevState: AuthFormState | null,
+  formData: FormData
+): Promise<AuthFormState> {
+  const parsed = forgotPasswordSchema.safeParse({
+    email: String(formData.get("email") ?? ""),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "أدخل بريدًا إلكترونيًا صحيحًا",
+      fieldErrors: zodAuthFieldErrors(parsed.error),
+    };
+  }
+
+  await requestPasswordReset(parsed.data.email, await appBaseUrl());
+  // Generic response — no account-existence disclosure.
+  return {
+    ok: true,
+    message: "إذا كان هذا البريد مسجلًا في المنصة فستصلك رسالة لإعادة تعيين كلمة المرور خلال دقائق",
+  };
+}
+
+/* --------------------------- Reset password ----------------------- */
+
+export async function resetPasswordAction(
+  _prevState: AuthFormState | null,
+  formData: FormData
+): Promise<AuthFormState> {
+  const result = await resetPassword({
+    token: String(formData.get("token") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    confirmPassword: String(formData.get("confirmPassword") ?? ""),
+  });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.message,
+      fieldErrors: result.fieldErrors,
+    };
+  }
+
+  redirect("/login?reset=1");
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/session.ts =====
+
+import { cache } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+import { db } from "@/lib/db";
+import {
+  createSessionToken,
+  verifySessionToken,
+  SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
+} from "@/lib/auth/token";
+
+/* ------------------------------------------------------------------ */
+/* Server-side session handling.                                        */
+/*                                                                      */
+/* The cookie is httpOnly + SameSite=Lax (+ Secure in production) and   */
+/* holds a stateless JWT. Every authorization decision re-reads the     */
+/* user from the database — role/activation/verification changes apply  */
+/* on the very next request. localStorage is never a security boundary. */
+/* ------------------------------------------------------------------ */
+
+export { SESSION_COOKIE };
+
+/** Session-safe user projection — passwordHash NEVER leaves this module. */
+export interface SafeUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  schoolId: string | null;
+  branchId: string | null;
+  isActive: boolean;
+  emailVerifiedAt: Date | null;
+  tokenVersion: number;
+}
+
+/** Issue a session token for the user and set the auth cookie. */
+export async function createSessionCookie(
+  userId: string,
+  tokenVersion: number
+): Promise<void> {
+  const token = await createSessionToken({ sub: userId, tv: tokenVersion });
+  const store = await cookies();
+  store.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  });
+}
+
+/** Clear the auth cookie (logout). */
+export async function destroySessionCookie(): Promise<void> {
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+}
+
+/**
+ * Resolve the current signed-in user from the session cookie, with all
+ * security state re-checked against the database. Returns null for any
+ * failure: no cookie, invalid/expired token, unknown user, deactivated
+ * account, or stale tokenVersion (revoked sessions).
+ *
+ * cache() keeps one DB read per request even when several components ask.
+ */
+export const getCurrentUser = cache(async (): Promise<SafeUser | null> => {
+  try {
+    const store = await cookies();
+    const claims = await verifySessionToken(store.get(SESSION_COOKIE)?.value);
+    if (!claims) return null;
+
+    const user = await db.user.findUnique({ where: { id: claims.sub } });
+    if (!user || !user.isActive) return null;
+    if (user.tokenVersion !== claims.tv) return null;
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      schoolId: user.schoolId,
+      branchId: user.branchId,
+      isActive: user.isActive,
+      emailVerifiedAt: user.emailVerifiedAt,
+      tokenVersion: user.tokenVersion,
+    };
+  } catch {
+    // A missing AUTH_SECRET or a database hiccup means "not signed in"
+    // rather than a crashed page; the provisioning/login flows surface
+    // configuration errors explicitly.
+    return null;
+  }
+});
+
+/** Require a signed-in user or redirect to the Arabic login page. */
+export async function requireUser(nextPath?: string): Promise<SafeUser> {
+  const user = await getCurrentUser();
+  if (!user) {
+    const query = nextPath
+      ? `?next=${encodeURIComponent(sanitizeNextPath(nextPath))}`
+      : "";
+    redirect(`/login${query}`);
+  }
+  return user;
+}
+
+/** Whitelist internal redirects coming from the ?next= parameter. */
+export function sanitizeNextPath(value: string | undefined | null): string {
+  if (value && value.startsWith("/") && !value.startsWith("//")) return value;
+  return "/";
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/password.ts =====
+
+import bcrypt from "bcryptjs";
+
+/* ------------------------------------------------------------------ */
+/* Password hashing — bcrypt via bcryptjs (pure JS: no native build     */
+/* steps on Windows/local machines). Plaintext passwords are never      */
+/* stored, logged or embedded in URLs.                                  */
+/* ------------------------------------------------------------------ */
+
+const BCRYPT_COST = 12;
+
+/** A fixed bcrypt hash of an unreachable random string. Compared against
+ * when the account does not exist so that "user not found" and "wrong
+ * password" take the same wall-clock time (timing-equalized login). */
+const DUMMY_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEe.5bTzDcZZowT8mSD2Fz.CbA9O7eO8fZu";
+
+export function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, BCRYPT_COST);
+}
+
+export function verifyPassword(
+  plain: string,
+  hash: string
+): Promise<boolean> {
+  return bcrypt.compare(plain, hash);
+}
+
+/** Timing-equalizing no-op comparison for unknown accounts. */
+export function verifyDummyPassword(plain: string): Promise<boolean> {
+  return bcrypt.compare(plain, DUMMY_HASH);
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/roles.ts =====
+
+/* ------------------------------------------------------------------ */
+/* Canonical role keys — stored in the DB `User.role` column and        */
+/* validated with Zod on every write. Arabic labels are UI-only and    */
+/* never persisted.                                                    */
+/* ------------------------------------------------------------------ */
+
+export const ROLE_KEYS = [
+  "SUPER_ADMIN",
+  "DEVELOPMENT_OFFICE_MANAGER",
+  "EDUCATIONAL_DEPUTY",
+  "EDUCATIONAL_SUPERVISOR",
+  "TEACHER",
+] as const;
+
+export type Role = (typeof ROLE_KEYS)[number];
+
+/** User-facing Arabic role labels. */
+export const ROLE_LABELS: Record<Role, string> = {
+  SUPER_ADMIN: "مدير المنصة",
+  DEVELOPMENT_OFFICE_MANAGER: "مدير مكتب التطوير",
+  EDUCATIONAL_DEPUTY: "الوكيل التعليمي",
+  EDUCATIONAL_SUPERVISOR: "المشرف التربوي",
+  TEACHER: "معلم",
+};
+
+export function roleLabel(role: string): string {
+  return ROLE_LABELS[role as Role] ?? role;
+}
+
+/* ------------------------------------------------------------------ */
+/* Centralized capabilities — the single source of role semantics.      */
+/* Server code must ask these functions instead of comparing role       */
+/* strings ad-hoc (no scattered authorization logic).                   */
+/* ------------------------------------------------------------------ */
+
+/** Platform-wide administrative area (directory, account management). */
+export function canManagePlatform(role: string): boolean {
+  return role === "SUPER_ADMIN";
+}
+
+/**
+ * School-level administration. Office managers are confined to their
+ * own school by the service layer (their schoolId comes from the DB,
+ * never from the client).
+ */
+export function canAdministerSchool(role: string): boolean {
+  return role === "SUPER_ADMIN" || role === "DEVELOPMENT_OFFICE_MANAGER";
+}
+
+/** Read-only authorized views — never operational mutations. */
+export function isReadOnlyRole(role: string): boolean {
+  return role === "EDUCATIONAL_DEPUTY";
+}
+
+/** Only teachers must verify their email before first sign-in. */
+export function requiresEmailVerification(role: string): boolean {
+  return role === "TEACHER";
+}
+
+/* ------------------------------------------------------------------ */
+/* Role-aware navigation                                                */
+/* ------------------------------------------------------------------ */
+
+/** Which nav modules each role may see. Unlisted roles see only "home". */
+const NAV_ROLES: Record<string, Role[]> = {
+  home: [...ROLE_KEYS],
+  // Phase 5 — training academy catalog (published courses, scoped by
+  // school; publishing controls live behind separate admin modules)
+  academy: [...ROLE_KEYS],
+  // Platform + school administration
+  schools: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 4 — user directory (school-scoped for office managers)
+  users: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Teacher professional records module (later phase) — admins only
+  teachers: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 4 — supervisor workspace (assigned teachers only)
+  supervision: ["EDUCATIONAL_SUPERVISOR"],
+  // Phase 4 — deputy read-only scope overview
+  "deputy-overview": ["EDUCATIONAL_DEPUTY"],
+  // Phase 5 — program + course management (admin pair only)
+  programs: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  "course-management": ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 6 — assessments: teachers take them; managers administer;
+  // supervisors/deputies get read-only results inside their scope
+  assessments: [...ROLE_KEYS],
+  assignments: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "EDUCATIONAL_SUPERVISOR"],
+  certificates: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "EDUCATIONAL_SUPERVISOR"],
+  reports: [...ROLE_KEYS],
+  settings: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Phase 4 — self-service profile (every role, own data only)
+  "my-profile": [...ROLE_KEYS],
+};
+
+/**
+ * Module ids visible to a role, computed on the SERVER. Server
+ * components pass these serializable ids to client shells, which resolve
+ * the full NavItem objects (icons are component references and cannot
+ * cross the RSC serialization boundary). Page-level guards remain the
+ * real security boundary; this only shapes navigation.
+ */
+export function navIdsForRole(role: string | undefined): string[] {
+  if (!role) return [];
+  return Object.entries(NAV_ROLES)
+    .filter(([, roles]) => (roles as string[]).includes(role as Role))
+    .map(([id]) => id);
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/token.ts =====
+
+import { SignJWT, jwtVerify } from "jose";
+
+/* ------------------------------------------------------------------ */
+/* Session token (stateless JWT in an httpOnly cookie).                 */
+/*                                                                      */
+/* The token carries ONLY the user id and the account's tokenVersion —  */
+/* role, activation and verification state are ALWAYS re-read from the  */
+/* database on every request (src/lib/auth/session.ts), so revoking or  */
+/* deactivating an account takes effect immediately.                    */
+/*                                                                      */
+/* This module is edge-safe: it uses `jose` (WebCrypto) and touches no  */
+/* Node-only or next/headers APIs, so the middleware can verify tokens  */
+/* without pulling the database layer into the edge runtime.            */
+/* ------------------------------------------------------------------ */
+
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+
+/** Cookie name — defined here (edge-safe) so middleware and session.ts share it. */
+export const SESSION_COOKIE = "mq_session";
+
+export interface SessionClaims {
+  /** User id. */
+  sub: string;
+  /** tokenVersion at sign time — mismatch invalidates the session. */
+  tv: number;
+}
+
+function sessionSecret(): Uint8Array {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "AUTH_SECRET is missing or too short — set a 32+ char random value in .env"
+    );
+  }
+  return new TextEncoder().encode(secret);
+}
+
+export async function createSessionToken(
+  claims: SessionClaims,
+  expiresAt: Date = new Date(Date.now() + SESSION_TTL_SECONDS * 1000)
+): Promise<string> {
+  return new SignJWT({ tv: claims.tv })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(claims.sub)
+    .setIssuedAt()
+    .setExpirationTime(expiresAt)
+    .sign(sessionSecret());
+}
+
+/**
+ * Verify a session token and return its claims, or null for ANY failure
+ * (missing token, bad signature, expiry, missing/short AUTH_SECRET).
+ * Never throws — callers treat null as "not signed in".
+ */
+export async function verifySessionToken(
+  token: string | undefined | null
+): Promise<SessionClaims | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, sessionSecret(), {
+      algorithms: ["HS256"],
+    });
+    if (!payload.sub || typeof payload.tv !== "number") return null;
+    return { sub: payload.sub, tv: payload.tv };
+  } catch {
+    return null;
+  }
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/tokens.ts =====
+
+/**
+ * Phase 11 — account-security token flows.
+ *
+ * Contract (matches the schema comments, prisma/schema.prisma):
+ *  - Raw tokens live ONLY inside the emailed URL. The database stores a
+ *    SHA-256 hash (hash-at-rest), so a database leak cannot be replayed
+ *    against the public endpoints.
+ *  - Tokens are single-use (usedAt) and expiring (verification 24h,
+ *    reset 1h).
+ *  - Consuming a reset token bumps tokenVersion → every existing session
+ *    JWT becomes invalid immediately.
+ *  - Security emails are attempted IMMEDIATELY and never persisted with
+ *    their token payload (see lib/notifications/emails.ts).
+ *  - Password-reset requests NEVER reveal whether the email exists.
+ */
+
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { db } from "@/lib/db";
+import { hashPassword } from "@/lib/auth/password";
+import { appPublicOrigin } from "@/config/notifications";
+import { sendSecurityEmailNow } from "@/lib/notifications/emails";
+import { formatEmailDate } from "@/lib/integrations/email/templates";
+import { notify } from "@/lib/notifications/service";
+import { checkRateLimit } from "@/lib/security/rate-limit";
+
+const VERIFICATION_TOKEN_HOURS = 24;
+const RESET_TOKEN_HOURS = 1;
+const RAW_TOKEN_BYTES = 32;
+
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+function generateRawToken(): string {
+  return randomBytes(RAW_TOKEN_BYTES).toString("base64url");
+}
+
+/** Builds an absolute action URL or null when the deployment has no origin. */
+export function absoluteActionUrl(path: string): string | null {
+  const origin = appPublicOrigin();
+  if (!origin) return null;
+  if (!path.startsWith("/")) return null;
+  return `${origin}${path}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Email verification → account activation                             */
+/* ------------------------------------------------------------------ */
+
+export interface CreatedTokenResult {
+  ok: boolean;
+  /** Raw token (return value ONLY — never logged, never stored). */
+  token?: string;
+  expiresAt?: Date;
+  /** null when APP_PUBLIC_ORIGIN is unset — callers must report honestly. */
+  actionUrl?: string | null;
+}
+
+export async function createEmailVerificationToken(userId: string): Promise<CreatedTokenResult> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) return { ok: false };
+
+  // Keep at most one live token per purpose — replacing the old one
+  // prevents token pile-up and makes "the newest email wins".
+  await db.emailVerificationToken.deleteMany({
+    where: { userId, usedAt: null },
+  });
+
+  const token = generateRawToken();
+  const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_HOURS * 60 * 60 * 1000);
+  await db.emailVerificationToken.create({
+    data: { userId, tokenHash: hashToken(token), expiresAt },
+  });
+  return { ok: true, token, expiresAt, actionUrl: absoluteActionUrl(`/account/verify-email?token=${token}`) };
+}
+
+export type ConsumeTokenFailure = "INVALID" | "EXPIRED" | "USED";
+
+export async function consumeEmailVerificationToken(
+  rawToken: string,
+): Promise<
+  | { ok: true; user: { id: string; name: string; email: string; schoolId: string | null; role: string }; alreadyVerified: boolean }
+  | { ok: false; reason: ConsumeTokenFailure }
+> {
+  if (!rawToken || rawToken.length < 20 || rawToken.length > 200) {
+    return { ok: false, reason: "INVALID" };
+  }
+  const record = await db.emailVerificationToken.findUnique({
+    where: { tokenHash: hashToken(rawToken) },
+    select: { id: true, userId: true, expiresAt: true, usedAt: true },
+  });
+  if (!record) return { ok: false, reason: "INVALID" };
+  if (record.usedAt) return { ok: false, reason: "USED" };
+  if (record.expiresAt.getTime() <= Date.now()) return { ok: false, reason: "EXPIRED" };
+
+  const user = await db.user.findUnique({
+    where: { id: record.userId },
+    select: { id: true, name: true, email: true, schoolId: true, role: true, isActive: true, emailVerifiedAt: true },
+  });
+  if (!user || !user.isActive) return { ok: false, reason: "INVALID" };
+
+  const alreadyVerified = user.emailVerifiedAt !== null;
+
+  // Mark used + set verification timestamp atomically.
+  await db.$transaction([
+    db.emailVerificationToken.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() },
+    }),
+    ...(alreadyVerified
+      ? []
+      : [db.user.update({
+          where: { id: user.id },
+          data: { emailVerifiedAt: new Date() },
+        })]),
+  ]);
+
+  // Activation event → in-app notification (+ queued welcome email for
+  // the ACCOUNT category, which is never preference-gated).
+  if (!alreadyVerified) {
+    await notify({
+      userId: user.id,
+      type: "ACCOUNT_ACTIVATED",
+      titleAr: "تم تفعيل حسابك بنجاح",
+      bodyAr: "تم تأكيد بريدك الإلكتروني وتفعيل حسابك داخل المنصة. يمكنك الآن متابعة لوحتك التدريبية.",
+      resourceType: "User",
+      resourceId: user.id,
+      destinationUrl: "/dashboard",
+      eventId: `account-activated:${user.id}`,
+      email: true,
+    });
+  }
+
+  return {
+    ok: true,
+    user: { id: user.id, name: user.name, email: user.email, schoolId: user.schoolId, role: user.role },
+    alreadyVerified,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Password reset                                                      */
+/* ------------------------------------------------------------------ */
+
+export async function createPasswordResetToken(userId: string): Promise<CreatedTokenResult> {
+  await db.passwordResetToken.deleteMany({ where: { userId, usedAt: null } });
+  const token = generateRawToken();
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_HOURS * 60 * 60 * 1000);
+  await db.passwordResetToken.create({
+    data: { userId, tokenHash: hashToken(token), expiresAt },
+  });
+  return { ok: true, token, expiresAt, actionUrl: absoluteActionUrl(`/account/reset-password?token=${token}`) };
+}
+
+export interface PasswordResetRequestOutcome {
+  /** Always true from the caller's perspective (anti-enumeration). */
+  accepted: true;
+  /** Global, non-sensitive deployment fact — safe to display. */
+  emailConfigured: boolean;
+  emailSent: boolean;
+  /** True when this request was suppressed by the per-email limiter. */
+  rateLimited?: boolean;
+  note?: string;
+}
+
+/**
+ * Phase 12 — per-email flood control for "forgot password".
+ * An attacker must not be able to mail-bomb arbitrary addresses through
+ * this public flow. Limits are deliberately low (3 / 15 min per email);
+ * a blocked request returns the SAME anti-enumeration shape so the
+ * response never becomes an account-existence oracle.
+ */
+const RESET_REQUEST_LIMIT = 3;
+const RESET_REQUEST_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Handles a "forgot password" request. The outcome is IDENTICAL for
+ * existing and non-existing emails — no account enumeration.
+ */
+export async function requestPasswordReset(rawEmail: string): Promise<PasswordResetRequestOutcome> {
+  const email = rawEmail.trim().toLowerCase();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { accepted: true, emailConfigured: false, emailSent: false, note: "INVALID_INPUT" };
+  }
+
+  // Rate limit BEFORE any DB lookup so the limiter applies uniformly and
+  // cannot be used to probe which emails exist (identical outcome either way).
+  const limiter = checkRateLimit(
+    "password-reset-request",
+    email,
+    RESET_REQUEST_LIMIT,
+    RESET_REQUEST_WINDOW_MS
+  );
+  if (!limiter.allowed) {
+    console.warn(
+      `[security] password-reset request rate-limited for an address (retry in ${limiter.retryAfterSeconds}s)`
+    );
+    return {
+      accepted: true,
+      emailConfigured: false,
+      emailSent: false,
+      rateLimited: true,
+      note: "RATE_LIMITED",
+    };
+  }
+
+  const user = await db.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, isActive: true, schoolId: true },
+  });
+
+  if (!user || !user.isActive) {
+    return { accepted: true, emailConfigured: false, emailSent: false };
+  }
+
+  const created = await createPasswordResetToken(user.id);
+  if (!created.ok || !created.token) {
+    return { accepted: true, emailConfigured: false, emailSent: false };
+  }
+  if (!created.actionUrl) {
+    // Deployment without APP_PUBLIC_ORIGIN — an absolute reset link cannot
+    // be built, so no misleading email is sent. Recorded as NOT_CONFIGURED.
+    return {
+      accepted: true,
+      emailConfigured: false,
+      emailSent: false,
+      note: "APP_PUBLIC_ORIGIN_MISSING",
+    };
+  }
+
+  const outcome = await sendSecurityEmailNow({
+    toEmail: email,
+    userId: user.id,
+    schoolId: user.schoolId,
+    templateKey: "password-reset",
+    params: {
+      recipientName: user.name,
+      resetUrl: created.actionUrl,
+    },
+  });
+
+  if (outcome.ok) return { accepted: true, emailConfigured: true, emailSent: true };
+  if ("configured" in outcome) {
+    return { accepted: true, emailConfigured: false, emailSent: false, note: "EMAIL_NOT_CONFIGURED" };
+  }
+  return {
+    accepted: true,
+    emailConfigured: true,
+    emailSent: false,
+    note: `EMAIL_ERROR:${outcome.errorCategory}`,
+  };
+}
+
+export type ResetPasswordResult =
+  | { ok: true; userId: string }
+  | { ok: false; reason: ConsumeTokenFailure | "WEAK_PASSWORD" };
+
+/** Minimum password policy (kept simple and identical everywhere). */
+export function validateNewPassword(password: string): boolean {
+  return typeof password === "string" && password.length >= 8 && password.length <= 72;
+}
+
+export async function consumePasswordResetToken(
+  rawToken: string,
+  newPassword: string,
+): Promise<ResetPasswordResult> {
+  if (!validateNewPassword(newPassword)) return { ok: false, reason: "WEAK_PASSWORD" };
+
+  const record = await db.passwordResetToken.findUnique({
+    where: { tokenHash: hashToken(rawToken) },
+    select: { id: true, userId: true, expiresAt: true, usedAt: true },
+  });
+  if (!record) return { ok: false, reason: "INVALID" };
+  if (record.usedAt) return { ok: false, reason: "USED" };
+  if (record.expiresAt.getTime() <= Date.now()) return { ok: false, reason: "EXPIRED" };
+
+  const user = await db.user.findUnique({
+    where: { id: record.userId },
+    select: { id: true, name: true, email: true, isActive: true, schoolId: true },
+  });
+  if (!user || !user.isActive) return { ok: false, reason: "INVALID" };
+
+  const passwordHash = await hashPassword(newPassword);
+  const now = new Date();
+
+  // Atomic: consume token + rotate password + invalidate all sessions.
+  await db.$transaction([
+    db.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: now } }),
+    db.user.update({
+      where: { id: user.id },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+    }),
+  ]);
+
+  // Security notice — in-app (always) + immediate email (never gated).
+  await notify({
+    userId: user.id,
+    type: "PASSWORD_CHANGED",
+    titleAr: "تم تغيير كلمة مرور حسابك",
+    bodyAr: `تم تغيير كلمة مرور حسابك بتاريخ ${formatEmailDate(now)}، وتم إنهاء جميع الجلسات النشطة حفاظًا على الأمان. إن لم تقم أنت بهذا التغيير فتواصل مع إدارة المدرسة فورًا.`,
+    resourceType: "User",
+    resourceId: user.id,
+    destinationUrl: "/notifications/preferences",
+    eventId: `password-changed:${record.id}`,
+    email: false, // email part is sent immediately below (token-free).
+  }).catch(() => null);
+  await sendSecurityEmailNow({
+    toEmail: user.email,
+    userId: user.id,
+    schoolId: user.schoolId,
+    templateKey: "password-changed",
+    params: { recipientName: user.name, dateText: formatEmailDate(now) },
+  }).catch(() => null);
+
+  return { ok: true, userId: user.id };
+}
+
+/** Constant-time comparison helper (used by the cron endpoint). */
+export function safeSecretEquals(a: string, b: string): boolean {
+  const bufA = createHash("sha256").update(a).digest();
+  const bufB = createHash("sha256").update(b).digest();
+  return timingSafeEqual(bufA, bufB);
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/dev-admin.ts =====
+
+import { redirect } from "next/navigation";
+
+import { requireUser } from "@/lib/auth/session";
+
+/* ------------------------------------------------------------------ */
+/* ADMINISTRATIVE CONTEXT — real, session-backed authorization.         */
+/*                                                                      */
+/* Phase 2 introduced this seam as a development-only identity; Phase 3 */
+/* replaces the implementation with the signed-in session. The call-    */
+/* sites (every school-module mutation) did NOT change: they still go   */
+/* through requireAdminContext() and re-validate ownership on the       */
+/* server, so tenant isolation stays enforced at the data layer.        */
+/*                                                                      */
+/* Guarantees:                                                          */
+/*   1. The actor's identity and school scope come from the DB session, */
+/*      never from client-supplied fields.                              */
+/*   2. Office managers are structurally confined to their own school   */
+/*      (see schoolScopeError). Cross-school writes are rejected.       */
+/*   3. Roles outside the administrative pair never receive a context — */
+/*      they are redirected to the Arabic forbidden page.               */
+/* ------------------------------------------------------------------ */
+
+export type AdminContext =
+  | {
+      id: string;
+      name: string;
+      role: "SUPER_ADMIN";
+      schoolId: null;
+    }
+  | {
+      id: string;
+      name: string;
+      role: "DEVELOPMENT_OFFICE_MANAGER";
+      schoolId: string;
+    };
+
+/**
+ * Resolve the signed-in administrative actor or redirect:
+ *   - unauthenticated            -> /login
+ *   - teacher / supervisor / deputy -> /forbidden
+ */
+export async function requireAdminContext(): Promise<AdminContext> {
+  const user = await requireUser();
+
+  if (user.role === "SUPER_ADMIN") {
+    return { id: user.id, name: user.name, role: "SUPER_ADMIN", schoolId: null };
+  }
+
+  if (user.role === "DEVELOPMENT_OFFICE_MANAGER" && user.schoolId) {
+    return {
+      id: user.id,
+      name: user.name,
+      role: "DEVELOPMENT_OFFICE_MANAGER",
+      schoolId: user.schoolId,
+    };
+  }
+
+  redirect("/forbidden");
+}
+
+/**
+ * School-scope enforcement for service-layer writes. Returns a
+ * ServiceResult-shaped rejection when the actor may not operate on the
+ * requested school; null means "allowed".
+ *
+ *   SUPER_ADMIN                 -> any school
+ *   DEVELOPMENT_OFFICE_MANAGER  -> only their own school
+ *   anything else               -> never reaches here (no context), but
+ *                                  stays denied for defense in depth
+ */
+export function schoolScopeError(
+  ctx: AdminContext,
+  schoolId: string
+): { ok: false; message: string; code: "FORBIDDEN" } | null {
+  if (ctx.role === "SUPER_ADMIN") return null;
+  if (ctx.role === "DEVELOPMENT_OFFICE_MANAGER" && ctx.schoolId === schoolId) {
+    return null;
+  }
+  return {
+    ok: false,
+    message: "ليس لديك صلاحية إدارة بيانات هذه المدرسة — العملية مرفوضة",
+    code: "FORBIDDEN",
+  };
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/auth/rate-limit.ts =====
+
+/* ------------------------------------------------------------------ */
+/* In-memory login rate limiting.                                       */
+/*                                                                      */
+/* Reasonable brute-force protection for a single-server deployment:    */
+/* per-email sliding window. Documented limitations (not hidden):       */
+/*   1. Counters live in process memory — they reset on server restart  */
+/*      and are not shared across multiple instances.                   */
+/*   2. A distributed deployment should swap this module for a          */
+/*      Redis/DB-backed limiter without touching call-sites.            */
+/* ------------------------------------------------------------------ */
+
+interface AttemptRecord {
+  failures: number[];
+  lockedUntil: number;
+}
+
+const MAX_FAILURES = 5;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+const records = new Map<string, AttemptRecord>();
+
+function keyFor(email: string, ip: string): string {
+  return `${email.toLowerCase()}|${ip}`;
+}
+
+function prune(record: AttemptRecord, now: number) {
+  record.failures = record.failures.filter((t) => now - t < WINDOW_MS);
+}
+
+/** True when the caller must be blocked right now. */
+export function isRateLimited(email: string, ip: string): boolean {
+  const record = records.get(keyFor(email, ip));
+  if (!record) return false;
+  const now = Date.now();
+  if (record.lockedUntil > now) return true;
+  prune(record, now);
+  return record.failures.length >= MAX_FAILURES;
+}
+
+/** Seconds until the lockout lifts (for the Arabic message). */
+export function retryAfterSeconds(email: string, ip: string): number {
+  const record = records.get(keyFor(email, ip));
+  if (!record) return 0;
+  return Math.max(0, Math.ceil((record.lockedUntil - Date.now()) / 1000));
+}
+
+/** Record a failed attempt; locks the key once the window is exhausted. */
+export function recordLoginFailure(email: string, ip: string): void {
+  const key = keyFor(email, ip);
+  const now = Date.now();
+  const record = records.get(key) ?? { failures: [], lockedUntil: 0 };
+  prune(record, now);
+  record.failures.push(now);
+  if (record.failures.length >= MAX_FAILURES) {
+    record.lockedUntil = now + LOCKOUT_MS;
+    record.failures = [];
+  }
+  records.set(key, record);
+}
+
+/** Record a successful login — clears the failure counter. */
+export function recordLoginSuccess(email: string, ip: string): void {
+  records.delete(keyFor(email, ip));
+}
+
+/** Test helper: clear all counters. */
+export function resetRateLimiter(): void {
+  records.clear();
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/security/rate-limit.ts =====
+
+/**
+ * Phase 12 — shared lightweight rate limiting (moved from
+ * lib/surveys/rate-limit.ts so every sensitive flow can use it).
+ *
+ * Process-local sliding in-memory window keyed by `scope:subject`.
+ * Best-effort by nature: limits reset on process restart and are
+ * per-instance. For this platform's scale (single Next.js process,
+ * SQLite dev phase) it stops burst abuse of public and sensitive
+ * write paths (survey submissions, password-reset mail, certificate
+ * verification) without adding infrastructure.
+ */
+
+interface Bucket {
+  timestamps: number[];
+}
+
+const buckets = new Map<string, Bucket>();
+
+/** Periodic sweep so abandoned buckets don't grow unbounded. */
+const SWEEP_INTERVAL_MS = 300_000;
+let lastSweep = 0;
+
+function sweep(now: number, windowMs: number): void {
+  if (now - lastSweep < SWEEP_INTERVAL_MS) return;
+  lastSweep = now;
+  for (const [key, bucket] of buckets) {
+    bucket.timestamps = bucket.timestamps.filter((ts) => now - ts < windowMs);
+    if (bucket.timestamps.length === 0) buckets.delete(key);
+  }
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  /** Seconds until the next attempt is allowed (when blocked). */
+  retryAfterSeconds: number;
+}
+
+export function checkRateLimit(
+  scope: string,
+  subject: string,
+  limit: number,
+  windowMs: number
+): RateLimitResult {
+  const now = Date.now();
+  sweep(now, windowMs);
+  const key = `${scope}:${subject}`;
+  const bucket = buckets.get(key) ?? { timestamps: [] };
+  bucket.timestamps = bucket.timestamps.filter((ts) => now - ts < windowMs);
+
+  if (bucket.timestamps.length >= limit) {
+    const oldest = bucket.timestamps[0] ?? now;
+    const retryAfterSeconds = Math.max(1, Math.ceil((windowMs - (now - oldest)) / 1000));
+    buckets.set(key, bucket);
+    return { allowed: false, retryAfterSeconds };
+  }
+
+  bucket.timestamps.push(now);
+  buckets.set(key, bucket);
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+/** Test helper — clears all buckets (used by the integration suites). */
+export function resetRateLimits(): void {
+  buckets.clear();
+}
+
+/**
+ * Best-effort client identity for rate limiting unauthenticated flows.
+ * Reads the standard proxy headers; falls back to "unknown" so the
+ * limiter still applies (one shared bucket) when no proxy headers
+ * exist. Never used for authorization — rate limiting only.
+ */
+export function clientKeyFromHeaders(headers: Headers): string {
+  const forwarded = headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+===== END FILE =====
+
+===== FILE: src/lib/db.ts =====
+
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const db =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ['query'],
+  })
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+
+===== END FILE =====
+
+===== FILE: src/lib/validation/auth.ts =====
+
+import { z } from "zod";
+
+/* ------------------------------------------------------------------ */
+/* Authentication & account validation schemas (Zod v4, same style as   */
+/* src/lib/validation/schools.ts). All server-side entry points parse   */
+/* their input through these schemas — never trust the client.          */
+/* ------------------------------------------------------------------ */
+
+/** Normalize an email address for storage and lookups. */
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+const emailField = z
+  .string({ message: "البريد الإلكتروني مطلوب" })
+  .trim()
+  .min(3, "البريد الإلكتروني مطلوب")
+  .max(254, "البريد الإلكتروني طويل جدًا")
+  .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+    message: "صيغة البريد الإلكتروني غير صحيحة",
+  })
+  .transform(normalizeEmail);
+
+const nameField = z
+  .string({ message: "الاسم مطلوب" })
+  .trim()
+  .min(2, "الاسم يجب ألا يقل عن حرفين")
+  .max(120, "الاسم طويل جدًا (الحد الأقصى 120 حرفًا)");
+
+/** Shared password policy: 8+ chars, at least one letter and one digit. */
+const passwordField = z
+  .string({ message: "كلمة المرور مطلوبة" })
+  .min(8, "كلمة المرور يجب ألا تقل عن 8 أحرف")
+  .max(128, "كلمة المرور طويلة جدًا (الحد الأقصى 128 حرفًا)")
+  .refine((v) => /\p{L}/u.test(v) && /\d/.test(v), {
+    message: "كلمة المرور يجب أن تحتوي على حرف واحد ورقم واحد على الأقل",
+  });
+
+/* ------------------------------- Login ---------------------------- */
+
+export const loginSchema = z.object({
+  email: emailField,
+  password: z.string({ message: "كلمة المرور مطلوبة" }).min(1, "كلمة المرور مطلوبة"),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
+/* -------------------- Teacher self-registration ------------------- */
+
+export const teacherRegistrationSchema = z
+  .object({
+    /** The registration link's school slug — re-validated on the server. */
+    slug: z.string().trim().min(1, "رابط التسجيل غير صالح"),
+    name: nameField,
+    email: emailField,
+    password: passwordField,
+    confirmPassword: z.string({ message: "تأكيد كلمة المرور مطلوب" }),
+    /** Optional home branch — must belong to the registration school. */
+    branchId: z
+      .string()
+      .trim()
+      .max(64)
+      .optional()
+      .transform((v) => (v && v.length > 0 ? v : undefined)),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "كلمتا المرور غير متطابقتين",
+    path: ["confirmPassword"],
+  });
+
+export type TeacherRegistrationInput = z.infer<typeof teacherRegistrationSchema>;
+
+/* --------------------------- Password reset ----------------------- */
+
+export const forgotPasswordSchema = z.object({ email: emailField });
+
+export const passwordResetSchema = z
+  .object({
+    token: z.string().trim().min(1, "رابط إعادة التعيين غير صالح"),
+    password: passwordField,
+    confirmPassword: z.string({ message: "تأكيد كلمة المرور مطلوب" }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "كلمتا المرور غير متطابقتين",
+    path: ["confirmPassword"],
+  });
+
+export type PasswordResetInput = z.infer<typeof passwordResetSchema>;
+
+/* ------------------ Platform account management ------------------- */
+
+/**
+ * Office-manager provisioning schema. NOTE: the role is intentionally
+ * ABSENT from the input — the service layer forces it to
+ * DEVELOPMENT_OFFICE_MANAGER so no public or admin form can ever create
+ * a SUPER_ADMIN or choose a role.
+ */
+export const createOfficeManagerSchema = z.object({
+  name: nameField,
+  email: emailField,
+  password: passwordField,
+  schoolId: z.string().trim().min(1, "يجب اختيار المدرسة"),
+});
+
+export type CreateOfficeManagerInput = z.infer<typeof createOfficeManagerSchema>;
+
+/* --------------------------- Result helper ------------------------ */
+
+/** Same uniform shape as the schools module ServiceResult. */
+export type AuthResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false;
+      /** Arabic, user-facing error message. */
+      message: string;
+      fieldErrors?: Record<string, string>;
+      code?:
+        | "VALIDATION_ERROR"
+        | "INVALID_CREDENTIALS"
+        | "INACTIVE"
+        | "EMAIL_NOT_VERIFIED"
+        | "RATE_LIMITED"
+        | "FORBIDDEN"
+        | "NOT_FOUND"
+        | "REGISTRATION_CLOSED"
+        | "TOKEN_INVALID"
+        | "TOKEN_USED"
+        | "TOKEN_EXPIRED";
+    };
+
+export function zodAuthFieldErrors(error: z.ZodError): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = issue.path.length > 0 ? String(issue.path[0]) : "_form";
+    if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+  }
+  return fieldErrors;
+}
+
+===== END FILE =====
+
+===== FILE: src/instrumentation.ts =====
+
+/**
+ * Phase 11 — optional in-process scheduler (FALLBACK ONLY).
+ *
+ * Production deployments should drive background work through an EXTERNAL
+ * scheduler calling the secured POST /api/cron/dispatch endpoint with the
+ * CRON_SECRET header — an in-memory timer cannot be relied upon for
+ * production scheduling (process restarts, multi-instance deployments).
+ *
+ * This instrumentation only runs when ENABLE_INTERNAL_SCHEDULER=true,
+ * never registers twice, and unrefs its timer so it never keeps the
+ * process alive. Every tick is the same idempotent code path the cron
+ * endpoint uses.
+ */
+
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  if ((process.env.ENABLE_INTERNAL_SCHEDULER ?? "").trim() !== "true") return;
+
+  const globalRef = globalThis as typeof globalThis & {
+    __mqPhase11SchedulerTimer?: NodeJS.Timeout;
+  };
+  if (globalRef.__mqPhase11SchedulerTimer) return;
+
+  const { INTERNAL_SCHEDULER_INTERVAL_SECONDS } = await import("@/config/notifications");
+  const { scanAssignmentDeadlineReminders, scanCourseCompletions } = await import(
+    "@/lib/notifications/reminders"
+  );
+  const { processEmailOutbox } = await import("@/lib/notifications/dispatcher");
+
+  const tick = async (): Promise<void> => {
+    try {
+      await scanAssignmentDeadlineReminders();
+    } catch (error) {
+      // Logged but never fatal — the next tick retries idempotently.
+      console.error(
+        "[scheduler] deadline scan failed:",
+        error instanceof Error ? error.message : error
+      );
+    }
+    try {
+      await scanCourseCompletions();
+    } catch (error) {
+      console.error(
+        "[scheduler] course-completion scan failed:",
+        error instanceof Error ? error.message : error
+      );
+    }
+    try {
+      await processEmailOutbox();
+    } catch (error) {
+      console.error(
+        "[scheduler] email dispatch failed:",
+        error instanceof Error ? error.message : error
+      );
+    }
+  };
+
+  const timer = setInterval(() => {
+    void tick();
+  }, Math.max(30, INTERNAL_SCHEDULER_INTERVAL_SECONDS) * 1000);
+  timer.unref?.();
+  globalRef.__mqPhase11SchedulerTimer = timer;
+}
+
+===== END FILE =====
+
+===== FILE: prisma/schema.prisma =====
+
+// Manarat Qurtubah — Phase 2 data model
+// SQLite for the development phase; the same schema maps to PostgreSQL
+// later without model changes (only the datasource provider changes).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * A school tenant. Each school carries its own identity (names, slug,
+ * logo, brand color) and owns a set of branches. Schools are never
+ * hard-deleted once related records exist — they are deactivated.
+ */
+model School {
+  id         String   @id @default(cuid())
+  /// Arabic school name (primary, required).
+  nameAr     String
+  /// Optional English school name.
+  nameEn     String?
+  /// Unique URL-friendly identifier used in routes and in the
+  /// school-specific teacher registration link (/register/{slug}).
+  slug       String   @unique
+  /// Logo reference. Stores a URL — never inline image bytes.
+  logoUrl    String?
+  /// Primary brand color as #RRGGBB. Defaults to the platform blue.
+  brandColor String   @default("#1D5BD6")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  branches Branch[]
+  users    User[]
+
+  supervisorAssignments SupervisorAssignment[]
+  deputyGrants          DeputyGrant[]
+
+  teacherSupervisorAssignments TeacherSupervisorAssignment[]
+
+  trainingPrograms TrainingProgram[]
+  academyCourses   Course[]
+
+  /** Phase 6 — assessments owned by this school (null-school = platform). */
+  assessments Assessment[]
+  /** Phase 7 — assignments are ALWAYS school-owned. */
+  assignments Assignment[]
+  /** Phase 8 — certificates are ALWAYS school-owned (never platform). */
+  certificates Certificate[]
+  /** Phase 9 — surveys and follow-ups are ALWAYS school-owned. */
+  surveys   Survey[]
+  followUps FollowUp[]
+  archiveEvents ArchiveEvent[]
+  @@map("schools")
+}
+
+/**
+ * A branch belonging to exactly one school. Educational stage is stored
+ * as a canonical key ("primary" | "intermediate" | "secondary") and
+ * validated with Zod on every write — SQLite has no native enum type.
+ *
+ * Duplicate branch names inside the same school are prevented by a
+ * unique constraint on the normalized name (nameNorm: trimmed, collapsed
+ * whitespace, lowercased) — see src/lib/validation/schools.ts.
+ */
+model Branch {
+  id        String   @id @default(cuid())
+  schoolId  String
+  nameAr    String
+  nameEn    String?
+  /// Normalized Arabic/English name for in-school uniqueness (see above).
+  nameNorm  String
+  stage     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  users                 User[]
+  supervisorAssignments SupervisorAssignment[]
+  deputyGrants          DeputyGrant[]
+  /// Branch names must be unique within the same school (normalized).
+  @@unique([schoolId, nameNorm])
+  @@index([schoolId])
+  @@map("branches")
+}
+
+/**
+ * A platform or school user. Roles are stored as canonical English keys
+ * ("SUPER_ADMIN" | "DEVELOPMENT_OFFICE_MANAGER" | "EDUCATIONAL_DEPUTY" |
+ * "EDUCATIONAL_SUPERVISOR" | "TEACHER") and validated with Zod on every
+ * write — SQLite has no native enum type. Role-specific authorization
+ * lives centrally in src/lib/auth (never scattered across call-sites).
+ *
+ * SUPER_ADMIN is a platform-level actor: schoolId stays null.
+ * Email is stored normalized (trimmed, lowercased) and unique at the DB
+ * level as the final duplicate-prevention guarantee.
+ *
+ * tokenVersion is bumped on security-sensitive changes (password reset,
+ * logout-everywhere): session JWTs embed it and older sessions become
+ * invalid immediately — no server-side session table needed.
+ */
+model User {
+  id             String    @id @default(cuid())
+  name           String
+  /// Normalized email address (trimmed + lowercased) — unique.
+  email          String    @unique
+  /// bcrypt hash — plaintext passwords are never stored or logged.
+  passwordHash   String
+  role           String
+  /** Owning school tenant. Null for SUPER_ADMIN (platform-level). */
+  schoolId       String?
+  /** Home branch for branch-scoped roles (e.g. a teacher's branch). */
+  branchId       String?
+  isActive       Boolean   @default(true)
+  /// Null until the email-verification flow completes (teachers).
+  emailVerifiedAt DateTime?
+  /// Set on every successful credential sign-in (server-side only).
+  /// Null means the account has never signed in — displayed honestly.
+  lastLoginAt    DateTime?
+  tokenVersion   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school               School?                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branch               Branch?                @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  supervisorAssignments SupervisorAssignment[] @relation("SupervisorUser")
+  deputyGrants          DeputyGrant[]          @relation("DeputyUser")
+
+  verificationTokens   EmailVerificationToken[]
+  passwordResetTokens  PasswordResetToken[]
+
+  /** This user's CURRENT supervisor (null = none) — one row per teacher. */
+  teacherSupervision    TeacherSupervisorAssignment? @relation("TeacherSupervisionTeacher")
+  /** Teachers explicitly assigned to this supervisor. */
+  supervisedTeachers    TeacherSupervisorAssignment[] @relation("TeacherSupervisionSupervisor")
+
+  /** Phase 5 — training academy authorship & participation. */
+  createdPrograms      TrainingProgram[]  @relation("ProgramCreator")
+  createdCourses       Course[]           @relation("CourseCreator")
+  instructedCourses    Course[]           @relation("CourseInstructor")
+  uploadedAttachments  Attachment[]       @relation("AttachmentUploader")
+  enrollments          CourseEnrollment[] @relation("Enrollments")
+
+  /** Phase 6 — assessment authorship, attempts and manual reviews. */
+  createdAssessments Assessment[]         @relation("AssessmentCreator")
+  assessmentAttempts AssessmentAttempt[]  @relation("AttemptOwner")
+  reviewedAttempts   AssessmentAttempt[]  @relation("AttemptReviewer")
+  /** Phase 7 — assignments, submissions and review audit. */
+  createdAssignments    Assignment[]           @relation("CreatedAssignments")
+  assignmentSubmissions AssignmentSubmission[] @relation("AssignmentSubmissions")
+  reviewedSubmissions   AssignmentSubmission[] @relation("ReviewedSubmissions")
+  /** Phase 8 — certificate ownership, issuance/revocation audit. */
+  certificates       Certificate[]      @relation("CertificateOwner")
+  issuedCertificates Certificate[]      @relation("CertificateIssuer")
+  revokedCertificates Certificate[]     @relation("CertificateRevoker")
+  certificateEvents  CertificateEvent[] @relation("CertificateEventActor")
+  /** Phase 9 — survey authorship, responses and audit. */
+  ownedSurveys     Survey[]         @relation("SurveyOwner")
+  surveyResponses  SurveyResponse[] @relation("SurveyRespondent")
+  surveyEventActor SurveyEvent[]    @relation("SurveyEventActor")
+  /** Phase 9 — follow-up responsibilities and audit. */
+  followUpsAsTeacher     FollowUp[]      @relation("FollowUpTeacher")
+  followUpsAsSupervisor  FollowUp[]      @relation("FollowUpSupervisor")
+  followUpsAsCreator     FollowUp[]      @relation("FollowUpCreator")
+  followUpEventActor     FollowUpEvent[] @relation("FollowUpEventActor")
+  /** Phase 10 — archive operations audit. */
+  archivedFollowUps FollowUp[]      @relation("FollowUpArchiver")
+  archiveEventActor ArchiveEvent[]  @relation("ArchiveEventActor")
+  /** Phase 11 — in-app notifications, preferences and email audit. */
+  notifications          Notification[]          @relation("NotificationOwner")
+  notificationPreference NotificationPreference?
+  emailDeliveries        EmailDelivery[]         @relation("EmailDeliveryOwner")
+  @@index([schoolId])
+  @@index([role])
+  @@map("users")
+}
+
+/**
+ * Explicit supervisor → branch assignment inside one school. Supervisors
+ * may only see teachers of their assigned branches — this table is the
+ * single source of that boundary (checked server-side everywhere).
+ */
+model SupervisorAssignment {
+  id           String   @id @default(cuid())
+  supervisorId String
+  schoolId     String
+  branchId     String
+  createdAt    DateTime @default(now())
+
+  supervisor User     @relation("SupervisorUser", fields: [supervisorId], references: [id], onDelete: Cascade)
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([supervisorId, branchId])
+  @@index([supervisorId])
+  @@map("supervisor_assignments")
+}
+
+/**
+ * Explicit read-only authorization for an EDUCATIONAL_DEPUTY over a
+ * school (branchId null) or a single branch. Deputies never get write
+ * access through this grant — it only widens what they may read.
+ */
+model DeputyGrant {
+  id        String   @id @default(cuid())
+  userId    String
+  schoolId  String
+  /// Null = the grant covers the whole school.
+  branchId  String?
+  createdAt DateTime @default(now())
+
+  user   User    @relation("DeputyUser", fields: [userId], references: [id], onDelete: Cascade)
+  school School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("deputy_grants")
+}
+
+/**
+ * Explicit teacher -> supervisor assignment inside ONE school.
+ *
+ * A teacher has at most ONE current supervisor (@@unique on teacherId),
+ * so "changing the supervisor" is a single-row replace: the former
+ * supervisor loses access automatically unless ANOTHER valid grant
+ * (e.g. a branch assignment) still covers the teacher. Visibility is
+ * the union of explicit assignments and branch-derived coverage —
+ * always confined to the supervisor's own school (service layer).
+ */
+model TeacherSupervisorAssignment {
+  id           String   @id @default(cuid())
+  /// Unique per teacher: one current supervisor at a time.
+  teacherId    String   @unique
+  supervisorId String
+  /// Denormalized from teacher.schoolId — enforced equal on write.
+  schoolId     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teacher    User   @relation("TeacherSupervisionTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  supervisor User   @relation("TeacherSupervisionSupervisor", fields: [supervisorId], references: [id], onDelete: Cascade)
+  school     School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([supervisorId])
+  @@index([schoolId])
+  @@map("teacher_supervisor_assignments")
+}
+
+/**
+ * Single-use, expiring email-verification token. The raw token lives
+ * only inside the emailed URL; the database stores its SHA-256 hash so
+ * a database leak cannot be replayed against the public endpoint.
+ */
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+/**
+ * Single-use, expiring password-reset token (same hash-at-rest policy).
+ * Consuming a reset token bumps the user's tokenVersion, invalidating
+ * every existing session immediately.
+ */
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 5 — training academy                                           */
+/*                                                                      */
+/* Tenancy: schoolId null means PLATFORM-WIDE (shared with every        */
+/* school). Only SUPER_ADMIN may create/manage platform-wide records —  */
+/* enforced in the service layer, never trusted from the client.        */
+/* SQLite has no native enums: status/type/category columns are         */
+/* canonical English keys validated with Zod on every write.            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A training program grouping related courses. DRAFT -> PUBLISHED ->
+ * ARCHIVED lifecycle; programs are never hard-deleted once courses
+ * reference them (archiving preserves history).
+ */
+model TrainingProgram {
+  id            String   @id @default(cuid())
+  /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
+  schoolId      String?
+  nameAr        String
+  nameEn        String?
+  /// Normalized name for duplicate prevention within the same scope.
+  nameNorm      String
+  descriptionAr String
+  descriptionEn String?
+  /// Cover image attachment (optional).
+  coverAttachmentId String? @unique
+  /// Canonical category key — validated against src/config/training.ts.
+  category      String
+  /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
+  status        String   @default("DRAFT")
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school    School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  createdBy User    @relation("ProgramCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  cover     Attachment? @relation("ProgramCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
+
+  courses      Course[]
+  assignments  Assignment[]
+  attachments  Attachment[] @relation("ProgramFiles")
+  /** Phase 8 — certificates issued for completing this program. */
+  certificates Certificate[]
+  /** Phase 9 — impact surveys and follow-ups linked to this program. */
+  surveys   Survey[]
+  followUps FollowUp[]
+
+  @@index([schoolId])
+  @@index([status])
+  @@map("training_programs")
+}
+
+/**
+ * A training course inside (optionally) a program. Content is built
+ * from ordered sections and lessons; publishing is a server-validated
+ * workflow that requires at least one section and one lesson.
+ */
+model Course {
+  id            String   @id @default(cuid())
+  /// Optional parent program.
+  programId     String?
+  /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
+  schoolId      String?
+  titleAr       String
+  titleEn       String?
+  descriptionAr String
+  descriptionEn String?
+  /// Cover image attachment (optional).
+  coverAttachmentId String? @unique
+  /// Canonical category key — validated against src/config/training.ts.
+  category      String
+  /// BEGINNER | INTERMEDIATE | ADVANCED — optional difficulty level.
+  level         String?
+  /// Estimated effort in hours (display only).
+  estimatedHours Int?
+  /// Instructor / responsible user (optional, must belong to the
+  /// course's school when set — service-layer enforced).
+  instructorId  String?
+  /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
+  status        String   @default("DRAFT")
+  /// Set on the first successful publish; kept while archived.
+  publishedAt   DateTime?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  program    TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  school     School?          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  instructor User?            @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  createdBy  User             @relation("CourseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  cover      Attachment?      @relation("CourseCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
+
+  sections    CourseSection[]
+  attachments Attachment[]       @relation("CourseFiles")
+  enrollments CourseEnrollment[]
+  assignments Assignment[]
+  /** Phase 6 — assessments bound to this course (optional binding). */
+  assessments Assessment[]
+  /** Phase 8 — certificates issued for completing this course. */
+  certificates Certificate[]
+  /** Phase 9 — impact surveys and follow-ups linked to this course. */
+  surveys   Survey[]
+  followUps FollowUp[]
+  @@index([schoolId])
+  @@index([status])
+  @@index([programId])
+  @@map("courses")
+}
+
+/**
+ * An ordered section (module) inside one course. Ordering is a plain
+ * integer maintained by the service layer (swap-based moves inside a
+ * transaction) — SQLite + Prisma cannot defer unique constraints, so
+ * no DB-level unique on orderIndex.
+ */
+model CourseSection {
+  id          String   @id @default(cuid())
+  courseId    String
+  titleAr     String
+  description String?
+  orderIndex  Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course  Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons CourseLesson[]
+  /** Phase 7 — assignments linked to this section. */
+  assignments Assignment[]
+  /** Phase 9 — surveys linked to lessons of this section (no direct link). */
+
+  @@index([courseId])
+  @@map("course_sections")
+}
+
+/**
+ * A lesson inside one section. Types:
+ *   TEXT          — plain-text body rendered safely (never HTML)
+ *   VIDEO         — uploaded video file (Attachment reference)
+ *   EXTERNAL_VIDEO — https URL to an allow-listed external host
+ *   RESOURCE      — downloadable file (Attachment reference)
+ */
+model CourseLesson {
+  id          String   @id @default(cuid())
+  sectionId   String
+  titleAr     String
+  description String?
+  /// TEXT | VIDEO | EXTERNAL_VIDEO | RESOURCE — validated with Zod.
+  type        String
+  /// Plain-text body for TEXT lessons (safe rendering, no HTML).
+  content     String?
+  /// External video URL for EXTERNAL_VIDEO lessons (validated https).
+  videoUrl    String?
+  /// Primary media attachment for VIDEO / RESOURCE lessons (one-to-one).
+  attachmentId String? @unique
+  orderIndex  Int
+  /// Draft lessons stay invisible to teachers even in published courses.
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  attachment  Attachment?   @relation("LessonPrimaryAttachment", fields: [attachmentId], references: [id], onDelete: SetNull)
+  attachments Attachment[]  @relation("LessonFiles")
+  /** Phase 7 — assignments linked to this lesson. */
+  assignments Assignment[]
+  /** Phase 9 — surveys linked to this lesson. */
+  surveys Survey[]
+
+  @@index([sectionId])
+  @@map("course_lessons")
+}
+
+/**
+ * Uploaded file metadata — bytes live in the configured storage
+ * backend (local disk in development; the adapter interface is
+ * provider-agnostic), NEVER in the relational database. Filenames are
+ * display-only: storage keys are generated server-side.
+ */
+model Attachment {
+  id           String   @id @default(cuid())
+  /// Original client filename — display only, never used as a path.
+  originalName String
+  /// Server-generated safe storage key inside the storage backend.
+  storageKey   String   @unique
+  mimeType     String
+  sizeBytes    Int
+  /// COVER | RESOURCE — canonical key, validated with Zod.
+  kind         String
+  /// Owning course (required for every attachment).
+  courseId     String?
+  /// Owning lesson for lesson-bound resources (optional).
+  lessonId     String?
+  /// Owning program for program covers (optional).
+  programId    String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  course   Course?          @relation("CourseFiles", fields: [courseId], references: [id], onDelete: Cascade)
+  lesson   CourseLesson?    @relation("LessonFiles", fields: [lessonId], references: [id], onDelete: Cascade)
+  program  TrainingProgram? @relation("ProgramFiles", fields: [programId], references: [id], onDelete: Cascade)
+  /// Reverse links for cover references (no FK — the FK lives on the
+  /// cover owner side).
+  courseCoverFor Course? @relation("CourseCover")
+  programCoverFor TrainingProgram? @relation("ProgramCover")
+  /// Reverse link for the lesson primary-media reference.
+  primaryForLesson CourseLesson? @relation("LessonPrimaryAttachment")
+  uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([courseId])
+  @@index([lessonId])
+  @@index([programId])
+  @@map("attachments")
+}
+
+/**
+ * A teacher's enrollment in one course. Unique (courseId, userId)
+ * prevents duplicates. Completion tracking and lesson analytics are
+ * intentionally deferred to a later phase — enrollment alone never
+ * marks anything completed.
+ */
+model CourseEnrollment {
+  id         String   @id @default(cuid())
+  courseId   String
+  userId     String
+  /// ACTIVE (completion states arrive in a later phase).
+  status     String   @default("ACTIVE")
+  enrolledAt DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation("Enrollments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, userId])
+  @@index([userId])
+  @@map("course_enrollments")
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 6 — exam engine, assessments & learning progress               */
+/*                                                                      */
+/* Tenancy mirrors the training academy: schoolId null means            */
+/* PLATFORM-WIDE (visible to every school); only SUPER_ADMIN may        */
+/* create platform-wide assessments. SQLite has no native enums:        */
+/* status/type columns are canonical English keys validated with Zod    */
+/* on every write (src/lib/validation/assessment.ts).                   */
+/*                                                                      */
+/* SECURITY: the answer key lives ONLY in AssessmentQuestion rows and   */
+/* never crosses the RSC boundary before a submission is finalized —    */
+/* the service layer strips it from every teacher-facing projection.    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * An assessment (quiz/exam) optionally bound to one training course.
+ * DRAFT -> PUBLISHED -> ARCHIVED lifecycle, same as programs/courses.
+ * Publishing requires at least one question and a passing score that
+ * fits the total points (service-layer guard on every publish).
+ */
+model Assessment {
+  id             String   @id @default(cuid())
+  /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
+  schoolId       String?
+  /// Optional binding to a published training course (same tenant).
+  courseId       String?
+  titleAr        String
+  titleEn        String?
+  instructionsAr String
+  instructionsEn String?
+  /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
+  status         String   @default("DRAFT")
+  /// Points required to pass (validated <= total question points).
+  passingScore   Int
+  /// Time limit in minutes (null = untimed). Server-enforced deadline.
+  timeLimitMinutes Int?
+  /// Maximum attempts per teacher (null = unlimited).
+  attemptLimit   Int?
+  /// Availability window (null bounds = always available).
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  /// Denormalized sum of question points — recomputed by the service
+  /// layer inside the same transaction as every question mutation.
+  maxScore       Int      @default(0)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school    School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy User    @relation("AssessmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  questions AssessmentQuestion[]
+  attempts  AssessmentAttempt[]
+
+  @@index([schoolId])
+  @@index([status])
+  @@index([courseId])
+  @@map("assessments")
+}
+
+/**
+ * One question inside an assessment. Options and the correct-answer key
+ * are stored as JSON strings (SQLite has no native JSON type) and are
+ * always written through the Zod-validated service layer:
+ *   SINGLE_CHOICE   options + answerKey {optionId}
+ *   MULTIPLE_CHOICE options + answerKey {optionIds: [...]}
+ *   TRUE_FALSE      no options + answerKey {value: boolean}
+ *   SHORT_ANSWER    no auto grading — model answer helps the reviewer;
+ *                   the attempt lands in NEEDS_REVIEW until reviewed.
+ */
+model AssessmentQuestion {
+  id           String  @id @default(cuid())
+  assessmentId String
+  /// SINGLE_CHOICE | MULTIPLE_CHOICE | TRUE_FALSE | SHORT_ANSWER
+  type         String
+  textAr       String
+  textEn       String?
+  orderIndex   Int
+  /// Points awarded for a fully correct answer (1..100).
+  points       Int
+  isRequired   Boolean @default(true)
+  /// JSON [{id, textAr}] — choice types only.
+  optionsJson  String?
+  /// SERVER-ONLY answer key JSON — never serialized to the client
+  /// before the attempt is finalized.
+  answerKeyJson String?
+  /// Optional feedback shown after submission.
+  explanation  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@map("assessment_questions")
+}
+
+/**
+ * One teacher attempt. Lifecycle:
+ *   IN_PROGRESS (answers draft autosaved) -> EXPIRED (deadline passed,
+ *   never submitted — no invented grade) -> on submit either
+ *   NEEDS_REVIEW (contains short-answer questions) or graded atomically
+ *   into PASSED / FAILED. Finalized rows are immutable (service guard).
+ *
+ * Concurrency: submission flips the row with a conditional
+ * updateMany(status = IN_PROGRESS) inside a transaction, so double
+ * submissions cannot double-grade; attempt limits are re-checked inside
+ * the start/submit transactions (SQLite serializes writers).
+ */
+model AssessmentAttempt {
+  id           String    @id @default(cuid())
+  assessmentId String
+  userId       String
+  /// IN_PROGRESS | EXPIRED | NEEDS_REVIEW | PASSED | FAILED
+  status       String    @default("IN_PROGRESS")
+  startedAt    DateTime  @default(now())
+  /// Server-side deadline for timed assessments (startedAt + limit).
+  deadlineAt   DateTime?
+  submittedAt  DateTime?
+  /// JSON [{questionId, choice?/bool?/text?}] — autosaved draft, then
+  /// the graded submission snapshot.
+  answersJson  String?
+  /// Points earned on auto-gradable questions (set at submission).
+  objectiveScore Int     @default(0)
+  /// Final score after any manual review (null until finalized).
+  earnedScore  Int?
+  /// Snapshot of the graded question set's total points (set at submit).
+  maxScore     Int?
+  /// 0..100 rounded integer (set when finalized).
+  percentage   Int?
+  passed       Boolean?
+  /// Manual review audit (short-answer grading).
+  reviewedById String?
+  reviewedAt   DateTime?
+  /// JSON [{questionId, points}] — per-question manual review scores
+  /// (audit trail + per-question feedback after review).
+  reviewScoresJson String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user       User       @relation("AttemptOwner", fields: [userId], references: [id], onDelete: Restrict)
+  reviewedBy User?      @relation("AttemptReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([assessmentId])
+  @@index([userId])
+  @@index([status])
+  @@map("assessment_attempts")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 7 — Assignments, teacher submissions and supervision.
+// Assignments are ALWAYS school-owned (schoolId NOT NULL).
+// SQLite has no enums: canonical English string keys are validated
+// with Zod on every write (see src/lib/validation/assignments.ts).
+// ─────────────────────────────────────────────────────────────────
+
+model Assignment {
+  id            String   @id @default(cuid())
+  schoolId      String
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  // Optional content binding — every linked row must belong to the
+  // same school and must not be archived (validated in the service).
+  programId     String?
+  program       TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId      String?
+  course        Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  sectionId     String?
+  section       CourseSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  lessonId      String?
+  lesson        CourseLesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  createdById   String
+  createdBy     User     @relation("CreatedAssignments", fields: [createdById], references: [id])
+
+  titleAr       String
+  titleEn       String?
+  descriptionAr String
+  descriptionEn String?
+
+  // DRAFT | PUBLISHED | CLOSED | ARCHIVED (ARCHIVED is terminal)
+  status        String   @default("DRAFT")
+
+  // Audience targeting — ids validated server-side, always in-school.
+  // ALL_TEACHERS | BRANCHES | TEACHERS
+  audienceMode         String  @default("ALL_TEACHERS")
+  targetTeacherIdsJson String?
+  targetBranchIdsJson  String?
+
+  // Deadlines and late policy. Server-side only; the client is never
+  // trusted for any date decision.
+  dueAt     DateTime
+  publishedAt DateTime?
+  allowLate Boolean   @default(false)
+  lateUntil DateTime?
+
+  // Sum of rubric criterion maxPoints — recomputed on every rubric edit.
+  totalPoints Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  criteria    AssignmentRubricCriterion[]
+  submissions AssignmentSubmission[]
+  /** Phase 9 — surveys and follow-ups linked to this assignment. */
+  surveys   Survey[]
+  followUps FollowUp[]
+
+  @@index([schoolId, status])
+  @@index([dueAt])
+  @@map("assignments")
+}
+
+model AssignmentRubricCriterion {
+  id           String     @id @default(cuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  orderIndex   Int
+  titleAr      String
+  maxPoints    Int
+
+  scores RubricScore[]
+
+  @@unique([assignmentId, orderIndex])
+  @@map("assignment_rubric_criteria")
+}
+
+model AssignmentSubmission {
+  id           String     @id @default(cuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  teacherId    String
+  teacher      User       @relation("AssignmentSubmissions", fields: [teacherId], references: [id])
+  // Denormalized tenant key — every scoping query uses this column.
+  schoolId     String
+
+  // DRAFT | SUBMITTED | UNDER_REVIEW | RETURNED | GRADED
+  status       String @default("DRAFT")
+
+  responseText String?
+
+  isLate          Boolean   @default(false)
+  submittedAt     DateTime?
+  lastSubmittedAt DateTime?
+  resubmitCount   Int       @default(0)
+
+  scoreTotal   Int?
+  feedbackText String?
+  reviewedById String?
+  reviewedBy   User?     @relation("ReviewedSubmissions", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files        SubmissionFile[]
+  revisions    SubmissionRevision[]
+  rubricScores RubricScore[]
+
+  @@unique([assignmentId, teacherId])
+  @@index([schoolId, status])
+  @@map("assignment_submissions")
+}
+
+model SubmissionFile {
+  id           String               @id @default(cuid())
+  submissionId String
+  submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  // Server-generated key (UUID under dated folders) — never user input.
+  storageKey   String @unique
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  @@map("submission_files")
+}
+
+model SubmissionRevision {
+  id           String               @id @default(cuid())
+  submissionId String
+  submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  revisionIndex Int
+  // Snapshot of the PREVIOUS version taken at resubmit time.
+  responseText String?
+  fileNamesJson String?
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@unique([submissionId, revisionIndex])
+  @@map("submission_revisions")
+}
+
+model RubricScore {
+  id           String                    @id @default(cuid())
+  submissionId String
+  submission   AssignmentSubmission      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criterionId  String
+  criterion    AssignmentRubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  points       Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([submissionId, criterionId])
+  @@map("rubric_scores")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 8 — Certificates & professional growth.
+// Certificates are ALWAYS school-owned (schoolId NOT NULL): a
+// certificate records that ONE teacher of THIS school satisfied the
+// completion requirements of a course/program, per the SAME rules the
+// server-side eligibility engine enforces at issuance time.
+//
+// Status model: ISSUED | REVOKED persisted. Expiration is DERIVED
+// from expiresAt (never a stored status), so a certificate can never
+// be simultaneously revoked and expired.
+//
+// Duplicate prevention: unique (teacherId, courseId) and
+// (teacherId, programId) at the DB level — one completion
+// certificate per teacher per qualifying content. Rows remain after
+// revocation (audit-first), so a revoked certificate still blocks
+// accidental re-issuance.
+// ─────────────────────────────────────────────────────────────────
+
+model Certificate {
+  id       String @id @default(cuid())
+  /// Owning school tenant (the ISSUING school — never null).
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  /// The certified teacher. Always an active TEACHER of the owning
+  /// school (service-enforced on every write — never client-trusted).
+  teacherId String
+  teacher   User   @relation("CertificateOwner", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  /// Human-readable serial (MQ-YYYY-XXXXXX) — unique, printed on the
+  /// certificate and accepted by the verification search.
+  certificateNumber String @unique
+  /// Public verification code (16-char Crockford base32, stored
+  /// WITHOUT dashes) — unique, collision-resistant, safe to print.
+  verificationCode String @unique
+
+  titleAr       String
+  titleEn       String?
+  descriptionAr String?
+  descriptionEn String?
+
+  /// The qualifying content. The service requires at least ONE of the
+  /// two — eligibility is always computed against real learning data.
+  programId String?
+  program   TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId  String?
+  course    Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  /// ISSUED | REVOKED — canonical key, validated with Zod on write.
+  status String @default("ISSUED")
+
+  issuedAt  DateTime
+  /// Null = the certificate never expires.
+  expiresAt DateTime?
+
+  /// Issuance audit: who issued it + issuing-authority label snapshot.
+  issuedById      String
+  issuedBy        User    @relation("CertificateIssuer", fields: [issuedById], references: [id])
+  issuerRoleLabel String?
+
+  /// Revocation audit (null while ISSUED).
+  revokedById      String?
+  revokedBy        User?     @relation("CertificateRevoker", fields: [revokedById], references: [id])
+  revokedAt        DateTime?
+  revocationReason String?
+
+  /// JSON snapshot of the eligibility rules + achieved results checked
+  /// server-side at issuance (audit of WHAT qualified the teacher).
+  criteriaSnapshotJson String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events CertificateEvent[]
+  /** Phase 9 — impact surveys linked to this certificate. */
+  surveys Survey[]
+
+  /// One completion certificate per teacher per qualifying content.
+  @@unique([teacherId, courseId])
+  @@unique([teacherId, programId])
+  @@index([schoolId, status])
+  @@index([teacherId])
+  @@map("certificates")
+}
+
+/**
+ * Append-only audit trail for certificate lifecycle events (ISSUED /
+ * REVOKED). The service never updates or deletes events — revocation
+ * ADDS a new event, preserving the full history.
+ */
+model CertificateEvent {
+  id            String      @id @default(cuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  /// ISSUED | REVOKED — canonical key, validated on write.
+  type String
+  /// Actor that performed the action (null = system).
+  actorId   String?
+  actor     User?   @relation("CertificateEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Role key snapshot at event time.
+  actorRole String?
+  /// Free-text note (the revocation reason is duplicated here).
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([certificateId])
+  @@map("certificate_events")
+}
+/* ------------------------------------------------------------------ */
+/* Phase 9 — impact surveys, follow-up & outcome measurement             */
+/*                                                                        */
+/* Tenancy: surveys and follow-ups are ALWAYS school-owned (schoolId     */
+/* NOT NULL) — SUPER_ADMIN has no operational write path, mirroring      */
+/* the Phase 7/8 rule. Statuses/audience modes are canonical English     */
+/* keys validated with Zod on every write (SQLite has no native enums).  */
+/*                                                                        */
+/* PRIVACY: anonymous surveys NEVER persist respondent identity — the    */
+/* respondentId stays null for the whole row lifetime, individual        */
+/* responses are never exposed, and small-group aggregates (fewer than   */
+/* the configured threshold) are suppressed. Where pre/post linking is   */
+/* explicitly enabled, only a pseudonymous SHA-256 key is stored — it    */
+/* cannot be reversed to a user identity from the database alone.        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * An impact survey (questionnaire). DRAFT -> PUBLISHED -> CLOSED ->
+ * ARCHIVED lifecycle. Publishing is a server-validated workflow that
+ * requires at least one question and consistent dates. An optional
+ * evaluation STAGE (before training / after training / application
+ * follow-up) plus content links let the office measure training impact;
+ * a shared linkPairCode connects pre/post surveys for change analysis.
+ */
+model Survey {
+  id       String @id @default(cuid())
+  /// Owning school tenant (never null — surveys are school work).
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// Authoring user (office manager or supervisor within their scope).
+  ownerUserId String
+  owner       User   @relation("SurveyOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  titleAr        String
+  titleEn        String?
+  descriptionAr  String?
+  descriptionEn  String?
+  /// Purpose shown to respondents before the questions.
+  purposeAr      String?
+  /// Respondent instructions shown above the first question.
+  instructionsAr String?
+
+  // Optional impact links — every linked row must belong to the same
+  // school (or be platform-wide content) and must not be archived
+  // (validated in the service on every write).
+  programId     String?
+  program       TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId      String?
+  course        Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  lessonId      String?
+  lesson        CourseLesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  assignmentId  String?
+  assignment    Assignment?      @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  certificateId String?
+  certificate   Certificate?     @relation(fields: [certificateId], references: [id], onDelete: SetNull)
+
+  /// PRE_TRAINING | AFTER_TRAINING | APPLICATION_FOLLOWUP | null
+  /// (null = a general survey with no impact-evaluation stage).
+  stage String?
+  /// Shared pairing code joining a pre-training survey with its
+  /// after-training twin (e.g. "P9-PAIR-007"). Required for stage
+  /// comparisons; never secret — it only names the pair.
+  linkPairCode String?
+
+  // Audience targeting — ids validated server-side, always in-school.
+  // ALL_TEACHERS | BRANCHES | TEACHERS (same modes as Phase 7).
+  audienceMode         String  @default("ALL_TEACHERS")
+  targetBranchIdsJson  String?
+  targetTeacherIdsJson String?
+
+  /// Anonymous surveys store NO respondent identity (respondentId stays
+  /// null forever). Individual responses and drafts are unavailable —
+  /// the create form explains this trade-off before enabling it.
+  anonymous Boolean @default(false)
+  /// Allow more than one submission from the same respondent (identified
+  /// surveys only; anonymous duplicates cannot technically be prevented
+  /// without identity — surfaced as an explicit limitation in the UI).
+  allowMultipleResponses Boolean @default(false)
+  /// Pseudonymous pre/post linking for anonymous surveys: stores a
+  /// SHA-256 respondentKey derived from linkPairCode + user id. The key
+  /// never appears in UI payloads and cannot be reversed without both
+  /// the database and the source pepper.
+  linkResponsesEnabled Boolean @default(false)
+
+  // DRAFT | PUBLISHED | CLOSED | ARCHIVED (ARCHIVED is terminal)
+  status String @default("DRAFT")
+
+  /// Response window — null opensAt = open on publish, null closesAt
+  /// = open until manually closed. Server-enforced on every submission.
+  opensAt  DateTime?
+  closesAt DateTime?
+  publishedAt DateTime?
+  closedAt   DateTime?
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions SurveyQuestion[]
+  responses SurveyResponse[]
+  events    SurveyEvent[]
+  /** Phase 9 — follow-ups that reference this survey. */
+  followUps FollowUp[]
+
+  @@index([schoolId, status])
+  @@index([ownerUserId])
+  @@index([programId])
+  @@index([courseId])
+  @@map("surveys")
+}
+
+/**
+ * One question inside a survey. Ordering is a plain integer normalized
+ * 1..N by the service on every save (no DB-unique — mirrors the Phase 5
+ * section/lesson ordering approach). Options for choice questions are
+ * stored as a JSON string[]; submissions snapshot the selected option
+ * TEXTS so later question edits cannot corrupt historical results.
+ */
+model SurveyQuestion {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  orderIndex Int
+  textAr     String
+  /// Optional helper line under the question text.
+  helpTextAr String?
+
+  /// SINGLE_CHOICE | MULTI_CHOICE | RATING | LIKERT | SHORT_TEXT |
+  /// LONG_TEXT | YES_NO — validated with Zod on every write.
+  type String
+  /// Required questions must carry an answer at submission time.
+  required Boolean @default(false)
+
+  /// JSON string[] — 2..10 options for SINGLE_CHOICE / MULTI_CHOICE.
+  optionsJson String?
+  /// RATING scale bounds (1..10); defaults to 1..5 when null.
+  minScore Int?
+  maxScore Int?
+
+  answers SurveyAnswer[]
+
+  @@index([surveyId])
+  @@map("survey_questions")
+}
+
+/**
+ * A respondent's progress on one survey. DRAFT rows (identified surveys
+ * only) save progress; SUBMITTED rows are immutable (no edit path —
+ * re-submission only when the survey explicitly allows multiple
+ * responses). For anonymous surveys respondentId is null FOREVER — the
+ /// row is created directly in SUBMITTED state.
+ */
+model SurveyResponse {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  /// Denormalized owning school for tenant-scoped queries.
+  schoolId String
+
+  /// Null for anonymous surveys — identity is never persisted.
+  respondentId String?
+  respondent   User?   @relation("SurveyRespondent", fields: [respondentId], references: [id], onDelete: SetNull)
+
+  /// Pseudonymous pairing key (SHA-256 of linkPairCode + user id +
+  /// pepper) — present ONLY for anonymous surveys with linking enabled.
+  /// Used exclusively for aggregate pre/post matching.
+  respondentKey String?
+
+  /// DRAFT | SUBMITTED
+  status      String  @default("DRAFT")
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers SurveyAnswer[]
+
+  @@index([surveyId])
+  @@index([schoolId])
+  @@index([respondentId])
+  @@index([respondentKey])
+  @@map("survey_responses")
+}
+
+/**
+ * One answer inside a response. The value column depends on the
+ * question type: valueNumber for RATING/LIKERT/YES_NO, valueText for
+ * SHORT/LONG_TEXT, selectedOptionsJson (string[]) for choice types.
+ * Enforced with Zod at submission; the service re-checks every value
+ * against its question definition (type, scale bounds, option set).
+ */
+model SurveyAnswer {
+  id         String          @id @default(cuid())
+  responseId String
+  response   SurveyResponse  @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId String
+  question   SurveyQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  valueNumber         Int?
+  valueText           String?
+  selectedOptionsJson String?
+
+  @@unique([responseId, questionId])
+  @@index([questionId])
+  @@map("survey_answers")
+}
+
+/**
+ * Append-only audit trail for survey lifecycle events (CREATED /
+ * UPDATED / PUBLISHED / CLOSED / ARCHIVED). Never updated or deleted —
+ * status changes ADD events, preserving the full history.
+ */
+model SurveyEvent {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  /// CREATED | UPDATED | PUBLISHED | CLOSED | ARCHIVED
+  type String
+  /// Actor that performed the action (null = system).
+  actorId   String?
+  actor     User?   @relation("SurveyEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([surveyId])
+  @@map("survey_events")
+}
+
+/**
+ * A follow-up record: a supervisor's structured classroom-application
+ * visit for one teacher. Internal notes (observations, challenges,
+ * support needs) are NEVER rendered to teachers; the shared view shows
+ * only the explicit subset (title, purpose, dates, status,
+ * recommendations) and only when sharedWithTeacher is true.
+ */
+model FollowUp {
+  id       String @id @default(cuid())
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// The followed-up teacher (active TEACHER of the owning school).
+  teacherId String
+  teacher   User   @relation("FollowUpTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  /// Responsible supervisor — must cover the teacher (assigned or via
+  /// branch grant); office managers may assign any school supervisor.
+  supervisorId String
+  supervisor   User   @relation("FollowUpSupervisor", fields: [supervisorId], references: [id], onDelete: Restrict)
+
+  /// Creator (manager or the supervisor themself) — audit anchor.
+  createdById String
+  createdBy   User   @relation("FollowUpCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  titleAr    String
+  purposeAr  String?
+  /// The follow-up session date.
+  followUpDate DateTime
+  /// Scheduled next follow-up (date-based workflow, optional).
+  nextFollowUpAt DateTime?
+
+  /// PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  status String @default("PLANNED")
+
+  // Optional links (same-tenant guards in the service).
+  programId    String?
+  program      TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId     String?
+  course       Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  surveyId     String?
+  survey       Survey?          @relation(fields: [surveyId], references: [id], onDelete: SetNull)
+  assignmentId String?
+  assignment   Assignment?      @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  // Internal supervisor notes — never exposed to TEACHER role.
+  observationAr  String?
+  progressAr     String?
+  challengesAr   String?
+  supportNeedsAr String?
+  /// Included in the teacher-shared view (explicitly shared content).
+  recommendationsAr String?
+  /// Master switch: teacher can see the shared subset of this record.
+  sharedWithTeacher Boolean @default(false)
+
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /** Phase 10 — soft-archive timestamp (null = active workflow). The
+   * record's status is never altered by archiving; active lists filter
+   * on archivedAt: null so archived history stays out of live queues. */
+  archivedAt   DateTime?
+  archivedById String?
+  archiver     User?   @relation("FollowUpArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
+
+  events FollowUpEvent[]
+
+  @@index([schoolId, status])
+  @@index([teacherId])
+  @@index([supervisorId])
+  @@index([schoolId, nextFollowUpAt])
+  @@index([archivedAt])
+  @@map("follow_ups")
+}
+
+/**
+ * Phase 10 — append-only audit trail for archive and restore operations
+ * across entity types that carry a safe archival lifecycle
+ * (TrainingProgram / Course / Assessment / Assignment / Survey /
+ * FollowUp). The service never updates or deletes events. Records whose
+ * phases already own an event stream (SurveyEvent, FollowUpEvent) ALSO
+ * get an entry here so the archive center shows one unified trail;
+ * entities without their own event model (programs, courses,
+ * assessments, assignments) rely on this table as their archive audit.
+ */
+model ArchiveEvent {
+  id String @id @default(cuid())
+  /// Owning school tenant. Null = platform-wide content (schoolId null
+  /// programs/courses/assessments) touched by SUPER_ADMIN.
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// PROGRAM | COURSE | ASSESSMENT | ASSIGNMENT | SURVEY | FOLLOW_UP
+  entityType String
+  entityId   String
+  /// ARCHIVED | RESTORED
+  action String
+
+  actorId   String?
+  actor     User?   @relation("ArchiveEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String?
+  /// Human-readable record title snapshot at event time.
+  entityTitle String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([schoolId])
+  @@map("archive_events")
+}
+
+/**
+ * Append-only history for follow-up records (CREATED / UPDATED /
+ * STATUS_CHANGED / SHARING_CHANGED). Gives supervisors and office
+ * managers the full modification trail without overwriting anything.
+ */
+model FollowUpEvent {
+  id         String   @id @default(cuid())
+  followUpId String
+  followUp   FollowUp @relation(fields: [followUpId], references: [id], onDelete: Cascade)
+
+  /// CREATED | UPDATED | STATUS_CHANGED | SHARING_CHANGED
+  type String
+  actorId   String?
+  actor     User?   @relation("FollowUpEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([followUpId])
+  @@map("follow_up_events")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 11 — notifications, preferences & email delivery audit.
+//
+// Recipient ownership: a notification row is PRIVATE to its user —
+// every read path filters on userId server-side (never client-trusted).
+//
+// Idempotency: event-driven notifications carry a stable eventId and
+// the DB enforces unique (userId, eventId), so retrying the same event
+// can never duplicate a notification. NULL eventIds (rare, one-shot
+// writes) are unconstrained by SQLite's NULL-aware unique semantics.
+//
+// Destination safety: destinationUrl always starts with a single "/"
+// and is validated against the internal path allow-list in
+// src/lib/notifications/urls.ts — external URLs are never stored.
+//
+// Email: delivery attempts are recorded in EmailDelivery (queue +
+// audit in one row) with provider message ids, attempt counts and
+// SANITIZED error categories only — no tokens, no message bodies,
+// no provider secrets are ever persisted here.
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * One in-app notification for ONE recipient. Arabic is the primary
+ * language; optional English mirrors exist for bilingual rendering.
+ * readAt is set by the owner's own actions only (ownership enforced
+ * in the service layer and API routes).
+ */
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NotificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Canonical event key (e.g. ASSIGNMENT_PUBLISHED) — see
+  /// src/config/notifications.ts for the full list.
+  type      String
+  /// ASSIGNMENTS | ASSESSMENTS | COURSES | SURVEYS | FOLLOWUPS |
+  /// CERTIFICATES | ACCOUNT | PLATFORM — drives preference filtering.
+  category  String
+
+  titleAr   String
+  bodyAr    String
+  titleEn   String?
+  bodyEn    String?
+
+  /// Related resource discriminator (e.g. "Assignment") + id — used for
+  /// dedupe context and future deep-links; never trusted for access.
+  resourceType String?
+  resourceId   String?
+  /// Validated INTERNAL destination (starts with "/") or null.
+  destinationUrl String?
+
+  /// Mirror of the linked email delivery status (null = no email was
+  /// part of this notification): QUEUED | SENT | FAILED | DISABLED.
+  emailStatus String?
+
+  /// Stable event identifier for idempotency (unique per recipient).
+  eventId   String?
+
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([category, createdAt])
+  @@map("notifications")
+}
+
+/**
+ * Per-user delivery preferences. Persisted and enforced SERVER-SIDE:
+ * the notification service consults this row before creating anything.
+ * Account-security messages (email verification, password reset,
+ * password changed) are NOT governed by these flags — they always
+ * proceed because secure operation depends on them.
+ */
+model NotificationPreference {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Master switches. emailEnabled gates OPTIONAL notification emails;
+  /// it never gates account-security mail.
+  inAppEnabled Boolean @default(true)
+  emailEnabled Boolean @default(false)
+
+  /// Per-category toggles (in-app + optional email together).
+  assignments Boolean @default(true)
+  assessments Boolean @default(true)
+  courses     Boolean @default(true)
+  surveys     Boolean @default(true)
+  followups   Boolean @default(true)
+  certificates Boolean @default(true)
+  platform    Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+/**
+ * Queue + audit row for ONE outbound email. Lifecycle:
+ *   QUEUED -> PROCESSING -> SENT | FAILED
+ * with bounded retries (attemptCount/maxAttempts + nextAttemptAt
+ * backoff) and optimistic claiming (conditional updateMany on status)
+ * so concurrent workers can never double-send the same row.
+ *
+ * Privacy: subject/template/category are operational metadata; raw
+ * message bodies, verification tokens and provider secrets are never
+ * stored. Recipient emails are masked on every read path exposed to
+ * the UI (local-part asterisked).
+ */
+model EmailDelivery {
+  id         String   @id @default(cuid())
+  toEmail    String
+  toUserId   String?
+  user       User?    @relation("EmailDeliveryOwner", fields: [toUserId], references: [id], onDelete: SetNull)
+
+  subject    String
+  /// Template key (e.g. "assignment-published") — see templates.ts.
+  template   String
+  /// ACCOUNT (security/account mail) or a Notification category.
+  category   String   @default("ACCOUNT")
+  /// Owning school tenant when the mail is school-scoped (null =
+  /// platform/account mail). Used for school-scoped delivery health.
+  schoolId   String?
+  notificationId String?
+
+  /// QUEUED | PROCESSING | SENT | FAILED
+  status     String   @default("QUEUED")
+  provider   String?
+  providerMessageId String?
+
+  attemptCount  Int      @default(0)
+  maxAttempts   Int      @default(4)
+  nextAttemptAt DateTime @default(now())
+  lockedAt      DateTime?
+  lockedBy      String?
+
+  /// Sanitized failure classification (NETWORK | AUTH | RATE_LIMIT |
+  /// VALIDATION | PROVIDER | NOT_CONFIGURED) + short provider message.
+  lastErrorCategory String?
+  lastErrorMessage  String?
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+
+  /// Stable idempotency key — unique at the DB level so the same
+  /// logical email can never be queued twice.
+  dedupeKey  String?  @unique
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([schoolId, createdAt])
+  @@index([toUserId, createdAt])
+  @@map("email_deliveries")
+}
+
+===== END FILE =====
+
+===== FILE: drizzle.config.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: prisma/seed.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: prisma/seed.js =====
+
+/* ------------------------------------------------------------------ */
+/* Manarat Qurtubah — development bootstrap seed.                       */
+/*                                                                      */
+/* The database ships EMPTY: /admin/accounts (which creates staff       */
+/* accounts) is itself protected, so the first SUPER_ADMIN must come    */
+/* from here. This script seeds one school tenant plus one account      */
+/* per platform role so every phase can be explored immediately.        */
+/*                                                                      */
+/* Plain CommonJS on purpose: run it with `node prisma/seed.js` —       */
+/* it needs NOTHING beyond the existing dependencies (@prisma/client    */
+/* + bcryptjs, which is pure JS and builds natively nowhere).           */
+/*                                                                      */
+/* Idempotent: every record is an upsert (or checked before insert),   */
+/* so re-running resets the demo accounts to the exact credentials      */
+/* documented below without duplicating any rows.                       */
+/*                                                                      */
+/* These are DEVELOPMENT credentials — rotate them before any real      */
+/* deployment.                                                          */
+/* ------------------------------------------------------------------ */
+
+const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcryptjs");
+
+const db = new PrismaClient();
+
+/* Same cost as src/lib/auth/password.ts (BCRYPT_COST = 12). */
+const BCRYPT_COST = 12;
+
+const SCHOOL_SLUG = "al-nahda";
+const BRANCH_NAME = "قسم البنين";
+
+/** Demo accounts — re-running the seed resets these passwords. */
+const ACCOUNTS = [
+  {
+    name: "مدير المنصة",
+    email: "admin@manarat.local",
+    password: "Admin@1234",
+    role: "SUPER_ADMIN",
+    school: false,
+    branch: false,
+  },
+  {
+    name: "مدير مكتب التطوير",
+    email: "office@manarat.local",
+    password: "Office@1234",
+    role: "DEVELOPMENT_OFFICE_MANAGER",
+    school: true,
+    branch: false,
+  },
+  {
+    name: "الوكيل التعليمي",
+    email: "deputy@manarat.local",
+    password: "Deputy@1234",
+    role: "EDUCATIONAL_DEPUTY",
+    school: true,
+    branch: false,
+  },
+  {
+    name: "المشرف التربوي",
+    email: "supervisor@manarat.local",
+    password: "Supervisor@1234",
+    role: "EDUCATIONAL_SUPERVISOR",
+    school: true,
+    branch: true,
+  },
+  {
+    name: "معلم تجريبي",
+    email: "teacher@manarat.local",
+    password: "Teacher@1234",
+    role: "TEACHER",
+    school: true,
+    branch: true,
+  },
+];
+
+async function main() {
+  console.log("Hashing passwords (bcrypt, cost 12)...");
+  const seeded = [];
+  for (const account of ACCOUNTS) {
+    seeded.push({
+      ...account,
+      passwordHash: await bcrypt.hash(account.password, BCRYPT_COST),
+    });
+  }
+
+  /* 1) School tenant ------------------------------------------------ */
+  const school = await db.school.upsert({
+    where: { slug: SCHOOL_SLUG },
+    update: {},
+    create: {
+      nameAr: "مدرسة النهضة النموذجية",
+      nameEn: "Al-Nahda Model School",
+      slug: SCHOOL_SLUG,
+    },
+  });
+  console.log(`School ready: ${school.nameAr} (${school.slug})`);
+
+  /* 2) Home branch. nameNorm mirrors the service-layer normalization
+     (trim + lowercase) required by the @@unique([schoolId, nameNorm]). */
+  const nameNorm = BRANCH_NAME.trim().toLowerCase();
+  const branch = await db.branch.upsert({
+    where: { schoolId_nameNorm: { schoolId: school.id, nameNorm } },
+    update: {},
+    create: {
+      schoolId: school.id,
+      nameAr: BRANCH_NAME,
+      nameEn: "Boys Section",
+      nameNorm,
+      stage: "primary",
+    },
+  });
+  console.log(`Branch ready: ${branch.nameAr}`);
+
+  /* 3) Users — one per role. Provisioned accounts arrive pre-verified
+     (same policy as createStaffAccount); only self-registered teachers
+     go through the email-verification flow. */
+  const ids = {};
+  for (const account of seeded) {
+    const scoped = {
+      schoolId: account.school ? school.id : null,
+      branchId: account.branch ? branch.id : null,
+    };
+    const user = await db.user.upsert({
+      where: { email: account.email },
+      update: {
+        name: account.name,
+        passwordHash: account.passwordHash,
+        role: account.role,
+        ...scoped,
+        isActive: true,
+        emailVerifiedAt: new Date(),
+      },
+      create: {
+        name: account.name,
+        email: account.email,
+        passwordHash: account.passwordHash,
+        role: account.role,
+        ...scoped,
+        isActive: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    ids[account.role] = user.id;
+    console.log(`Account ready: ${account.email} -> ${account.role}`);
+  }
+
+  /* 4) Supervisor branch scope — what the supervisor may see. -------- */
+  await db.supervisorAssignment.upsert({
+    where: {
+      supervisorId_branchId: {
+        supervisorId: ids.EDUCATIONAL_SUPERVISOR,
+        branchId: branch.id,
+      },
+    },
+    update: {},
+    create: {
+      supervisorId: ids.EDUCATIONAL_SUPERVISOR,
+      schoolId: school.id,
+      branchId: branch.id,
+    },
+  });
+
+  /* 5) Deputy read-only grant over the WHOLE school (branchId null).
+     DeputyGrant has no unique constraint — check before inserting. --- */
+  const existingGrant = await db.deputyGrant.findFirst({
+    where: { userId: ids.EDUCATIONAL_DEPUTY, schoolId: school.id, branchId: null },
+  });
+  if (!existingGrant) {
+    await db.deputyGrant.create({
+      data: {
+        userId: ids.EDUCATIONAL_DEPUTY,
+        schoolId: school.id,
+        branchId: null,
+      },
+    });
+  }
+
+  /* 6) Teacher -> supervisor assignment (@@unique on teacherId:
+     one current supervisor at a time). ------------------------------- */
+  await db.teacherSupervisorAssignment.upsert({
+    where: { teacherId: ids.TEACHER },
+    update: { supervisorId: ids.EDUCATIONAL_SUPERVISOR },
+    create: {
+      teacherId: ids.TEACHER,
+      supervisorId: ids.EDUCATIONAL_SUPERVISOR,
+      schoolId: school.id,
+    },
+  });
+
+  console.log("\nSeed complete — sign in at /login with:");
+  console.table(
+    ACCOUNTS.map((account) => ({
+      email: account.email,
+      password: account.password,
+      role: account.role,
+    }))
+  );
+}
+
+main()
+  .catch((error) => {
+    console.error("Seed failed:", error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await db.$disconnect();
+  });
+
+===== END FILE =====
+
+===== FILE: scripts/seed.ts =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== FILE: scripts/seed.js =====
+[NOT FOUND - listed in the missing-files section below]
+===== END FILE =====
+
+===== SECTION: COLLECTION SUMMARY =====
+  Files collected : 31
+  Files missing   : 11
+
+  Collected files:
+    + package.json  (1919 bytes)
+    + next.config.ts  (2218 bytes)
+    + tsconfig.json  (771 bytes)
+    + postcss.config.mjs  (84 bytes)
+    + tailwind.config.ts  (1760 bytes)
+    + components.json  (399 bytes)
+    + src/app/globals.css  (66 bytes)
+    + src/app/globals.css.bak  (5995 bytes)
+    + src/app/layout.tsx  (641 bytes)
+    + src/app/page.tsx  (2048 bytes)
+    + src/lib/utils.ts  (170 bytes)
+    + src/config/branding.ts  (750 bytes)
+    + src/components/layout/app-shell.tsx  (3241 bytes)
+    + src/components/ui/button.tsx  (2180 bytes)
+    + src/app/login/page.tsx  (1340 bytes)
+    + src/app/login/login-form.tsx  (3237 bytes)
+    + src/components/auth/auth-card.tsx  (2351 bytes)
+    + src/app/actions/auth.ts  (6623 bytes)
+    + src/lib/auth/session.ts  (3813 bytes)
+    + src/lib/auth/password.ts  (1176 bytes)
+    + src/lib/auth/roles.ts  (4676 bytes)
+    + src/lib/auth/token.ts  (2608 bytes)
+    + src/lib/auth/tokens.ts  (12550 bytes)
+    + src/lib/auth/dev-admin.ts  (3229 bytes)
+    + src/lib/auth/rate-limit.ts  (2681 bytes)
+    + src/lib/security/rate-limit.ts  (2699 bytes)
+    + src/lib/db.ts  (311 bytes)
+    + src/lib/validation/auth.ts  (5274 bytes)
+    + src/instrumentation.ts  (2241 bytes)
+    + prisma/schema.prisma  (60237 bytes)
+    + prisma/seed.js  (6778 bytes)
+
+  Requested but NOT FOUND (this is itself diagnostic - e.g. a missing
+  tailwind.config or a missing seed script is an important clue):
+    - next.config.mjs
+    - next.config.js
+    - postcss.config.js
+    - postcss.config.cjs
+    - tailwind.config.js
+    - middleware.ts
+    - src/middleware.ts
+    - drizzle.config.ts
+    - prisma/seed.ts
+    - scripts/seed.ts
+    - scripts/seed.js
+
+===== END SECTION =====
+
+################################################################################
+#  END OF DIAGNOSTIC BUNDLE
+################################################################################
