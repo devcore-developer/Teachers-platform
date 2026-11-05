@@ -27,6 +27,10 @@ interface LoginPageProps {
  * logo and colors — so a manipulated parameter cannot leak or mutate
  * tenant data; authentication itself stays school-agnostic (email +
  * password). Without the parameter the platform identity renders.
+ *
+ * The premium composition (identity header, decorated background,
+ * elevated card and platform footer) lives in the shared AuthCard so
+ * every gate screen stays consistent.
  */
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { next, reset, school } = await searchParams;
@@ -43,6 +47,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <div style={wrapperStyle}>
       <AuthCard
         branding={resolved.branding}
+        className="max-w-md"
         title="تسجيل الدخول"
         description={`ادخل بيانات حسابك للوصول إلى مساحة عملك في ${resolved.branding.productName}.`}
         footer={
@@ -56,7 +61,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       >
         {reset === "1" && (
           <div
-            className="mb-4 rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-sm font-semibold text-success"
+            className="mb-5 rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm font-semibold text-success"
             role="status"
           >
             تم تغيير كلمة المرور بنجاح — سجّل الدخول بكلمة المرور الجديدة.

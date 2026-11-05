@@ -7,54 +7,100 @@ interface BrandLogoProps {
   branding: PlatformBranding;
   /** "sidebar" renders on the navy sidebar, "light" on light surfaces. */
   variant?: "sidebar" | "light";
+  /** sm: rails and cards — lg: gate screens (login, register, recovery). */
+  size?: "sm" | "md" | "lg";
+  /** horizontal: rails — vertical: centered gate-screen headers. */
+  orientation?: "horizontal" | "vertical";
   withSubtitle?: boolean;
   className?: string;
 }
 
+const SIZE_STYLES = {
+  sm: {
+    box: "size-10 rounded-xl",
+    icon: "size-5.5",
+    name: "text-base",
+    subtitle: "text-xs",
+  },
+  md: {
+    box: "size-12 rounded-xl",
+    icon: "size-6.5",
+    name: "text-lg",
+    subtitle: "text-xs",
+  },
+  lg: {
+    box: "size-20 rounded-2xl sm:size-24",
+    icon: "size-9 sm:size-10",
+    name: "text-2xl sm:text-3xl",
+    subtitle: "text-sm",
+  },
+} as const;
+
 /**
  * Dynamic identity wordmark — platform or school.
  *
- * When the resolved branding carries a school logo it is rendered as an
- * image (the URL is server-validated); otherwise the platform mark is
- * drawn with brand colors that follow the runtime CSS variables, so the
- * same component serves every tenant without hardcoding any school.
+ * When the resolved branding carries a school logo the image renders
+ * AS-IS with its natural aspect ratio — no artificial white container
+ * on light surfaces. Only the navy sidebar keeps a subtle white plate
+ * behind uploaded logos, because dark logos would vanish against it.
+ * Without a logo the platform mark is drawn with brand colors that
+ * follow the runtime CSS variables, so the same component serves every
+ * tenant without hardcoding any school.
  */
 export function BrandLogo({
   branding,
   variant = "sidebar",
+  size = "sm",
+  orientation = "horizontal",
   withSubtitle = true,
   className,
 }: BrandLogoProps) {
   const light = variant === "light";
+  const s = SIZE_STYLES[size];
+  const stacked = orientation === "vertical";
 
   return (
-    <div className={cn("flex items-center gap-3", className)}>
+    <div
+      className={cn(
+        "flex",
+        stacked
+          ? "flex-col items-center gap-4 text-center"
+          : "items-center gap-3 text-start",
+        className
+      )}
+    >
       {branding.logoUrl ? (
         // School logo (uploaded through the authorized branding manager).
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={branding.logoUrl}
           alt=""
-          className="size-10 shrink-0 rounded-xl bg-white object-contain p-0.5 shadow-sm ring-1 ring-black/5"
           draggable={false}
+          className={cn(
+            "shrink-0 object-contain",
+            s.box,
+            !light && "bg-white p-0.5 shadow-sm ring-1 ring-black/5"
+          )}
         />
       ) : (
         <div
           className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-xl shadow-sm",
+            "flex shrink-0 items-center justify-center",
+            s.box,
             light
-              ? "bg-gradient-to-br from-brand-600 to-brand-800 text-white"
+              ? "bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-lg shadow-brand-600/25 ring-1 ring-brand-700/20"
               : "bg-white/10 text-white ring-1 ring-white/15"
           )}
           aria-hidden="true"
         >
-          <GraduationCap className="size-5.5" strokeWidth={1.8} />
+          <GraduationCap className={s.icon} strokeWidth={1.8} />
         </div>
       )}
-      <div className="min-w-0 text-start leading-tight">
+      <div className={cn("min-w-0 leading-tight", stacked && "space-y-1")}>
         <p
           className={cn(
-            "truncate text-base font-extrabold tracking-tight",
+            "truncate font-extrabold tracking-tight",
+            s.name,
             light ? "text-foreground" : "text-white"
           )}
         >
@@ -63,7 +109,8 @@ export function BrandLogo({
         {withSubtitle && (
           <p
             className={cn(
-              "truncate text-xs font-medium",
+              "truncate font-medium",
+              s.subtitle,
               light ? "text-muted-foreground" : "text-sidebar-foreground/70"
             )}
           >
