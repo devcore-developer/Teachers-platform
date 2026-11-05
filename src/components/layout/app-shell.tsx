@@ -8,7 +8,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { defaultBranding } from "@/config/branding";
 import { navItems } from "@/config/navigation";
-import type { CurrentUser, NavItem } from "@/lib/types";
+import type { CurrentUser, NavItem, PlatformBranding } from "@/lib/types";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -18,6 +18,10 @@ interface AppShellProps {
    * full items (with icons) are resolved here on the client because
    * icon components cannot cross the RSC serialization boundary. */
   allowedModuleIds: string[];
+  /** Resolved identity (platform or the signed-in user's school) —
+   * computed on the SERVER from the session. Defaults to the platform
+   * identity when not provided (gate screens). */
+  branding?: PlatformBranding;
 }
 
 const PUBLIC_PREFIXES = [
@@ -38,7 +42,8 @@ const PUBLIC_PREFIXES = [
  * a minimal bare layout — this is presentation only; every security
  * decision is enforced on the server (middleware + per-page guards).
  */
-export function AppShell({ children, user, allowedModuleIds }: AppShellProps) {
+export function AppShell({ children, user, allowedModuleIds, branding }: AppShellProps) {
+  const resolvedBranding = branding ?? defaultBranding;
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const pathname = usePathname();
 
@@ -46,6 +51,8 @@ export function AppShell({ children, user, allowedModuleIds }: AppShellProps) {
     () => navItems.filter((item) => allowedModuleIds.includes(item.id)),
     [allowedModuleIds]
   );
+
+  const canManageBranding = items.some((item) => item.id === "school-branding");
 
   const isPublicRoute =
     !user || PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -56,7 +63,11 @@ export function AppShell({ children, user, allowedModuleIds }: AppShellProps) {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar branding={defaultBranding} items={items} />
+      <Sidebar
+        branding={resolvedBranding}
+        items={items}
+        canManageBranding={canManageBranding}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
@@ -73,10 +84,10 @@ export function AppShell({ children, user, allowedModuleIds }: AppShellProps) {
         <footer className="mt-auto border-t border-border/70 bg-card/70 px-4 py-4 sm:px-6 lg:px-8">
           <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-1.5 text-center sm:flex-row sm:text-start">
             <p className="text-xs text-muted-foreground">
-              {defaultBranding.productName} — {defaultBranding.subtitle}
+              {resolvedBranding.productName} — {resolvedBranding.subtitle}
             </p>
             <p className="text-xs text-muted-foreground/70">
-              بيئة تطوير — المرحلة الثالثة © 2025
+              منارة — مكتب التطوير التربوي © 2025
             </p>
           </div>
         </footer>
@@ -85,7 +96,7 @@ export function AppShell({ children, user, allowedModuleIds }: AppShellProps) {
       <MobileNav
         open={mobileNavOpen}
         onOpenChange={setMobileNavOpen}
-        branding={defaultBranding}
+        branding={resolvedBranding}
         user={user}
         items={items}
       />

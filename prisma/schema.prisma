@@ -29,6 +29,16 @@ model School {
   logoUrl    String?
   /// Primary brand color as #RRGGBB. Defaults to the platform blue.
   brandColor String   @default("#1D5BD6")
+  /// Multi-school branding (Batch 3) — supporting palette. Every field
+  /// is optional: null means "derive a harmonious value from the
+  /// primary color" so old schools keep rendering without migration.
+  brandColorSecondary String?
+  /// Accent color for highlights/charts (#RRGGBB or null).
+  brandColorAccent    String?
+  /// Supporting (sidebar/deep surfaces) color (#RRGGBB or null).
+  brandColorNeutral   String?
+  /// Optional school tagline rendered under the school name.
+  brandTagline String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

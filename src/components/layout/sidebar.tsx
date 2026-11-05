@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Landmark } from "lucide-react";
+import { Landmark, Palette } from "lucide-react";
 
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { activeNavItemId } from "@/config/navigation";
@@ -12,6 +12,10 @@ import type { NavItem, PlatformBranding } from "@/lib/types";
 interface SidebarProps {
   branding: PlatformBranding;
   items: NavItem[];
+  /** True when the role may manage school branding — upgrades the
+   * identity card into a link to the branding manager. Computed on the
+   * server (nav ids) — the sidebar never decides authorization. */
+  canManageBranding?: boolean;
   className?: string;
 }
 
@@ -25,7 +29,15 @@ interface SidebarProps {
 const NAV_GROUPS: Array<{ label: string; members: string[] }> = [
   {
     label: "القائمة الرئيسية",
-    members: ["home", "academy", "schools", "users", "supervision", "deputy-overview", "it-workspace"],
+    members: [
+      "home",
+      "academy",
+      "schools",
+      "school-branding",
+      "users",
+      "supervision",
+      "deputy-overview",
+    ],
   },
   {
     label: "التدريب والتقييم",
@@ -67,7 +79,7 @@ function groupNavItems(
  * exactly one item (e.g. /academy/manage/12 highlights "إدارة الدورات"
  * without also highlighting "الأكاديمية التدريبية").
  */
-export function Sidebar({ branding, items, className }: SidebarProps) {
+export function Sidebar({ branding, items, canManageBranding, className }: SidebarProps) {
   const pathname = usePathname();
   const activeId = activeNavItemId(pathname, items);
   const groups = groupNavItems(items);
@@ -143,25 +155,69 @@ export function Sidebar({ branding, items, className }: SidebarProps) {
         ))}
       </nav>
 
-      {/* School workspace card — placeholder until tenant config arrives */}
+      {/* School identity card — real tenant identity (multi-school
+          branding). When the signed-in role may manage branding, the
+          whole card links to the branding manager. */}
       <div className="shrink-0 border-t border-sidebar-border/70 p-4">
-        <div className="rounded-xl bg-white/[0.06] p-3.5 ring-1 ring-white/10">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
-              <Landmark className="size-4 text-brand-100" aria-hidden="true" />
+        {canManageBranding ? (
+          <Link
+            href="/schools/branding"
+            className="group block rounded-xl bg-white/[0.06] p-3.5 ring-1 ring-white/10 transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          >
+            <div className="flex items-center gap-2.5">
+              {branding.currentSchool?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={branding.currentSchool.logoUrl}
+                  alt=""
+                  className="size-8 shrink-0 rounded-lg bg-white object-contain p-0.5"
+                  draggable={false}
+                />
+              ) : (
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                  <Landmark className="size-4 text-brand-100" aria-hidden="true" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="truncate text-xs font-bold text-sidebar-foreground">
+                  {branding.currentSchool?.name ?? "هوية المدرسة"}
+                </p>
+                <p className="truncate text-[11px] text-sidebar-foreground/60">
+                  تخصيص الشعار والألوان
+                </p>
+              </div>
+              <Palette className="size-4 shrink-0 text-sidebar-foreground/50 transition-colors group-hover:text-white" aria-hidden="true" />
             </div>
-            <div className="min-w-0 flex-1 leading-tight">
-              <p className="truncate text-xs font-bold text-sidebar-foreground">
-                {branding.currentSchool?.name ?? "مساحة عمل المدرسة"}
-              </p>
-              <p className="truncate text-[11px] text-sidebar-foreground/60">
-                تخصيص هوية المدرسة — قريباً
-              </p>
+          </Link>
+        ) : (
+          <div className="rounded-xl bg-white/[0.06] p-3.5 ring-1 ring-white/10">
+            <div className="flex items-center gap-2.5">
+              {branding.currentSchool?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={branding.currentSchool.logoUrl}
+                  alt=""
+                  className="size-8 shrink-0 rounded-lg bg-white object-contain p-0.5"
+                  draggable={false}
+                />
+              ) : (
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                  <Landmark className="size-4 text-brand-100" aria-hidden="true" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="truncate text-xs font-bold text-sidebar-foreground">
+                  {branding.currentSchool?.name ?? "مساحة عمل المدرسة"}
+                </p>
+                <p className="truncate text-[11px] text-sidebar-foreground/60">
+                  {branding.subtitle}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
         <p className="mt-3 text-center text-[11px] text-sidebar-foreground/40">
-          {branding.productName} · الإصدار 0.2.0
+          {branding.productName} · منارة — مكتب التطوير التربوي
         </p>
       </div>
     </aside>

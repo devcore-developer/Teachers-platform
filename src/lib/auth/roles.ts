@@ -47,6 +47,16 @@ export function canAdministerSchool(role: string): boolean {
   return role === "SUPER_ADMIN" || role === "DEVELOPMENT_OFFICE_MANAGER";
 }
 
+/**
+ * School visual-identity management (logo, displayed name, palette).
+ * Follows the existing school-administration pair: the platform owner
+ * may manage any school, the office manager only their own school
+ * (tenant scope is enforced again in src/lib/branding.ts).
+ */
+export function canManageSchoolBranding(role: string): boolean {
+  return canAdministerSchool(role);
+}
+
 /** Read-only authorized views — never operational mutations. */
 export function isReadOnlyRole(role: string): boolean {
   return role === "EDUCATIONAL_DEPUTY";
@@ -69,6 +79,8 @@ const NAV_ROLES: Record<string, Role[]> = {
   academy: [...ROLE_KEYS],
   // Platform + school administration
   schools: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Multi-school branding — school identity management (logo/name/colors)
+  "school-branding": ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
   // Phase 4 — user directory (school-scoped for office managers)
   users: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
   // Teacher professional records module (later phase) — admins only

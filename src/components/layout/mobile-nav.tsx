@@ -33,7 +33,15 @@ interface MobileNavProps {
 const NAV_GROUPS: Array<{ label: string; members: string[] }> = [
   {
     label: "القائمة الرئيسية",
-    members: ["home", "academy", "schools", "users", "supervision", "deputy-overview", "it-workspace"],
+    members: [
+      "home",
+      "academy",
+      "schools",
+      "school-branding",
+      "users",
+      "supervision",
+      "deputy-overview",
+    ],
   },
   {
     label: "التدريب والتقييم",

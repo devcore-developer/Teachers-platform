@@ -1,10 +1,12 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
 import { Cairo } from "next/font/google";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { getCurrentUser } from "@/lib/auth/session";
 import { navIdsForRole } from "@/lib/auth/roles";
+import { resolveViewerBranding } from "@/lib/branding";
 import type { CurrentUser } from "@/lib/types";
 
 /**
@@ -22,7 +24,18 @@ const cairo = Cairo({
   display: "swap",
 });
 
-export const metadata: Metadata = { title: "منارة قرطبة" };
+export async function generateMetadata(): Promise<Metadata> {
+  // Dynamic identity: the signed-in user's school names the product in
+  // the tab (e.g. «منارة قرطبة»); anonymous requests keep the platform
+  // identity «منارة».
+  try {
+    const user = await getCurrentUser();
+    const resolved = await resolveViewerBranding(user);
+    return { title: resolved.branding.productName };
+  } catch {
+    return { title: "منارة" };
+  }
+}
 
 // Every page in this platform is session-driven; rendering is dynamic
 // end-to-end (all pages already export force-dynamic themselves).
@@ -55,6 +68,14 @@ export default async function RootLayout({
   // ids and resolves icons locally.
   const user = await getCurrentUser();
 
+  // Multi-school branding: the signed-in user's school drives the whole
+  // shell identity (name, logo, palette). Colors are emitted as CSS
+  // variables on <body>; the design system already resolves every
+  // brand-* utility through them, so shared components never hardcode
+  // school colors.
+  const resolved = await resolveViewerBranding(user);
+  const bodyStyle: CSSProperties = resolved.cssVars as CSSProperties;
+
   // Bridge the session projection (SafeUser) to the shell's display type
   // (CurrentUser): `initials` is derived presentation state, computed on
   // the server so the client receives a ready-to-render object.
@@ -66,8 +87,12 @@ export default async function RootLayout({
 
   return (
     <html lang="ar" dir="rtl">
-      <body className={`${cairo.variable} font-sans`}>
-        <AppShell user={shellUser} allowedModuleIds={allowedModuleIds}>
+      <body className={`${cairo.variable} font-sans`} style={bodyStyle}>
+        <AppShell
+          user={shellUser}
+          allowedModuleIds={allowedModuleIds}
+          branding={resolved.branding}
+        >
           {children}
         </AppShell>
       </body>
