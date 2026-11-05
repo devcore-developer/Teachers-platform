@@ -719,7 +719,7 @@ export interface GrowthRosterRow {
 export type GrowthRosterScope =
   | string
   | {
-      [key: string]: unknown;   // ← السطر الجديد — ضيفه بالظبط كده
+      [key: string]: unknown;
       id?: string | null;
       schoolId?: string | null;
       supervisorId?: string | null;
