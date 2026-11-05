@@ -1,105 +1,168 @@
-/**
- * Phase 8 — server-safe presentational helpers for the professional
- * growth views (progress bars, timeline, section cards).
- */
-import type { ReactNode } from "react";
+import Link from "next/link";
+import { ArrowUp, CheckCircle2, CircleDashed } from "lucide-react";
 
-import { GROWTH_EVENT_TYPE_LABELS } from "@/config/certificates";
 import type { GrowthHistoryEvent } from "@/lib/growth/service";
+import { GROWTH_LEVELS, growthLevelLabel } from "@/config/growth";
 
-export function GrowthStatTile({
-  label,
-  value,
-  hint,
-  tone = "default",
+/* ------------------------------------------------------------------ */
+/* Batch 2 (part 2/2) — shared growth UI building blocks.              */
+/*                                                                     */
+/* Presentational-only (no hooks, no client APIs): the same components */
+/* render inside server pages (/growth, /my-growth, /growth/[id]) and  */
+/* inside the client projection component. Blue brand only — لا بنفسجي. */
+/* ------------------------------------------------------------------ */
+
+/** The T0..T5 ladder badge (the exact HTML label format). */
+export function LevelBadge({
+  level,
+  tone = "current",
 }: {
-  label: string;
-  value: ReactNode;
-  hint?: string;
-  tone?: "default" | "brand" | "warning" | "success";
+  level: string;
+  tone?: "current" | "next" | "muted";
 }) {
-  const tones: Record<string, string> = {
-    default: "border-slate-200 bg-white",
-    brand: "border-blue-200 bg-blue-50",
-    warning: "border-amber-200 bg-amber-50",
-    success: "border-emerald-200 bg-emerald-50",
-  };
+  const toneClass =
+    tone === "current"
+      ? "bg-brand-600 text-white"
+      : tone === "next"
+        ? "bg-brand-50 text-brand-700 ring-1 ring-brand-200"
+        : "bg-muted text-muted-foreground";
   return (
-    <div className={`rounded-xl border p-4 shadow-sm ${tones[tone]}`}>
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${toneClass}`}
+    >
+      {growthLevelLabel(level)}
+    </span>
+  );
+}
+
+/** 60% promotion-gate progress bar (marker line at the threshold). */
+export function GrowthProgressBar({
+  percent,
+  threshold = 60,
+}: {
+  percent: number;
+  threshold?: number;
+}) {
+  const safe = Math.max(0, Math.min(100, percent));
+  return (
+    <div
+      className="relative h-3 w-full overflow-hidden rounded-full bg-muted"
+      role="progressbar"
+      aria-valuenow={safe}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className="h-full rounded-full bg-brand-600 transition-all"
+        style={{ width: `${safe}%` }}
+      />
+      <span
+        className="absolute inset-y-0 w-0.5 bg-brand-900/40"
+        style={{ insetInlineStart: `${threshold}%` }}
+        aria-hidden
+      />
     </div>
   );
 }
 
-export function ProgressBar({ percent }: { percent: number | null }) {
-  if (percent === null) {
-    return <span className="text-xs text-slate-400">—</span>;
-  }
-  const clamped = Math.max(0, Math.min(100, percent));
-  const tone =
-    clamped >= 100 ? "bg-emerald-500" : clamped >= 50 ? "bg-[#1D5BD6]" : "bg-amber-400";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
-        <div className={`h-full rounded-full ${tone}`} style={{ width: `${clamped}%` }} />
-      </div>
-      <span className="text-xs font-medium text-slate-600">{clamped}%</span>
-    </div>
+/** Eligible / not-yet pill for the promotion gate. */
+export function EligibilityBadge({ eligible }: { eligible: boolean }) {
+  return eligible ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+      <CheckCircle2 className="size-3.5" aria-hidden />
+      مستحق للانتقال
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-bold text-muted-foreground">
+      <CircleDashed className="size-3.5" aria-hidden />
+      لم يكتمل شرط 60% بعد
+    </span>
   );
 }
 
-const EVENT_DOT_CLASSES: Record<string, string> = {
-  ENROLLMENT: "bg-blue-500",
-  ASSESSMENT: "bg-indigo-500",
-  ASSIGNMENT: "bg-amber-500",
-  CERTIFICATE: "bg-emerald-500",
-};
+/** The static T0..T5 journey stepper (current level highlighted). */
+export function GrowthLadder({ currentLevel }: { currentLevel: string }) {
+  const currentIndex = GROWTH_LEVELS.findIndex((level) => level.id === currentLevel);
+  return (
+    <ol className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {GROWTH_LEVELS.map((level, index) => {
+        const state =
+          index < currentIndex
+            ? "border-brand-600 bg-brand-600 text-white"
+            : index === currentIndex
+              ? "border-brand-600 bg-brand-50 text-brand-800 ring-2 ring-brand-600"
+              : "border-border bg-muted text-muted-foreground";
+        return (
+          <li
+            key={level.id}
+            className={`rounded-xl border p-3 text-center ${state}`}
+          >
+            <p className="text-sm font-black">{level.id}</p>
+            <p className="mt-1 text-[11px] font-semibold leading-4">{level.nameAr}</p>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
-export function GrowthTimeline({ events }: { events: GrowthHistoryEvent[] }) {
+/**
+ * The growth journey timeline — append-only GrowthEvent rows
+ * (تصنيف المشرف / اعتماد الانتقال), newest first.
+ */
+export function GrowthHistoryTimeline({
+  events,
+}: {
+  events: GrowthHistoryEvent[];
+}) {
   if (events.length === 0) {
     return (
-      <p className="text-sm text-slate-500">
-        لا توجد أنشطة تدريبية مسجلة بعد — سيتتبع هذا السجل التحاقك وتقييماتك وتسليماتك وشهاداتك.
+      <p className="text-sm text-muted-foreground">
+        لا توجد أحداث نمو مسجّلة بعد — يظهر هنا كل تصنيف أو انتقال معتمد.
       </p>
     );
   }
   return (
-    <ol className="relative space-y-5 border-r-2 border-slate-100 pr-5">
-      {events.map((event, index) => (
-        <li key={`${event.type}-${event.date.toISOString()}-${index}`} className="relative">
+    <ol className="relative space-y-4 border-s border-border ps-5">
+      {events.map((event) => (
+        <li key={event.id} className="relative">
           <span
+            className="absolute -start-[26px] top-1 flex size-4 items-center justify-center rounded-full bg-brand-600 text-white"
             aria-hidden
-            className={`absolute -right-[27px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${
-              EVENT_DOT_CLASSES[event.type] ?? "bg-slate-400"
-            }`}
-          />
-          <p className="text-sm font-medium text-slate-800">{event.label}</p>
-          {event.detail ? <p className="text-xs text-slate-500">{event.detail}</p> : null}
-          <p className="mt-0.5 text-[11px] text-slate-400">
-            {GROWTH_EVENT_TYPE_LABELS[event.type] ?? event.type} —{" "}
+          >
+            <ArrowUp className="size-3" />
+          </span>
+          <p className="text-sm font-bold">
+            {event.fromLabel
+              ? `${event.fromLabel} ← ${event.toLabel}`
+              : `تصنيف أول: ${event.toLabel}`}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {event.reasonLabel}
+            {event.actorName ? ` — بواسطة ${event.actorName}` : ""}
+            {" · "}
             {new Intl.DateTimeFormat("ar-EG", {
               dateStyle: "medium",
-              numberingSystem: "latn",
-            }).format(event.date)}
+              timeStyle: "short",
+            }).format(event.createdAt)}
           </p>
+          {event.note && (
+            <p className="mt-1 rounded-lg bg-muted px-3 py-2 text-xs">{event.note}</p>
+          )}
         </li>
       ))}
     </ol>
   );
 }
 
-export function RequirementChip({ met, label }: { met: boolean; label: string }) {
+/** Shared "open the full file" link used by roster tables. */
+export function TeacherGrowthLink({ teacherId }: { teacherId: string }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${
-        met
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-amber-200 bg-amber-50 text-amber-700"
-      }`}
+    <Link
+      href={`/growth/${teacherId}`}
+      className="text-xs font-bold text-brand-700 underline-offset-4 hover:underline"
     >
-      {met ? "مستوفى" : "غير مستوفى"} — {label}
-    </span>
+      عرض ملف النمو
+    </Link>
   );
 }

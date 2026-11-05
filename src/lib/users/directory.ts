@@ -1,22 +1,26 @@
 import { Prisma } from "@prisma/client";
 
-import type { AdminContext } from "@/lib/auth/dev-admin";
+import type { AdminContext, ItCoordinatorContext } from "@/lib/auth/dev-admin";
 import { hashPassword } from "@/lib/auth/password";
-import { issueEmailVerificationToken } from "@/lib/auth/one-time-tokens";
+import { issueEmailVerificationToken, issuePasswordResetToken } from "@/lib/auth/one-time-tokens";
 import {
+  buildPasswordResetEmail,
   buildVerificationEmail,
   defaultMailSender,
   type MailSender,
 } from "@/lib/mail/mailer";
+import { normalizeEmail } from "@/lib/validation/auth";
 import { db } from "@/lib/db";
 import { formatDateLabel } from "@/lib/schools/dto";
 import {
   adminProfileUpdateSchema,
+  CREATABLE_ROLES_BY_ACTOR,
   deputyScopeSchema,
   directoryQuerySchema,
   removeTeacherSupervisorSchema,
   staffAccountSchema,
   supervisorBranchesSchema,
+  teacherRecoverySchema,
   teacherSupervisorSchema,
   USERS_PAGE_SIZE,
   zodUsersFieldErrors,
@@ -24,11 +28,14 @@ import {
 } from "@/lib/validation/users";
 
 /* ------------------------------------------------------------------ */
-/* Phase 4 — user directory, assignments & account management service.  */
+/* User directory, assignments & account management service.            */
 /*                                                                      */
 /* Every authorization rule lives HERE (server-side), never in forms:   */
-/*   - office managers are structurally confined to their own school;   */
+/*   - school-scoped administrators (office manager + school manager)   */
+/*     are structurally confined to their own school;                   */
 /*   - no input can create or promote to SUPER_ADMIN;                   */
+/*   - the IT coordinator has exactly two powers (teacher assignment    */
+/*     + account recovery), always inside their own school;             */
 /*   - cross-school relationships are rejected explicitly;              */
 /*   - multi-row changes run inside transactions;                       */
 /*   - password hashes / tokens never leave this layer.                 */
@@ -119,6 +126,44 @@ export interface OwnProfileView {
   lastLoginLabel: string | null;
 }
 
+/* --------------------------- IT workspace -------------------------- */
+
+export interface ItWorkspaceTeacher {
+  id: string;
+  name: string;
+  email: string;
+  isActive: boolean;
+  isVerified: boolean;
+  branchName: string | null;
+  supervisor: { id: string; name: string } | null;
+}
+
+export interface ItWorkspaceSupervisor {
+  id: string;
+  name: string;
+  /** Teachers currently assigned to this supervisor (same school). */
+  assignedCount: number;
+}
+
+export interface ItWorkspaceData {
+  school: { id: string; nameAr: string };
+  stats: {
+    teachersTotal: number;
+    activeTeachers: number;
+    supervisorsTotal: number;
+    assignedTeachers: number;
+    unassignedTeachers: number;
+  };
+  supervisors: ItWorkspaceSupervisor[];
+  teachers: ItWorkspaceTeacher[];
+}
+
+export interface TeacherRecoveryOutcome {
+  teacherName: string;
+  teacherEmail: string;
+  emailSent: boolean;
+}
+
 const dateTimeLabel = new Intl.DateTimeFormat("ar-EG", {
   day: "numeric",
   month: "long",
@@ -139,21 +184,34 @@ function relationError(
 }
 
 /**
- * Defense in depth: every administrative mutation requires one of the
- * two administrative roles. In production the server action already
- * redirects other roles via requireAdminContext — this gate keeps the
- * SERVICE safe even when called with a deputy/supervisor/teacher
- * context (tests, future callers, regressions).
+ * Defense in depth: administrative mutations require an administrative
+ * role. In production the server action already redirects other roles
+ * via requireAdminContext — this gate keeps the SERVICE safe even when
+ * called with a deputy/supervisor/teacher/IT context.
  */
 function adminActorError(actor: AdminContext): UsersServiceResult<never> | null {
-  if (actor.role === "SUPER_ADMIN" || actor.role === "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    actor.role === "SUPER_ADMIN" ||
+    actor.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    actor.role === "SCHOOL_MANAGER"
+  ) {
     return null;
   }
   return {
     ok: false,
-    message: "هذه العملية متاحة للإدارة المصرّح لها فقط",
+    message: "غير مصرح لك بهذه العملية الإدارية — العملية مرفوضة",
     code: "FORBIDDEN",
   };
+}
+
+/** The two school-scoped administrators — always confined to own school. */
+function isSchoolScopedAdmin(
+  actor: AdminContext
+): actor is Extract<AdminContext, { schoolId: string }> {
+  return (
+    actor.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    actor.role === "SCHOOL_MANAGER"
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -163,8 +221,8 @@ function adminActorError(actor: AdminContext): UsersServiceResult<never> | null 
 /**
  * Role-scoped, filterable, paginated user directory.
  *   - SUPER_ADMIN: platform-wide, optional school filter;
- *   - DEVELOPMENT_OFFICE_MANAGER: forced to their OWN school — a
- *     client-supplied schoolId filter is IGNORED (never trusted).
+ *   - DEVELOPMENT_OFFICE_MANAGER / SCHOOL_MANAGER: forced to their OWN
+ *     school — a client-supplied schoolId filter is IGNORED.
  * A tampered branchId simply yields zero rows (the forced school scope
  * stays in the WHERE clause) — no data leaks, no errors to probe with.
  */
@@ -183,10 +241,9 @@ export async function listUsersForDirectory(
   }
   const query = parsed.data;
 
-  const effectiveSchoolId =
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER"
-      ? actor.schoolId // forced — never from the client
-      : query.schoolId;
+  const effectiveSchoolId = isSchoolScopedAdmin(actor)
+    ? actor.schoolId // forced — never from the client
+    : query.schoolId;
 
   const where: Prisma.UserWhereInput = {
     ...(effectiveSchoolId ? { schoolId: effectiveSchoolId } : {}),
@@ -243,16 +300,16 @@ export async function listUsersForDirectory(
 }
 
 /**
- * Full detail for the management view. Office managers may only view
- * users of their own school (SUPER_ADMIN rows are school-less and are
- * therefore structurally out of their reach).
+ * Full detail for the management view. School-scoped administrators may
+ * only view users of their own school (SUPER_ADMIN rows are school-less
+ * and are therefore structurally out of their reach).
  */
 export async function getUserDetailForAdmin(
   actor: AdminContext,
   userId: string
 ): Promise<UsersServiceResult<UserDetailView>> {
   if (!userId) {
-    return { ok: false, message: "معرّف المستخدم مطلوب", code: "VALIDATION_ERROR" };
+    return { ok: false, message: "معرّف المستخدم مفقود", code: "VALIDATION_ERROR" };
   }
 
   const user = await db.user.findUnique({
@@ -275,15 +332,12 @@ export async function getUserDetailForAdmin(
   });
 
   if (!user) {
-    return { ok: false, message: "الحساب غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    user.schoolId !== actor.schoolId
-  ) {
+  if (isSchoolScopedAdmin(actor) && user.schoolId !== actor.schoolId) {
     return {
       ok: false,
-      message: "ليس لديك صلاحية الاطلاع على حسابات هذه المدرسة",
+      message: "لا يمكنك عرض حسابات خارج مدرستك — العملية مرفوضة",
       code: "FORBIDDEN",
     };
   }
@@ -313,7 +367,7 @@ export async function getUserDetailForAdmin(
 }
 
 /* ------------------------------------------------------------------ */
-/* Staff account creation (office manager / super admin)                */
+/* Staff account creation (super admin / school admins)                 */
 /* ------------------------------------------------------------------ */
 
 export interface StaffAccountOutcome {
@@ -325,26 +379,34 @@ export interface StaffAccountOutcome {
 }
 
 /**
- * Create a school staff account (supervisor / deputy / teacher). The
- * role comes from a whitelist that EXCLUDES SUPER_ADMIN, the school is
- * forced from the actor's context (office manager) or validated
- * explicitly (super admin), and the account is NEVER pre-verified: the
- * existing email-verification flow is reused (an invite email with a
- * single-use expiring token). A failed provider is reported honestly
- * via emailSent: false — the account is NOT marked verified.
+ * Per-actor creation matrix (product rule, enforced HERE server-side):
+ *   SUPER_ADMIN                -> SCHOOL_MANAGER, IT_COORDINATOR,
+ *                                 DEVELOPMENT_OFFICE_MANAGER + staff
+ *   SCHOOL_MANAGER             -> DEVELOPMENT_OFFICE_MANAGER only,
+ *                                 for their OWN school
+ *   DEVELOPMENT_OFFICE_MANAGER -> staff roles only, for their OWN school
+ * A school can have at most ONE active SCHOOL_MANAGER (single signatory).
+ * The canonical map lives in validation/users.ts (client-safe) so the
+ * creation form and this service can never drift apart.
+ */
+
+/**
+ * Create a school staff account. The role comes from the schema
+ * whitelist that EXCLUDES SUPER_ADMIN, the per-actor matrix above is
+ * enforced here, the school is forced from the actor's context
+ * (school-scoped admins) or validated explicitly (super admin), and the
+ * account is NEVER pre-verified: the existing email-verification flow
+ * is reused (an invite email with a single-use expiring token). A
+ * failed provider is reported honestly via emailSent: false — the
+ * account is NOT marked verified.
  */
 export async function createStaffAccount(
   raw: unknown,
   actor: AdminContext,
   deps: { appBaseUrl: string; mailer?: MailSender }
 ): Promise<UsersServiceResult<StaffAccountOutcome>> {
-  if (actor.role !== "SUPER_ADMIN" && actor.role !== "DEVELOPMENT_OFFICE_MANAGER") {
-    return {
-      ok: false,
-      message: "إنشاء الحسابات متاح للإدارة فقط",
-      code: "FORBIDDEN",
-    };
-  }
+  const gate = adminActorError(actor);
+  if (gate) return gate;
 
   const parsed = staffAccountSchema.safeParse(raw);
   if (!parsed.success) {
@@ -357,17 +419,24 @@ export async function createStaffAccount(
   }
   const input = parsed.data;
 
-  // Tenant resolution — office managers can NEVER create outside their
-  // own school; the client-supplied schoolId is ignored for them.
-  const schoolId =
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER"
-      ? actor.schoolId
-      : input.schoolId;
+  // Per-actor creation matrix — a stricter rule than the schema enum.
+  const allowedRoles = CREATABLE_ROLES_BY_ACTOR[actor.role] ?? [];
+  if (!allowedRoles.includes(input.role)) {
+    return {
+      ok: false,
+      message: "دورك الحالي لا يسمح بإنشاء حسابات بهذا الدور",
+      code: "FORBIDDEN",
+    };
+  }
+
+  // Tenant resolution — school-scoped admins can NEVER create outside
+  // their own school; the client-supplied schoolId is ignored for them.
+  const schoolId = actor.role === "SUPER_ADMIN" ? input.schoolId : actor.schoolId;
   if (!schoolId) {
     return {
       ok: false,
-      message: "يجب اختيار المدرسة",
-      fieldErrors: { schoolId: "يجب اختيار المدرسة" },
+      message: "المدرسة مطلوبة",
+      fieldErrors: { schoolId: "اختر مدرسة" },
       code: "VALIDATION_ERROR",
     };
   }
@@ -376,17 +445,33 @@ export async function createStaffAccount(
   if (!school) {
     return {
       ok: false,
-      message: "المدرسة المحددة غير موجودة",
-      fieldErrors: { schoolId: "اختر مدرسة موجودة" },
+      message: "المدرسة غير موجودة",
+      fieldErrors: { schoolId: "اختر مدرسة صحيحة" },
       code: "VALIDATION_ERROR",
     };
   }
   if (!school.isActive) {
     return {
       ok: false,
-      message: "المدرسة موقوفة حاليًا — لا يمكن إنشاء حسابات فيها",
+      message: "المدرسة غير مفعّلة — لا يمكن إضافة حسابات لها",
       code: "FORBIDDEN",
     };
+  }
+
+  // Single school manager rule: a school works with ONE active manager.
+  if (input.role === "SCHOOL_MANAGER") {
+    const existingManager = await db.user.findFirst({
+      where: { role: "SCHOOL_MANAGER", schoolId, isActive: true },
+      select: { id: true },
+    });
+    if (existingManager) {
+      return {
+        ok: false,
+        message: "هذه المدرسة لديها مدير نشط بالفعل — كل مدرسة تعمل بمدير واحد",
+        fieldErrors: { role: "المدرسة لديها مدير بالفعل" },
+        code: "FORBIDDEN",
+      };
+    }
   }
 
   let branchId: string | null = null;
@@ -395,7 +480,7 @@ export async function createStaffAccount(
     if (!branch || branch.schoolId !== schoolId || !branch.isActive) {
       return {
         ok: false,
-        message: "الفرع المحدد غير تابع للمدرسة أو غير نشط",
+        message: "الفرع المختار غير تابع للمدرسة المستهدفة",
         fieldErrors: { branchId: "اختر فرعًا من فروع هذه المدرسة" },
         code: "RELATION_ERROR",
       };
@@ -409,7 +494,7 @@ export async function createStaffAccount(
         name: input.name,
         email: input.email, // normalized by the schema
         passwordHash: await hashPassword(input.password),
-        role: input.role, // whitelist-enforced — never SUPER_ADMIN
+        role: input.role, // whitelist + matrix enforced — never SUPER_ADMIN
         schoolId,
         branchId,
         isActive: true,
@@ -449,11 +534,11 @@ export async function createStaffAccount(
       return {
         ok: false,
         message: "البريد الإلكتروني مستخدم بالفعل لحساب آخر",
-        fieldErrors: { email: "هذا البريد مسجل بالفعل" },
+        fieldErrors: { email: "البريد مستخدم بالفعل" },
         code: "DUPLICATE_EMAIL",
       };
     }
-    return { ok: false, message: "تعذر إنشاء الحساب — حدث خطأ غير متوقع" };
+    return { ok: false, message: "حدث خطأ غير متوقع — حاول مرة أخرى" };
   }
 }
 
@@ -465,7 +550,7 @@ export async function createStaffAccount(
  * Administrative profile edit: display name + branch assignment ONLY.
  * The role, school and account state are NOT part of the schema — no
  * payload can escalate or move a user between schools. SUPER_ADMIN rows
- * are protected; office managers are confined to their own school.
+ * are protected; school-scoped admins are confined to their own school.
  */
 export async function updateUserProfileByAdmin(
   raw: unknown,
@@ -487,7 +572,7 @@ export async function updateUserProfileByAdmin(
 
   const target = await db.user.findUnique({ where: { id: input.userId } });
   if (!target) {
-    return { ok: false, message: "الحساب غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
   if (target.role === "SUPER_ADMIN") {
     return {
@@ -496,13 +581,10 @@ export async function updateUserProfileByAdmin(
       code: "FORBIDDEN",
     };
   }
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    target.schoolId !== actor.schoolId
-  ) {
+  if (isSchoolScopedAdmin(actor) && target.schoolId !== actor.schoolId) {
     return {
       ok: false,
-      message: "ليس لديك صلاحية تعديل حسابات هذه المدرسة",
+      message: "لا يمكنك تعديل حسابات خارج مدرستك",
       code: "FORBIDDEN",
     };
   }
@@ -516,11 +598,11 @@ export async function updateUserProfileByAdmin(
     branchUpdate = null; // explicit clear
   } else {
     if (!target.schoolId) {
-      return relationError("هذا الحساب غير تابع لمدرسة — لا يمكن إسناد فرع له");
+      return relationError("لا يمكن إسناد فرع لحساب لا يتبع أي مدرسة");
     }
     const branch = await db.branch.findUnique({ where: { id: input.branchId } });
     if (!branch || branch.schoolId !== target.schoolId) {
-      return relationError("الفرع المحدد غير تابع لمدرسة المستخدم", {
+      return relationError("الفرع المختار غير تابع لمدرسة المستخدم", {
         branchId: "اختر فرعًا من فروع مدرسة المستخدم",
       });
     }
@@ -558,12 +640,12 @@ export async function updateOwnProfile(
 
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user) {
-    return { ok: false, message: "الحساب غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
   if (!user.isActive) {
     return {
       ok: false,
-      message: "حسابك موقوف حاليًا — لا يمكن تحديث البيانات",
+      message: "الحساب غير مفعّل — لا يمكن تعديل الملف الشخصي",
       code: "FORBIDDEN",
     };
   }
@@ -606,20 +688,17 @@ export async function setSupervisorBranches(
     where: { id: input.supervisorId },
   });
   if (!supervisor) {
-    return { ok: false, message: "المشرف غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
   if (supervisor.role !== "EDUCATIONAL_SUPERVISOR" || !supervisor.schoolId) {
-    return relationError("الإسناد متاح للمشرفين التربويين التابعين لمدرسة فقط");
+    return relationError("الهدف يجب أن يكون مشرفًا تربويًا تابعًا لمدرسة");
   }
   // Captured after narrowing — usable inside the transaction callback.
   const supervisorSchoolId = supervisor.schoolId;
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    supervisor.schoolId !== actor.schoolId
-  ) {
+  if (isSchoolScopedAdmin(actor) && supervisor.schoolId !== actor.schoolId) {
     return {
       ok: false,
-      message: "ليس لديك صلاحية إدارة مشرفي هذه المدرسة",
+      message: "لا يمكنك إدارة مشرفين خارج مدرستك",
       code: "FORBIDDEN",
     };
   }
@@ -632,7 +711,7 @@ export async function setSupervisorBranches(
       select: { id: true },
     });
     if (branches.length !== branchIds.length) {
-      return relationError("أحد الفروع المحددة لا ينتمي إلى مدرسة المشرف — تم رفض العملية");
+      return relationError("بعض الفروع غير تابعة لمدرسة المشرف — أعد الاختيار");
     }
   }
 
@@ -680,29 +759,26 @@ export async function assignTeacherSupervisor(
   ]);
 
   if (!teacher) {
-    return { ok: false, message: "المعلم غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
   if (!supervisor) {
-    return { ok: false, message: "المشرف غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
   if (teacher.role !== "TEACHER") {
-    return relationError("إسناد المشرف متاح لحسابات المعلمين فقط");
+    return relationError("الإسناد متاح لمعلمي المنصة فقط");
   }
   if (supervisor.role !== "EDUCATIONAL_SUPERVISOR" || !supervisor.schoolId) {
-    return relationError("الحساب المحدد ليس مشرفًا تربويًا تابعًا لمدرسة");
+    return relationError("المُسند إليه يجب أن يكون مشرفًا تربويًا تابعًا لمدرسة");
   }
   if (!teacher.schoolId || teacher.schoolId !== supervisor.schoolId) {
     return relationError(
-      "لا يمكن إسناد معلم لمشرف في مدرسة أخرى — العملية مرفوضة"
+      "لا يمكن إسناد معلم ومشرف من مدرستين مختلفتين — العملية مرفوضة"
     );
   }
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    teacher.schoolId !== actor.schoolId
-  ) {
+  if (isSchoolScopedAdmin(actor) && teacher.schoolId !== actor.schoolId) {
     return {
       ok: false,
-      message: "ليس لديك صلاحية إدارة معلمي هذه المدرسة",
+      message: "لا يمكنك إسناد معلمين خارج مدرستك",
       code: "FORBIDDEN",
     };
   }
@@ -745,19 +821,16 @@ export async function removeTeacherSupervisor(
     where: { id: parsed.data.teacherId },
   });
   if (!teacher) {
-    return { ok: false, message: "المعلم غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
 
   const gate = adminActorError(actor);
   if (gate) return gate;
 
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    teacher.schoolId !== actor.schoolId
-  ) {
+  if (isSchoolScopedAdmin(actor) && teacher.schoolId !== actor.schoolId) {
     return {
       ok: false,
-      message: "ليس لديك صلاحية إدارة معلمي هذه المدرسة",
+      message: "لا يمكنك إسناد معلمين خارج مدرستك",
       code: "FORBIDDEN",
     };
   }
@@ -798,18 +871,15 @@ export async function setDeputyScope(
 
   const deputy = await db.user.findUnique({ where: { id: input.deputyId } });
   if (!deputy) {
-    return { ok: false, message: "الوكيل غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
   if (deputy.role !== "EDUCATIONAL_DEPUTY" || !deputy.schoolId) {
-    return relationError("نطاق الاطلاع متاح للوكلاء التعليميين التابعين لمدرسة فقط");
+    return relationError("الهدف يجب أن يكون وكيلًا تعليميًا تابعًا لمدرسة");
   }
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    deputy.schoolId !== actor.schoolId
-  ) {
+  if (isSchoolScopedAdmin(actor) && deputy.schoolId !== actor.schoolId) {
     return {
       ok: false,
-      message: "ليس لديك صلاحية إدارة وكلاء هذه المدرسة",
+      message: "لا يمكنك إدارة وكلاء خارج مدرستك",
       code: "FORBIDDEN",
     };
   }
@@ -821,7 +891,7 @@ export async function setDeputyScope(
       select: { id: true },
     });
     if (branches.length !== branchIds.length) {
-      return relationError("أحد الفروع المحددة لا ينتمي إلى مدرسة الوكيل — تم رفض العملية");
+      return relationError("بعض الفروع غير تابعة لمدرسة الوكيل — أعد الاختيار");
     }
   }
 
@@ -1040,7 +1110,7 @@ export async function getPlatformUsersMetrics(): Promise<UsersMetrics> {
   return { totalUsers, teachersCount, supervisorsCount, deputiesCount, managersCount, activeUsers };
 }
 
-/** School-scoped user statistics — office-manager dashboard. */
+/** School-scoped user statistics — school dashboards. */
 export async function getSchoolUsersMetrics(
   schoolId: string
 ): Promise<UsersMetrics> {
@@ -1063,4 +1133,279 @@ export async function listSupervisorsOfSchool(schoolId: string) {
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* IT coordinator workspace (the role's TWO permitted powers)           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Full IT workspace payload — real stats + supervisor/teacher rosters,
+ * ALL confined to the IT coordinator's own school (re-read from the DB,
+ * never trusted from the caller).
+ */
+export async function getItWorkspace(
+  ctx: ItCoordinatorContext,
+  query: {
+    q?: string;
+    status?: "ALL" | "ACTIVE" | "INACTIVE";
+    assignment?: "ALL" | "ASSIGNED" | "UNASSIGNED";
+  }
+): Promise<ItWorkspaceData | null> {
+  const it = await db.user.findUnique({
+    where: { id: ctx.id },
+    select: { role: true, schoolId: true },
+  });
+  if (!it || it.role !== "IT_COORDINATOR" || !it.schoolId) return null;
+  const schoolId = it.schoolId;
+
+  const q = query.q?.trim() ?? "";
+  const status = query.status ?? "ALL";
+  const assignment = query.assignment ?? "ALL";
+
+  const teachers = await db.user.findMany({
+    where: {
+      schoolId,
+      role: "TEACHER",
+      ...(status === "ACTIVE"
+        ? { isActive: true }
+        : status === "INACTIVE"
+          ? { isActive: false }
+          : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q } },
+              { email: { contains: q.toLowerCase() } },
+            ],
+          }
+        : {}),
+    },
+    include: {
+      branch: { select: { id: true, nameAr: true } },
+      teacherSupervision: {
+        include: { supervisor: { select: { id: true, name: true } } },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const filteredTeachers = teachers.filter((teacher) =>
+    assignment === "ASSIGNED"
+      ? teacher.teacherSupervision !== null
+      : assignment === "UNASSIGNED"
+        ? teacher.teacherSupervision === null
+        : true
+  );
+
+  const supervisors = await db.user.findMany({
+    where: { schoolId, role: "EDUCATIONAL_SUPERVISOR", isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  const supervisorsWithCounts = await Promise.all(
+    supervisors.map(async (supervisor) => ({
+      ...supervisor,
+      assignedCount: await db.teacherSupervisorAssignment.count({
+        where: { supervisorId: supervisor.id, schoolId },
+      }),
+    }))
+  );
+
+  const school = await db.school.findUnique({
+    where: { id: schoolId },
+    select: { id: true, nameAr: true },
+  });
+  if (!school) return null;
+
+  const assignedTeachers = teachers.filter(
+    (teacher) => teacher.teacherSupervision !== null
+  ).length;
+
+  return {
+    school,
+    stats: {
+      teachersTotal: teachers.length,
+      activeTeachers: teachers.filter((teacher) => teacher.isActive).length,
+      supervisorsTotal: supervisors.length,
+      assignedTeachers,
+      unassignedTeachers: teachers.length - assignedTeachers,
+    },
+    supervisors: supervisorsWithCounts,
+    teachers: filteredTeachers.map((teacher) => ({
+      id: teacher.id,
+      name: teacher.name,
+      email: teacher.email,
+      isActive: teacher.isActive,
+      isVerified: teacher.emailVerifiedAt !== null,
+      branchName: teacher.branch?.nameAr ?? null,
+      supervisor: teacher.teacherSupervision?.supervisor ?? null,
+    })),
+  };
+}
+
+/**
+ * IT power 1 — assign (or move) a teacher's supervisor. Same-school
+ * guarantee on BOTH sides, transactional replace (the previous row is
+ * deleted), and the IT coordinator can never touch another school.
+ */
+export async function assignTeacherSupervisorByIt(
+  raw: unknown,
+  actor: ItCoordinatorContext
+): Promise<UsersServiceResult<{ teacherId: string; supervisorId: string }>> {
+  const parsed = teacherSupervisorSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "تحقق من الحقول المدخلة ثم أعد المحاولة",
+      fieldErrors: zodUsersFieldErrors(parsed.error),
+      code: "VALIDATION_ERROR",
+    };
+  }
+  const input = parsed.data;
+
+  const [teacher, supervisor] = await Promise.all([
+    db.user.findUnique({ where: { id: input.teacherId } }),
+    db.user.findUnique({ where: { id: input.supervisorId } }),
+  ]);
+
+  if (!teacher || !supervisor) {
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
+  }
+  if (teacher.role !== "TEACHER") {
+    return relationError("الإسناد متاح لمعلمي المنصة فقط");
+  }
+  if (supervisor.role !== "EDUCATIONAL_SUPERVISOR" || !supervisor.schoolId) {
+    return relationError("المُسند إليه يجب أن يكون مشرفًا تربويًا تابعًا لمدرسة");
+  }
+  if (
+    !teacher.schoolId ||
+    teacher.schoolId !== actor.schoolId ||
+    supervisor.schoolId !== actor.schoolId
+  ) {
+    return relationError("لا يمكن إسناد معلمين أو مشرفين خارج مدرستك — العملية مرفوضة");
+  }
+
+  await db.$transaction(async (tx) => {
+    await tx.teacherSupervisorAssignment.deleteMany({
+      where: { teacherId: teacher.id },
+    });
+    await tx.teacherSupervisorAssignment.create({
+      data: {
+        teacherId: teacher.id,
+        supervisorId: supervisor.id,
+        schoolId: teacher.schoolId!,
+      },
+    });
+  });
+
+  return {
+    ok: true,
+    data: { teacherId: teacher.id, supervisorId: supervisor.id },
+  };
+}
+
+/** IT power 1 (b) — remove a teacher's supervisor (idempotent). */
+export async function removeTeacherSupervisorByIt(
+  raw: unknown,
+  actor: ItCoordinatorContext
+): Promise<UsersServiceResult<{ teacherId: string }>> {
+  const parsed = removeTeacherSupervisorSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "تحقق من الحقول المدخلة ثم أعد المحاولة",
+      fieldErrors: zodUsersFieldErrors(parsed.error),
+      code: "VALIDATION_ERROR",
+    };
+  }
+
+  const teacher = await db.user.findUnique({
+    where: { id: parsed.data.teacherId },
+  });
+  if (!teacher) {
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
+  }
+  if (!teacher.schoolId || teacher.schoolId !== actor.schoolId) {
+    return relationError("لا يمكن تعديل إسنادات معلمين خارج مدرستك — العملية مرفوضة");
+  }
+
+  await db.teacherSupervisorAssignment.deleteMany({
+    where: { teacherId: teacher.id },
+  });
+  return { ok: true, data: { teacherId: teacher.id } };
+}
+
+/**
+ * IT power 2 — request a password-reset email for ONE teacher of their
+ * own school. Reuses the EXISTING secure pipeline: single-use hashed
+ * token, expiry, session revocation on use, and the configured mail
+ * provider (never mailto links, never password disclosure). Rate
+ * limited to 3 reset emails per teacher per hour (DB-based).
+ */
+export async function requestTeacherRecoveryByIt(
+  raw: unknown,
+  actor: ItCoordinatorContext,
+  deps: { appBaseUrl: string; mailer?: MailSender }
+): Promise<UsersServiceResult<TeacherRecoveryOutcome>> {
+  const parsed = teacherRecoverySchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "أدخل بريدًا إلكترونيًا صحيحًا",
+      fieldErrors: zodUsersFieldErrors(parsed.error),
+      code: "VALIDATION_ERROR",
+    };
+  }
+
+  const teacher = await db.user.findUnique({
+    where: { email: normalizeEmail(parsed.data.teacherEmail) },
+  });
+  if (!teacher || teacher.role !== "TEACHER" || teacher.schoolId !== actor.schoolId) {
+    return {
+      ok: false,
+      message: "لا يوجد معلم بهذا البريد داخل مدرستك",
+      code: "NOT_FOUND",
+    };
+  }
+  if (!teacher.isActive) {
+    return {
+      ok: false,
+      message: "حساب المعلم موقوف — استعادة كلمة المرور متاحة للحسابات النشطة فقط",
+      code: "FORBIDDEN",
+    };
+  }
+
+  // Rate limit: at most 3 reset emails per teacher per hour.
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentTokens = await db.passwordResetToken.count({
+    where: { userId: teacher.id, createdAt: { gte: oneHourAgo } },
+  });
+  if (recentTokens >= 3) {
+    return {
+      ok: false,
+      message: "تم إرسال عدد كبير من روابط الاستعادة لهذا الحساب خلال الساعة الأخيرة — حاول لاحقًا",
+      code: "FORBIDDEN",
+    };
+  }
+
+  const rawToken = await issuePasswordResetToken(teacher.id);
+  const mailer = deps.mailer ?? defaultMailSender;
+  const sent = await mailer({
+    to: teacher.email,
+    ...buildPasswordResetEmail(
+      teacher.name,
+      `${deps.appBaseUrl.replace(/\/$/, "")}/reset-password?token=${encodeURIComponent(rawToken)}`
+    ),
+  });
+
+  return {
+    ok: true,
+    data: {
+      teacherName: teacher.name,
+      teacherEmail: teacher.email,
+      emailSent: sent.ok,
+    },
+  };
 }

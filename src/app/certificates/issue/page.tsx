@@ -1,5 +1,5 @@
 /**
- * Phase 8 — issuance flow (office manager):
+ * Phase 8 — issuance flow (office manager / school manager):
  *   1. Pick qualifying content (course or program) from a server-
  *      computed, tenant-scoped list.
  *   2. Review the per-teacher eligibility table — every rule is
@@ -33,9 +33,12 @@ export default async function IssueCertificatePage({
   searchParams: Promise<{ type?: string; id?: string }>;
 }) {
   const ctx = await requireAdminContext();
-  if (ctx.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    ctx.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    ctx.role !== "SCHOOL_MANAGER"
+  ) {
     return (
-      <AccessDenied hint="إصدار الشهادات متاح لمديري مكاتب التطوير فقط." />
+      <AccessDenied hint="إصدار الشهادات متاح لمديري مكاتب التطوير ومديري المدارس فقط." />
     );
   }
 

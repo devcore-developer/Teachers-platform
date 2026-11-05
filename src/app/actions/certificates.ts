@@ -8,6 +8,11 @@
  * before it is passed on as a CertificateActor. The service
  * re-validates role/tenant/eligibility again on its own — these
  * wrappers only adapt FormData payloads and trigger revalidation.
+ *
+ * SCHOOL_MANAGER issues/revokes with the same powers as the office
+ * manager, inside its own school only — the actor keeps its REAL role
+ * literal (no spoofing) and the service's structural scope fence does
+ * the confinement.
  */
 import { revalidatePath } from "next/cache";
 
@@ -50,16 +55,18 @@ function str(formData: FormData, key: string): string {
 }
 
 /**
- * Office-manager actor for issuance/revocation. Built ONLY from the
- * session user after an explicit role check — client payloads can
- * never widen it.
+ * Office-manager OR school-manager actor for issuance/revocation.
+ * Built ONLY from the session user after an explicit role check —
+ * client payloads can never widen it.
  */
 async function officeActor(): Promise<CertificateActor | null> {
   const user = await getCurrentUser();
-  if (!user || user.role !== "DEVELOPMENT_OFFICE_MANAGER" || !user.schoolId) {
+  if (!user) return null;
+  if (user.role !== "DEVELOPMENT_OFFICE_MANAGER" && user.role !== "SCHOOL_MANAGER") {
     return null;
   }
-  return { id: user.id, role: "DEVELOPMENT_OFFICE_MANAGER", schoolId: user.schoolId };
+  if (!user.schoolId) return null;
+  return { id: user.id, role: user.role, schoolId: user.schoolId };
 }
 
 /**
@@ -91,7 +98,10 @@ export async function issueCertificateAction(
   try {
     const ctx = await officeActor();
     if (!ctx) {
-      return failure("إصدار الشهادات متاح لمديري مكاتب التطوير فقط", "FORBIDDEN");
+      return failure(
+        "إصدار الشهادات متاح لمديري مكاتب التطوير ومديري المدارس فقط",
+        "FORBIDDEN"
+      );
     }
     const result = await issueCertificate(ctx, {
       teacherId: str(formData, "teacherId"),
@@ -128,7 +138,10 @@ export async function revokeCertificateAction(
   try {
     const ctx = await officeActor();
     if (!ctx) {
-      return failure("إلغاء الشهادات متاح لمديري مكاتب التطوير فقط", "FORBIDDEN");
+      return failure(
+        "إلغاء الشهادات متاح لمديري مكاتب التطوير ومديري المدارس فقط",
+        "FORBIDDEN"
+      );
     }
     const result = await revokeCertificate(ctx, {
       certificateId: str(formData, "certificateId"),

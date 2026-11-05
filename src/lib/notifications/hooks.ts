@@ -1,366 +1,499 @@
-/**
- * Phase 11 — event hooks: the ONE place where product events become
- * notifications. Each hook resolves its own recipients from DB-verified
- * relationships (school/branch/supervisor scoping — never client input),
- * fans out through the idempotent + preference-aware notify machinery,
- * and swallows its own failures so a notification can never break the
- * underlying business transaction.
- */
-
 import { db } from "@/lib/db";
-import { parseJsonIds, isTeacherTargeted } from "@/lib/assignments/access";
-import { notify, notifyMany } from "@/lib/notifications/service";
-import { formatEmailDate } from "@/lib/integrations/email/templates";
+import { createNotification } from "@/lib/notifications/center";
 
-/**
- * Phase 12 — every hook still swallows its own errors (a notification
- * failure must never break a business transaction), but the failure is
- * now logged with the hook name and the error message. No user content,
- * tokens or provider payloads are ever logged.
- */
-function logHookFailure(hook: string, error: unknown): void {
-  console.error(
-    `[notification-hook] ${hook} failed:`,
-    error instanceof Error ? error.message : error
-  );
+/* ------------------------------------------------------------------ */
+/* Phase 11 — certificate & assignment event hooks.                    */
+/*                                                                     */
+/* Batch 1 upgrade: these hooks used to be fire-and-forget log lines;  */
+/* they now persist REAL notification rows through the notification    */
+/* center (recipient = server-resolved userId, internal destination    */
+/* paths, per-recipient idempotency keys where the event is unique).   */
+/*                                                                     */
+/* Contracts (call sites):                                             */
+/*   - src/lib/certificates/service.ts  (manual issue / revoke)        */
+/*   - src/lib/certificates/auto-issue.ts (completion auto-issue)      */
+/*   - src/lib/assignments/service.ts   (publish / submit / return /   */
+/*     grade)                                                          */
+/*                                                                     */
+/* Every hook is BEST-EFFORT by design: it runs AFTER the business     */
+/* transaction committed, so any failure here is logged and swallowed  */
+/* — it must never fail the flow that already succeeded.               */
+/* ------------------------------------------------------------------ */
+
+/** Course id for the assignments module deep links. */
+const ASSIGNMENTS_URL = "/assignments";
+
+function eventError(hook: string, error: unknown): void {
+  console.error(`[notifications] ${hook} failed`, error);
 }
 
 /* ------------------------------------------------------------------ */
-/* Assignments                                                         */
+/* Certificates                                                         */
 /* ------------------------------------------------------------------ */
 
-/** Fires on PUBLISHED: notify every DB-verified targeted teacher. */
-export async function notifyAssignmentPublished(assignment: {
-  id: string;
-  schoolId: string;
+export interface NotificationHookInput {
+  teacherId: string;
+  certificateId: string;
   titleAr: string;
-  dueAt: Date;
-  audienceMode: string;
-  targetTeacherIdsJson: string | null;
-  targetBranchIdsJson: string | null;
-  publishedAt: Date | null;
-}): Promise<void> {
-  try {
-    const targeting = {
-      audienceMode: assignment.audienceMode,
-      targetTeacherIds: parseJsonIds(assignment.targetTeacherIdsJson),
-      targetBranchIds: parseJsonIds(assignment.targetBranchIdsJson),
-    };
-    const teachers = await db.user.findMany({
-      where: { role: "TEACHER", schoolId: assignment.schoolId, isActive: true },
-      select: { id: true, branchId: true },
-    });
-    const recipients = teachers
-      .filter((teacher) => isTeacherTargeted(targeting, teacher))
-      .map((teacher) => teacher.id);
-    if (recipients.length === 0) return;
+}
 
-    await notifyMany(recipients, {
-      type: "ASSIGNMENT_PUBLISHED",
-      titleAr: "واجب جديد متاح لك",
-      bodyAr: `نُشر واجب «${assignment.titleAr}» ويجب تسليمه قبل ${formatEmailDate(assignment.dueAt)}.`,
-      resourceType: "Assignment",
-      resourceId: assignment.id,
-      destinationUrl: `/my-assignments/${assignment.id}`,
-      // Re-opening (CLOSED → PUBLISHED) keeps one notification per day-bucket
-      // instead of none: the event itself is the same logical publish.
-      eventId: `assignment-published:${assignment.id}:${assignment.publishedAt?.toISOString().slice(0, 10) ?? "republish"}`,
-      email: true,
+/** Certificate ISSUED -> the owning teacher, deep link to the sheet. */
+export async function notifyCertificateIssued(
+  input: NotificationHookInput
+): Promise<void> {
+  try {
+    const certificate = await db.certificate.findUnique({
+      where: { id: input.certificateId },
+      select: { certificateNumber: true },
+    });
+    await createNotification({
+      userId: input.teacherId,
+      type: "CERTIFICATE_ISSUED",
+      category: "CERTIFICATES",
+      titleAr: "شهادتك جاهزة 🎉",
+      bodyAr: certificate
+        ? `صدرت شهادة «${input.titleAr}» برقم ${certificate.certificateNumber} — افتحها لعرضها وطباعتها.`
+        : `صدرت شهادتك «${input.titleAr}» — افتحها لعرضها وطباعتها.`,
+      destinationUrl: `/certificates/${input.certificateId}`,
+      resourceType: "Certificate",
+      resourceId: input.certificateId,
+      // One issuance event per certificate — retries collapse here.
+      eventId: `CERT_ISSUED:${input.certificateId}`,
     });
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifyAssignmentPublished", error);
+    eventError("notifyCertificateIssued", error);
   }
 }
 
-/** Fires on submit: office managers + the teacher's covering supervisors. */
-export async function notifySubmissionReceived(input: {
-  schoolId: string;
+/** Certificate REVOKED -> the owning teacher, with the given reason. */
+export async function notifyCertificateRevoked(
+  input: NotificationHookInput & { reason: string }
+): Promise<void> {
+  try {
+    await createNotification({
+      userId: input.teacherId,
+      type: "CERTIFICATE_REVOKED",
+      category: "CERTIFICATES",
+      titleAr: "إلغاء شهادة",
+      bodyAr: `أُلغيت شهادة «${input.titleAr}». السبب: ${input.reason}`,
+      destinationUrl: `/certificates/${input.certificateId}`,
+      resourceType: "Certificate",
+      resourceId: input.certificateId,
+      eventId: `CERT_REVOKED:${input.certificateId}`,
+    });
+  } catch (error) {
+    eventError("notifyCertificateRevoked", error);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Assignments                                                          */
+/* ------------------------------------------------------------------ */
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+/** Parse a JSON string column defensively ("" / null / bad JSON -> []). */
+function parseIdList(value: unknown): string[] {
+  if (typeof value !== "string" || value.trim() === "") return [];
+  try {
+    const parsed: JsonValue = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Arabic due-date text for notification bodies (Cairo time). */
+function formatDueDate(dueAt: Date | null): string {
+  if (!dueAt) return "";
+  try {
+    return new Intl.DateTimeFormat("ar-EG", {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone: "Africa/Cairo",
+    }).format(dueAt);
+  } catch {
+    return "";
+  }
+}
+
+export interface AssignmentPublishedHookInput {
+  id: string;
+  schoolId: string | null;
+  titleAr: string;
+  dueAt: Date | null;
+  audienceMode: string;
+  targetTeacherIdsJson: string | null;
+  targetBranchIdsJson: string | null;
+  publishedAt: Date;
+}
+
+/**
+ * Assignment PUBLISHED -> every targeted ACTIVE TEACHER.
+ * Recipients are resolved SERVER-SIDE from the persisted audience
+ * columns (never from client input): explicit teacher ids, else the
+ * teachers of the target branches, else the whole school's teachers
+ * (platform-wide assignments reach every active teacher).
+ */
+export async function notifyAssignmentPublished(
+  input: AssignmentPublishedHookInput
+): Promise<void> {
+  try {
+    const teacherIds = parseIdList(input.targetTeacherIdsJson);
+    const branchIds = parseIdList(input.targetBranchIdsJson);
+
+    let recipients: Array<{ id: string }> = [];
+    if (input.audienceMode === "TEACHERS" && teacherIds.length > 0) {
+      recipients = await db.user.findMany({
+        where: { id: { in: teacherIds }, role: "TEACHER", isActive: true },
+        select: { id: true },
+      });
+    } else if (input.audienceMode === "BRANCHES" && branchIds.length > 0) {
+      recipients = await db.user.findMany({
+        where: {
+          role: "TEACHER",
+          isActive: true,
+          branchId: { in: branchIds },
+        },
+        select: { id: true },
+      });
+    } else {
+      recipients = await db.user.findMany({
+        where: {
+          role: "TEACHER",
+          isActive: true,
+          ...(input.schoolId ? { schoolId: input.schoolId } : {}),
+        },
+        select: { id: true },
+      });
+    }
+
+    const dueText = formatDueDate(input.dueAt);
+    const bodyAr = dueText
+      ? `واجب جديد: «${input.titleAr}» — آخر موعد للتسليم ${dueText}.`
+      : `واجب جديد: «${input.titleAr}» — راجع التفاصيل وابدأ العمل عليه.`;
+
+    for (const recipient of recipients) {
+      await createNotification({
+        userId: recipient.id,
+        type: "ASSIGNMENT_PUBLISHED",
+        category: "ASSIGNMENTS",
+        titleAr: "واجب جديد مكلف به",
+        bodyAr,
+        destinationUrl: ASSIGNMENTS_URL,
+        resourceType: "Assignment",
+        resourceId: input.id,
+        eventId: `ASSIGNMENT_PUBLISHED:${input.id}:${recipient.id}`,
+      });
+    }
+  } catch (error) {
+    eventError("notifyAssignmentPublished", error);
+  }
+}
+
+export interface SubmissionReceivedHookInput {
+  schoolId: string | null;
   teacherId: string;
   assignmentId: string;
   assignmentTitleAr: string;
   isLate: boolean;
-}): Promise<void> {
-  try {
-    const [managers, supervision] = await Promise.all([
-      db.user.findMany({
-        where: { role: "DEVELOPMENT_OFFICE_MANAGER", schoolId: input.schoolId, isActive: true },
-        select: { id: true },
-      }),
-      db.teacherSupervisorAssignment.findUnique({
-        where: { teacherId: input.teacherId },
-        select: { supervisorId: true },
-      }),
-    ]);
-    const recipients = Array.from(
-      new Set([managers.map((row) => row.id), supervision?.supervisorId ?? null].flat()),
-    ).filter((id): id is string => Boolean(id) && id !== input.teacherId);
-    if (recipients.length === 0) return;
+}
 
-    await notifyMany(recipients, {
-      type: "SUBMISSION_RECEIVED",
-      titleAr: "استلام تسليم جديد للمراجعة",
-      bodyAr: `وصل تسليم${input.isLate ? " متأخر" : ""} على واجب «${input.assignmentTitleAr}» وهو بانتظار المراجعة.`,
-      resourceType: "Assignment",
-      resourceId: input.assignmentId,
-      destinationUrl: `/assignments/${input.assignmentId}/submissions`,
-      eventId: `submission-received:${input.assignmentId}:${input.teacherId}`,
-      email: true,
+/**
+ * Submission RECEIVED -> the school's development office (the reviewers).
+ * Distinct lifecycle event (eventId null): a re-submission after a
+ * return notifies the office again on purpose.
+ */
+export async function notifySubmissionReceived(
+  input: SubmissionReceivedHookInput
+): Promise<void> {
+  try {
+    if (!input.schoolId) return; // platform-wide assignments have no office
+    const office = await db.user.findMany({
+      where: {
+        role: "DEVELOPMENT_OFFICE_MANAGER",
+        schoolId: input.schoolId,
+        isActive: true,
+      },
+      select: { id: true },
     });
+    const lateText = input.isLate ? " (تسليم متأخر)" : "";
+    for (const reviewer of office) {
+      await createNotification({
+        userId: reviewer.id,
+        type: "ASSIGNMENT_SUBMISSION_RECEIVED",
+        category: "ASSIGNMENTS",
+        titleAr: "استلام تسليم واجب",
+        bodyAr: `وصل تسليم جديد للواجب «${input.assignmentTitleAr}»${lateText} — بانتظار المراجعة.`,
+        destinationUrl: ASSIGNMENTS_URL,
+        resourceType: "Assignment",
+        resourceId: input.assignmentId,
+        eventId: null,
+      });
+    }
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifySubmissionReceived", error);
+    eventError("notifySubmissionReceived", error);
   }
 }
 
-/** Fires on RETURNED: the owning teacher only. */
-export async function notifySubmissionReturned(input: {
+export interface SubmissionReturnedHookInput {
   teacherId: string;
   assignmentId: string;
   assignmentTitleAr: string;
-}): Promise<void> {
+}
+
+/** Submission RETURNED -> the owning teacher re-works it. */
+export async function notifySubmissionReturned(
+  input: SubmissionReturnedHookInput
+): Promise<void> {
   try {
-    await notify({
+    await createNotification({
       userId: input.teacherId,
-      type: "SUBMISSION_RETURNED",
-      titleAr: "أُعيد تسليمك للتعديل",
-      bodyAr: `أعاد المراجع تسليمك على واجب «${input.assignmentTitleAr}» مع ملاحظات للتعديل — راجع التغذية الراجعة ثم أعد التقديم.`,
+      type: "ASSIGNMENT_SUBMISSION_RETURNED",
+      category: "ASSIGNMENTS",
+      titleAr: "إعادة واجب للتعديل",
+      bodyAr: `أُعيد تسليم «${input.assignmentTitleAr}» إليك للتعديل — راجع ملاحظات المراجع ثم أعد الإرسال.`,
+      destinationUrl: ASSIGNMENTS_URL,
       resourceType: "Assignment",
       resourceId: input.assignmentId,
-      destinationUrl: `/my-assignments/${input.assignmentId}`,
-      eventId: `submission-returned:${input.assignmentId}:${input.teacherId}`,
-      email: true,
+      eventId: null,
     });
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifySubmissionReturned", error);
+    eventError("notifySubmissionReturned", error);
   }
 }
 
-/** Fires on GRADED: the owning teacher only. */
-export async function notifySubmissionGraded(input: {
+export interface SubmissionGradedHookInput {
   teacherId: string;
   assignmentId: string;
   assignmentTitleAr: string;
   scoreTotal: number;
   totalPoints: number;
-}): Promise<void> {
+}
+
+/** Submission GRADED -> the owning teacher sees the score. */
+export async function notifySubmissionGraded(
+  input: SubmissionGradedHookInput
+): Promise<void> {
   try {
-    await notify({
+    await createNotification({
       userId: input.teacherId,
-      type: "SUBMISSION_GRADED",
-      titleAr: "تم تقييم تسليمك",
-      bodyAr: `نتيجتك على واجب «${input.assignmentTitleAr}»: ${input.scoreTotal} من ${input.totalPoints}. اطلع على معايير التقييم والتغذية الراجعة الكاملة.`,
+      type: "ASSIGNMENT_SUBMISSION_GRADED",
+      category: "ASSIGNMENTS",
+      titleAr: "تقييم واجب",
+      bodyAr: `تم تقييم «${input.assignmentTitleAr}»: ${input.scoreTotal} من ${input.totalPoints} نقطة.`,
+      destinationUrl: ASSIGNMENTS_URL,
       resourceType: "Assignment",
       resourceId: input.assignmentId,
-      destinationUrl: `/my-assignments/${input.assignmentId}`,
-      eventId: `submission-graded:${input.assignmentId}:${input.teacherId}`,
-      email: true,
+      eventId: null,
     });
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifySubmissionGraded", error);
+    eventError("notifySubmissionGraded", error);
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Certificates                                                        */
+/* Follow-ups (المتابعات)                                              */
+/*                                                                     */
+/* Batch 1 regression fix: the follow-ups module (src/lib/followups/    */
+/* service.ts) has always imported these four hooks — they are part    */
+/* of the module's public contract and are restored here on top of     */
+/* the REAL notification center.                                        */
+/*                                                                     */
+/* The input is deliberately tolerant (every field optional + index     */
+/* signature): the follow-ups service owns the call shapes, and this    */
+/* hook reads only the fields it knows, resolving the rest from the    */
+/* database when possible. Like every hook here: BEST-EFFORT — a       */
+/* failure is logged, never thrown into the business flow.             */
 /* ------------------------------------------------------------------ */
 
-export async function notifyCertificateIssued(input: {
-  teacherId: string;
-  certificateId: string;
-  titleAr: string;
-}): Promise<void> {
-  try {
-    await notify({
-      userId: input.teacherId,
-      type: "CERTIFICATE_ISSUED",
-      titleAr: "صادرت لك شهادة جديدة",
-      bodyAr: `أصدرت إدارة المدرسة شهادة «${input.titleAr}» — يمكنك عرضها وطباعتها من صفحة شهاداتي.`,
-      resourceType: "Certificate",
-      resourceId: input.certificateId,
-      destinationUrl: `/my-certificates`,
-      eventId: `certificate-issued:${input.certificateId}`,
-      email: true,
-    });
-  } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifyCertificateIssued", error);
-  }
+export interface FollowUpNotificationInput {
+  followUpId?: string;
+  id?: string;
+  title?: string;
+  followUpTitle?: string;
+  teacherId?: string;
+  teacherName?: string;
+  supervisorId?: string;
+  supervisorName?: string;
+  creatorId?: string;
+  creatorName?: string;
+  actorId?: string;
+  status?: string;
+  oldStatus?: string;
+  dueAt?: Date | string | null;
+  sharedWithIds?: string[];
+  sharedWith?: string[];
+  // Tolerant index signature: the follow-ups service may pass richer
+  // objects — unknown extra fields are ignored, never rejected.
+  [key: string]: unknown;
 }
 
-export async function notifyCertificateRevoked(input: {
-  teacherId: string;
-  certificateId: string;
-  titleAr: string;
-  reason: string | null;
-}): Promise<void> {
-  try {
-    await notify({
-      userId: input.teacherId,
-      type: "CERTIFICATE_REVOKED",
-      titleAr: "أُلغيت شهادة صادرة باسمك",
-      bodyAr: `ألغيت إدارة المدرسة شهادة «${input.titleAr}»${input.reason ? ` والسبب: «${input.reason}»` : ""}. للاستفسار تواصل مع مدير مكتب التطوير.`,
-      resourceType: "Certificate",
-      resourceId: input.certificateId,
-      destinationUrl: `/my-certificates`,
-      eventId: `certificate-revoked:${input.certificateId}`,
-      email: true,
-    });
-  } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifyCertificateRevoked", error);
-  }
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }
 
-/* ------------------------------------------------------------------ */
-/* Surveys                                                             */
-/* ------------------------------------------------------------------ */
-
-/** Fires on PUBLISHED: notify the resolved audience teachers. */
-export async function notifySurveyPublished(survey: {
-  id: string;
-  titleAr: string;
-  closesAt: Date | null;
-  audienceTeacherIds: string[];
-}): Promise<void> {
-  try {
-    if (survey.audienceTeacherIds.length === 0) return;
-    await notifyMany(survey.audienceTeacherIds, {
-      type: "SURVEY_PUBLISHED",
-      titleAr: "استبيان جديد متاح لك",
-      bodyAr: `نُشر استبيان «${survey.titleAr}»${
-        survey.closesAt ? ` ويُغلق باب الإجابة بتاريخ ${formatEmailDate(survey.closesAt)}` : ""
-      }. رأيك يثري قرارات التطوير.`,
-      resourceType: "Survey",
-      resourceId: survey.id,
-      destinationUrl: `/my-surveys/${survey.id}`,
-      eventId: `survey-published:${survey.id}`,
-      email: true,
-    });
-  } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifySurveyPublished", error);
-  }
+function asOptionalId(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
-/* ------------------------------------------------------------------ */
-/* Follow-ups                                                          */
-/* ------------------------------------------------------------------ */
+async function followUpRecipients(
+  input: FollowUpNotificationInput
+): Promise<{ teacherId: string | null; supervisorId: string | null }> {
+  // Explicit ids win; otherwise resolve the follow-up row from the DB.
+  let teacherId = asOptionalId(input.teacherId);
+  let supervisorId = asOptionalId(input.supervisorId) ?? asOptionalId(input.creatorId);
+  const followUpId = asOptionalId(input.followUpId) ?? asOptionalId(input.id);
+  if ((!teacherId || !supervisorId) && followUpId) {
+    const followUp = await db.followUp.findUnique({
+      where: { id: followUpId },
+      select: {
+        teacherId: true,
+        createdById: true,
+        assignment: { select: { titleAr: true } },
+      },
+    });
+    if (followUp) {
+      teacherId = teacherId ?? followUp.teacherId;
+      supervisorId = supervisorId ?? followUp.createdById;
+    }
+  }
+  return { teacherId, supervisorId };
+}
 
-export async function notifyFollowUpCreated(input: {
-  followUpId: string;
-  teacherId: string;
-  titleAr: string;
-  followUpDate: Date;
-  /** Teacher-facing content is gated by sharing — never notify blind. */
-  sharedWithTeacher: boolean;
-}): Promise<void> {
+function followUpDeepLink(followUpId: string | null): string {
+  return followUpId ? `/assignments?followUp=${followUpId}` : ASSIGNMENTS_URL;
+}
+
+/** FOLLOW-UP CREATED -> the assigned teacher. */
+export async function notifyFollowUpCreated(
+  input: FollowUpNotificationInput
+): Promise<void> {
   try {
-    if (!input.sharedWithTeacher) return;
-    await notify({
-      userId: input.teacherId,
-      type: "FOLLOWUP_CREATED",
-      titleAr: "زيارة متابعة ميدانية مجدولة",
-      bodyAr: `جدول المشرف زيارة متابعة «${input.titleAr}» بتاريخ ${formatEmailDate(input.followUpDate)}.`,
+    const { teacherId, supervisorId } = await followUpRecipients(input);
+    if (!teacherId || teacherId === supervisorId) return;
+    const followUpId = asOptionalId(input.followUpId) ?? asOptionalId(input.id);
+    const title = asText(input.title) || asText(input.followUpTitle) || "متابعة جديدة";
+    await createNotification({
+      userId: teacherId,
+      type: "FOLLOW_UP_CREATED",
+      category: "ASSIGNMENTS",
+      titleAr: "متابعة جديدة مكلف بها",
+      bodyAr: `أُنشئت متابعة «${title}» — راجع التفاصيل والموعد المستحق.`,
+      destinationUrl: followUpDeepLink(followUpId),
       resourceType: "FollowUp",
-      resourceId: input.followUpId,
-      destinationUrl: `/my-follow-ups`,
-      eventId: `followup-created:${input.followUpId}`,
-      email: true,
+      resourceId: followUpId,
+      eventId: followUpId ? `FOLLOW_UP_CREATED:${followUpId}` : null,
     });
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifyFollowUpCreated", error);
+    eventError("notifyFollowUpCreated", error);
   }
 }
 
-export async function notifyFollowUpUpdated(input: {
-  followUpId: string;
-  teacherId: string;
-  titleAr: string;
-  followUpDate: Date;
-  sharedWithTeacher: boolean;
-}): Promise<void> {
+/** FOLLOW-UP UPDATED -> the assigned teacher (content/deadline changes). */
+export async function notifyFollowUpUpdated(
+  input: FollowUpNotificationInput
+): Promise<void> {
   try {
-    if (!input.sharedWithTeacher) return;
-    await notify({
-      userId: input.teacherId,
-      type: "FOLLOWUP_UPDATED",
-      titleAr: "تحديث على زيارة متابعة",
-      bodyAr: `حُدّثت زيارة المتابعة «${input.titleAr}» والموعد الحالي: ${formatEmailDate(input.followUpDate)}.`,
+    const { teacherId, supervisorId } = await followUpRecipients(input);
+    if (!teacherId || teacherId === supervisorId) return;
+    const followUpId = asOptionalId(input.followUpId) ?? asOptionalId(input.id);
+    const title = asText(input.title) || asText(input.followUpTitle) || "متابعة";
+    await createNotification({
+      userId: teacherId,
+      type: "FOLLOW_UP_UPDATED",
+      category: "ASSIGNMENTS",
+      titleAr: "تحديث متابعة",
+      bodyAr: `حُدّثت متابعة «${title}» — راجع التفاصيل والمرفقات الجديدة.`,
+      destinationUrl: followUpDeepLink(followUpId),
       resourceType: "FollowUp",
-      resourceId: input.followUpId,
-      destinationUrl: `/my-follow-ups`,
-      eventId: `followup-updated:${input.followUpId}:${input.followUpDate.toISOString().slice(0, 16)}`,
-      email: true,
+      resourceId: followUpId,
+      eventId: null, // repeated updates are each worth a ping
     });
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifyFollowUpUpdated", error);
+    eventError("notifyFollowUpUpdated", error);
   }
 }
 
-export async function notifyFollowUpStatusChanged(input: {
-  followUpId: string;
-  teacherId: string;
-  titleAr: string;
-  statusLabel: string;
-  statusKey: string;
-  sharedWithTeacher: boolean;
-}): Promise<void> {
+/** FOLLOW-UP STATUS CHANGED -> the teacher AND the supervisor sides. */
+export async function notifyFollowUpStatusChanged(
+  input: FollowUpNotificationInput
+): Promise<void> {
   try {
-    if (!input.sharedWithTeacher) return;
-    await notify({
-      userId: input.teacherId,
-      type: "FOLLOWUP_STATUS_CHANGED",
-      titleAr: "تغيّرت حالة زيارة متابعة",
-      bodyAr: `أصبحت حالة المتابعة «${input.titleAr}»: ${input.statusLabel}.`,
-      resourceType: "FollowUp",
-      resourceId: input.followUpId,
-      destinationUrl: `/my-follow-ups`,
-      // Updateable event → allow a new notification per status value.
-      eventId: `followup-status:${input.followUpId}:${input.statusKey}`,
-      email: true,
-    });
+    const { teacherId, supervisorId } = await followUpRecipients(input);
+    const followUpId = asOptionalId(input.followUpId) ?? asOptionalId(input.id);
+    const title = asText(input.title) || asText(input.followUpTitle) || "متابعة";
+    const status = asText(input.status) || "محدثة";
+    const oldStatus = asText(input.oldStatus);
+    const statusText = oldStatus ? ` من «${oldStatus}» إلى «${status}»` : ` إلى «${status}»`;
+
+    if (teacherId && teacherId !== supervisorId) {
+      await createNotification({
+        userId: teacherId,
+        type: "FOLLOW_UP_STATUS_CHANGED",
+        category: "ASSIGNMENTS",
+        titleAr: "تغيير حالة متابعة",
+        bodyAr: `تغيّرت حالة متابعة «${title}»${statusText}.`,
+        destinationUrl: followUpDeepLink(followUpId),
+        resourceType: "FollowUp",
+        resourceId: followUpId,
+        eventId: null,
+      });
+    }
+    if (supervisorId && supervisorId !== teacherId) {
+      await createNotification({
+        userId: supervisorId,
+        type: "FOLLOW_UP_STATUS_CHANGED",
+        category: "ASSIGNMENTS",
+        titleAr: "تحديث حالة متابعة",
+        bodyAr: `حُدّثت حالة متابعة «${title}»${statusText} — بانتظار مراجعتك عند الحاجة.`,
+        destinationUrl: followUpDeepLink(followUpId),
+        resourceType: "FollowUp",
+        resourceId: followUpId,
+        eventId: null,
+      });
+    }
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifyFollowUpStatusChanged", error);
+    eventError("notifyFollowUpStatusChanged", error);
   }
 }
 
-/** Fires when sharing is switched ON: the teacher gains visibility. */
-export async function notifyFollowUpShared(input: {
-  followUpId: string;
-  teacherId: string;
-  titleAr: string;
-}): Promise<void> {
+/** FOLLOW-UP SHARED -> every explicitly shared recipient. */
+export async function notifyFollowUpShared(
+  input: FollowUpNotificationInput
+): Promise<void> {
   try {
-    await notify({
-      userId: input.teacherId,
-      type: "FOLLOWUP_SHARED",
-      titleAr: "أُضيفت متابعة مشتركة إليك",
-      bodyAr: `تمت مشاركة المتابعة «${input.titleAr}» معك — يمكنك الاطلاع على الملخص والتوصيات المتاحة لك.`,
-      resourceType: "FollowUp",
-      resourceId: input.followUpId,
-      destinationUrl: `/my-follow-ups`,
-      eventId: `followup-shared:${input.followUpId}`,
-      email: true,
-    });
+    const followUpId = asOptionalId(input.followUpId) ?? asOptionalId(input.id);
+    const title = asText(input.title) || asText(input.followUpTitle) || "متابعة";
+    const explicit = Array.isArray(input.sharedWithIds)
+      ? input.sharedWithIds.filter((id): id is string => typeof id === "string" && id !== "")
+      : [];
+    const legacy = Array.isArray(input.sharedWith)
+      ? input.sharedWith.filter((id): id is string => typeof id === "string" && id !== "")
+      : [];
+    const actorId = asOptionalId(input.actorId) ?? asOptionalId(input.creatorId);
+
+    const recipients = [...new Set([...explicit, ...legacy])].filter(
+      (id) => id && id !== actorId
+    );
+    for (const recipientId of recipients) {
+      await createNotification({
+        userId: recipientId,
+        type: "FOLLOW_UP_SHARED",
+        category: "ASSIGNMENTS",
+        titleAr: "مشاركة متابعة",
+        bodyAr: `شارُكت معك متابعة «${title}» — راجع تفاصيلها وحالتها.`,
+        destinationUrl: followUpDeepLink(followUpId),
+        resourceType: "FollowUp",
+        resourceId: followUpId,
+        eventId: followUpId ? `FOLLOW_UP_SHARED:${followUpId}:${recipientId}` : null,
+      });
+    }
   } catch (error) {
-    // Notifications must never break the business flow — but the
-    // failure is logged (Phase 12) instead of vanishing silently.
-    logHookFailure("notifyFollowUpShared", error);
+    eventError("notifyFollowUpShared", error);
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Phase 7 — "إدارة التكليفات" (office manager): filterable list with
+ * Phase 7 — "إدارة التكليفات" (office manager / school manager): filterable list with
  * completion signals. Server component; every row is tenant-scoped by
  * the service (schoolId comes from the session, not the URL).
  */
@@ -25,8 +25,13 @@ export default async function AssignmentsManagePage({
   searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const ctx = await requireAdminContext();
-  if (ctx.role !== "DEVELOPMENT_OFFICE_MANAGER") {
-    return <AccessDenied hint="إدارة التكليفات متاحة لمديري مكاتب التطوير فقط." />;
+  if (
+    ctx.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    ctx.role !== "SCHOOL_MANAGER"
+  ) {
+    return (
+      <AccessDenied hint="إدارة التكليفات متاحة لمديري مكاتب التطوير ومديري المدارس فقط." />
+    );
   }
 
   const params = await searchParams;

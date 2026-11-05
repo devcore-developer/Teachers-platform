@@ -1,8 +1,8 @@
 /**
  * Phase 8 — certificate detail + printable sheet. One route serves:
  *   - the certified TEACHER (owner-only, server-checked),
- *   - DEVELOPMENT_OFFICE_MANAGER / EDUCATIONAL_SUPERVISOR /
- *     EDUCATIONAL_DEPUTY (own school),
+ *   - DEVELOPMENT_OFFICE_MANAGER / SCHOOL_MANAGER /
+ *     EDUCATIONAL_SUPERVISOR / EDUCATIONAL_DEPUTY (own school),
  *   - SUPER_ADMIN (platform-wide read-only records).
  * Authorization is enforced inside getCertificateView — this page only
  * renders the returned result or an access panel.
@@ -15,6 +15,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { roleLabel } from "@/lib/auth/roles";
 import { getCertificateView } from "@/lib/certificates/service";
 import { qrDataUrl } from "@/lib/certificates/qr";
 import { CERTIFICATE_EVENT_TYPE_LABELS } from "@/config/certificates";
@@ -57,7 +58,11 @@ export default async function CertificateViewPage({
   const verifyUrl = `${proto}://${host}/verify?code=${view.verificationCode}`;
   const qr = await qrDataUrl(verifyUrl);
 
-  const isOfficeManager = user.role === "DEVELOPMENT_OFFICE_MANAGER";
+  // Revocation follows canRevokeCertificates: office manager OR school
+  // manager (both confined to their own school by the service).
+  const canRevoke =
+    user.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    user.role === "SCHOOL_MANAGER";
   const isOwner = user.role === "TEACHER" && user.id === view.teacherId;
 
   return (
@@ -160,6 +165,15 @@ export default async function CertificateViewPage({
                 ) : null}
               </dd>
             </div>
+            {view.schoolSignatory ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">توقيع مدير المدرسة</dt>
+                <dd className="font-medium text-slate-700">
+                  {view.schoolSignatory.name}
+                  <span className="mr-1 text-xs text-slate-400">({view.schoolSignatory.title})</span>
+                </dd>
+              </div>
+            ) : null}
             {view.revocation ? (
               <>
                 <div className="flex justify-between gap-4">
@@ -180,7 +194,7 @@ export default async function CertificateViewPage({
             ) : null}
           </dl>
 
-          {isOfficeManager && view.status === "ISSUED" ? (
+          {canRevoke && view.status === "ISSUED" ? (
             <div className="mt-6 border-t border-slate-100 pt-4">
               <RevokeForm certificateId={view.id} />
             </div>
@@ -208,7 +222,7 @@ export default async function CertificateViewPage({
                     <p className="text-xs text-slate-500">
                       {formatDate(event.createdAt)}
                       {event.actorName ? ` — ${event.actorName}` : ""}
-                      {event.actorRole === "DEVELOPMENT_OFFICE_MANAGER" ? " (مدير مكتب التطوير)" : ""}
+                      {event.actorRole ? ` (${roleLabel(event.actorRole)})` : ""}
                     </p>
                     {event.note ? (
                       <p className="mt-1 text-xs text-slate-500">{event.note}</p>

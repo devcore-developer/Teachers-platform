@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { SchoolsMetricsSection } from "@/components/dashboard/schools-metrics";
 import { UsersMetricsSection } from "@/components/dashboard/users-metrics";
 import { AcademyMetricsSection } from "@/components/dashboard/academy-metrics";
@@ -15,13 +17,16 @@ export const metadata = {
  * the DB — never from the client:
  *   SUPER_ADMIN                -> platform dashboard + schools + users + academy metrics
  *   DEVELOPMENT_OFFICE_MANAGER -> same shell + THEIR school's metrics
- *                                 (schoolId from the session only)
+ *   SCHOOL_MANAGER             -> school dashboard (own school only)
+ *   IT_COORDINATOR             -> dedicated IT workspace (/it)
  *   deputy / supervisor / teacher -> scoped role dashboard
- *
- * Phase 1 mock sections keep their honest "بيانات تجريبية" labels.
  */
 export default async function HomePage() {
   const user = await requireUser();
+
+  if (user.role === "IT_COORDINATOR") {
+    redirect("/it");
+  }
 
   if (user.role === "SUPER_ADMIN") {
     return (
@@ -39,6 +44,21 @@ export default async function HomePage() {
   }
 
   if (user.role === "DEVELOPMENT_OFFICE_MANAGER" && user.schoolId) {
+    return (
+      <DashboardView
+        schoolsSlot={
+          <div className="space-y-6">
+            <SchoolsMetricsSection schoolId={user.schoolId} />
+            <UsersMetricsSection schoolId={user.schoolId} />
+            <AcademyMetricsSection schoolId={user.schoolId} />
+            <AssessmentMetricsSection schoolId={user.schoolId} />
+          </div>
+        }
+      />
+    );
+  }
+
+  if (user.role === "SCHOOL_MANAGER" && user.schoolId) {
     return (
       <DashboardView
         schoolsSlot={

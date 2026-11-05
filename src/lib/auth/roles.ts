@@ -89,6 +89,15 @@ const NAV_ROLES: Record<string, Role[]> = {
   settings: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
   // Phase 4 — self-service profile (every role, own data only)
   "my-profile": [...ROLE_KEYS],
+  // Batch 2 — supervisor->teacher messaging inbox (everyone reads;
+  // composing is scope-checked server-side per role)
+  messages: [...ROLE_KEYS],
+  // Batch 2 — self-service account security (password/email change)
+  "account-security": [...ROLE_KEYS],
+  // Batch 2 — yearly training record + archives (office/admin)
+  "training-archive": ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER"],
+  // Batch 2 — the professional growth board (v48 classification & promotion)
+  growth: ["EDUCATIONAL_SUPERVISOR"],
 };
 
 /**

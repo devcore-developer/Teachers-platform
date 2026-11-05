@@ -1,56 +1,98 @@
-/**
- * Phase 8 — per-teacher growth drill-down (back-office). Scope is
- * enforced inside getTeacherGrowth: supervisor → assigned teachers
- * only, deputy → granted scope, manager → own school. SUPER_ADMIN is
- * deliberately pointed to the aggregate page. Any tampering with the
- * route id lands on the service's scope rejection.
- */
-import { getCurrentUser } from "@/lib/auth/session";
-import { getTeacherGrowth } from "@/lib/growth/service";
-import { AccessDenied, PageHeader } from "@/app/assignments/ui";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { SectionCard } from "@/components/platform/section-card";
+import { requireUser } from "@/lib/auth/session";
+import {
+  canManageTeacherGrowth,
+  getTeacherGrowth,
+} from "@/lib/growth/service";
 import { GrowthProjection } from "@/app/growth/growth-projection";
+import {
+  GrowthHistoryTimeline,
+  GrowthLadder,
+} from "@/app/growth/ui";
 
-export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "ملف النمو المهني | منارة قرطبة",
+};
 
+/**
+ * Batch 2 (part 2/2) — one teacher's growth file (/growth/[teacherId]):
+ * the T0–T5 ladder position, the 60% gate, the 35-hour annual target,
+ * every real learning artifact and the append-only journey history.
+ *
+ * Access (fail-closed):
+ *   - the teacher themselves -> /my-growth
+ *   - their supervisor / school office / super admin -> full projection
+ *   - everyone else -> /forbidden
+ * Classification & promotion CONTROLS live on /supervision/growth —
+ * this page is the read-only projection shared by all authorized roles.
+ */
 export default async function TeacherGrowthPage({
   params,
 }: {
   params: Promise<{ teacherId: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return <AccessDenied hint="الجلسة منتهية — سجّل الدخول من جديد." />;
-  }
+  const { teacherId } = await params;
+  const user = await requireUser();
+
   if (user.role === "TEACHER") {
-    return (
-      <AccessDenied hint="لمعلمي النمو المهني صفحتهم الخاصة — استخدم صفحة «نموي المهني»." />
-    );
-  }
-  if (user.role === "SUPER_ADMIN") {
-    return (
-      <AccessDenied hint="الإطلاع على ملف معلم محدد غير متاح للإدارة العامة — استخدم الإحصاءات التجميعية على مستوى المنصة." />
-    );
-  }
-  if (
-    user.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
-    user.role !== "EDUCATIONAL_SUPERVISOR" &&
-    user.role !== "EDUCATIONAL_DEPUTY"
-  ) {
-    return <AccessDenied />;
+    // Teachers read their own journey on /my-growth — nothing else.
+    if (user.id === teacherId) redirect("/my-growth");
+    redirect("/forbidden");
   }
 
-  const { teacherId } = await params;
-  const result = await getTeacherGrowth(user, teacherId);
-  if (!result.ok) return <AccessDenied hint={result.message} />;
-  const data = result.data;
+  const allowed = await canManageTeacherGrowth(
+    { id: user.id, role: user.role, schoolId: user.schoolId },
+    teacherId
+  );
+  if (!allowed) redirect("/forbidden");
+
+  const data = await getTeacherGrowth(teacherId);
+  if (!data) notFound();
 
   return (
     <div>
       <PageHeader
         title={`النمو المهني — ${data.teacher.name}`}
-        subtitle={`ملخص من سجلات التدريب الفعلية${data.teacher.branchName ? ` — فرع: ${data.teacher.branchName}` : ""}`}
+        description={[
+          data.teacher.schoolName ?? "غير محدد",
+          data.teacher.stage ?? null,
+          data.teacher.subject ?? null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        breadcrumbs={[
+          { label: "الرئيسية" },
+          { label: "النمو المهني" },
+          { label: data.teacher.name },
+        ]}
+        meta={
+          user.role === "EDUCATIONAL_SUPERVISOR" ? (
+            <Link
+              href="/supervision/growth"
+              className="rounded-xl border bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700"
+            >
+              تصنيف واعتماد الانتقال
+            </Link>
+          ) : null
+        }
       />
-      <GrowthProjection data={data} />
+
+      <div className="space-y-6">
+        <GrowthLadder currentLevel={data.currentLevel} />
+
+        <GrowthProjection data={data} />
+
+        <SectionCard
+          title="رحلة النمو — السجل الكامل"
+          description="كل تصنيف وكل انتقال معتمد يُسجَّل هنا ولا يُحذف (سجل إضافي فقط)."
+        >
+          <GrowthHistoryTimeline events={data.history} />
+        </SectionCard>
+      </div>
     </div>
   );
 }

@@ -48,6 +48,22 @@ const ACCOUNTS = [
     branch: false,
   },
   {
+    name: "مدير المدرسة",
+    email: "manager@manarat.local",
+    password: "Manager@1234",
+    role: "SCHOOL_MANAGER",
+    school: true,
+    branch: false,
+  },
+  {
+    name: "مسؤول تقنية المعلومات",
+    email: "itcoordinator@manarat.local",
+    password: "ItCoord@1234",
+    role: "IT_COORDINATOR",
+    school: true,
+    branch: false,
+  },
+  {
     name: "الوكيل التعليمي",
     email: "deputy@manarat.local",
     password: "Deputy@1234",

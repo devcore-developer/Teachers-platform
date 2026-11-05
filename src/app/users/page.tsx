@@ -52,7 +52,7 @@ export default async function UsersPage({
   const schools =
     ctx.role === "SUPER_ADMIN" ? await listSchools() : [];
   const effectiveSchoolId =
-    ctx.role === "DEVELOPMENT_OFFICE_MANAGER"
+    ctx.role === "DEVELOPMENT_OFFICE_MANAGER" || ctx.role === "SCHOOL_MANAGER"
       ? ctx.schoolId
       : (flat.schoolId as string | undefined) || undefined;
   const branchOptions = effectiveSchoolId
@@ -102,7 +102,11 @@ export default async function UsersPage({
         <StaffCreateForm
           actorRole={ctx.role}
           schools={schoolsForCreate}
-          schoolId={ctx.role === "DEVELOPMENT_OFFICE_MANAGER" ? ctx.schoolId : undefined}
+          schoolId={
+            ctx.role === "DEVELOPMENT_OFFICE_MANAGER" || ctx.role === "SCHOOL_MANAGER"
+              ? ctx.schoolId
+              : undefined
+          }
           branches={branchOptions}
         />
 

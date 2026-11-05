@@ -443,42 +443,47 @@ export async function setAccountActive(
   isActive: boolean,
   actor: AdminContext
 ): Promise<SetAccountActiveResult> {
-  // Defense in depth: only the two administrative roles may toggle
-  // accounts — teachers/supervisors/deputies are rejected here even if
-  // a future caller forgets the action-level redirect.
-  if (actor.role !== "SUPER_ADMIN" && actor.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  // Defense in depth: only administrative roles may toggle accounts —
+  // teachers/supervisors/deputies/IT are rejected here even if a future
+  // caller forgets the action-level redirect.
+  if (
+    actor.role !== "SUPER_ADMIN" &&
+    actor.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    actor.role !== "SCHOOL_MANAGER"
+  ) {
     return {
       ok: false,
-      message: "إدارة الحسابات متاحة للإدارة المصرّح لها فقط",
+      message: "غير مصرح لك بإدارة الحسابات — هذه العملية إدارية فقط",
       code: "FORBIDDEN",
     };
   }
   if (userId === actor.id) {
     return {
       ok: false,
-      message: "لا يمكنك تغيير حالة حسابك الحالي",
+      message: "لا يمكنك تغيير حالة حسابك الشخصي",
       code: "FORBIDDEN",
     };
   }
 
   const target = await db.user.findUnique({ where: { id: userId } });
   if (!target) {
-    return { ok: false, message: "الحساب غير موجود", code: "NOT_FOUND" };
+    return { ok: false, message: "المستخدم غير موجود", code: "NOT_FOUND" };
   }
   if (target.role === "SUPER_ADMIN") {
     return {
       ok: false,
-      message: "لا يمكن إيقاف حساب مدير المنصة — هذا إجراء محمي",
+      message: "لا يمكن إيقاف حساب مدير المنصة — هذه العملية محمية",
       code: "FORBIDDEN",
     };
   }
   if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
+    (actor.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+      actor.role === "SCHOOL_MANAGER") &&
     target.schoolId !== actor.schoolId
   ) {
     return {
       ok: false,
-      message: "ليس لديك صلاحية إدارة حسابات هذه المدرسة — العملية مرفوضة",
+      message: "لا يمكنك إدارة حسابات خارج مدرستك — العملية مرفوضة",
       code: "FORBIDDEN",
     };
   }

@@ -122,6 +122,13 @@ model User {
   /// Set on every successful credential sign-in (server-side only).
   /// Null means the account has never signed in — displayed honestly.
   lastLoginAt    DateTime?
+  /// Batch 2 — professional growth classification (canonical T0..T5).
+  growthLevel     String    @default("T0")
+  /// Batch 2 — professional record fields (HTML: المرحلة / التخصص).
+  stage           String?
+  subject         String?
+  /// Batch 2 — audit anchor for administrative password resets.
+  passwordUpdatedAt DateTime?
   tokenVersion   Int       @default(0)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime @updatedAt
@@ -176,6 +183,18 @@ model User {
   notifications          Notification[]          @relation("NotificationOwner")
   notificationPreference NotificationPreference?
   emailDeliveries        EmailDelivery[]         @relation("EmailDeliveryOwner")
+  /** Batch 2 — growth history, messages, archives and deputy mapping. */
+  growthEvents       GrowthEvent[]      @relation("GrowthEventUser")
+  growthEventActor   GrowthEvent[]      @relation("GrowthEventActor")
+  messagesSent       TeacherMessage[]   @relation("MessageSender")
+  messagesReceived   TeacherMessage[]   @relation("MessageRecipient")
+  trainingArchives   TrainingArchive[]  @relation("TrainingArchiveActor")
+  deputyAssignments  TeacherSupervisorAssignment[] @relation("TeacherSupervisionDeputy")
+  /** Batch 1 — learning progress, completions and course comments. */
+  lessonProgress      CourseLessonProgress[] @relation("LessonProgressOwner")
+  courseCompletions   CourseCompletion[]     @relation("CourseCompletionOwner")
+  courseComments      CourseComment[]        @relation("CourseCommentAuthor")
+  certifiedCompletions CourseCompletion[]    @relation("CourseCompletionCertifier")
   @@index([schoolId])
   @@index([role])
   @@map("users")
@@ -238,6 +257,9 @@ model TeacherSupervisorAssignment {
   /// Unique per teacher: one current supervisor at a time.
   teacherId    String   @unique
   supervisorId String
+  /// Batch 2 — the educational deputy responsible for this teacher
+  /// (HTML: الوكيل التعليمي). Optional — nullable.
+  deputyId     String?
   /// Denormalized from teacher.schoolId — enforced equal on write.
   schoolId     String
   createdAt    DateTime @default(now())
@@ -245,9 +267,11 @@ model TeacherSupervisorAssignment {
 
   teacher    User   @relation("TeacherSupervisionTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
   supervisor User   @relation("TeacherSupervisionSupervisor", fields: [supervisorId], references: [id], onDelete: Cascade)
+  deputy     User?   @relation("TeacherSupervisionDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
   school     School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([supervisorId])
+  @@index([deputyId])
   @@index([schoolId])
   @@map("teacher_supervisor_assignments")
 }
@@ -386,6 +410,10 @@ model Course {
   sections    CourseSection[]
   attachments Attachment[]       @relation("CourseFiles")
   enrollments CourseEnrollment[]
+  /** Batch 1 — learning progress, completions and course comments. */
+  lessonProgress CourseLessonProgress[]
+  completions    CourseCompletion[]
+  comments       CourseComment[]
   assignments Assignment[]
   /** Phase 6 — assessments bound to this course (optional binding). */
   assessments Assessment[]
@@ -454,6 +482,8 @@ model CourseLesson {
   section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   attachment  Attachment?   @relation("LessonPrimaryAttachment", fields: [attachmentId], references: [id], onDelete: SetNull)
   attachments Attachment[]  @relation("LessonFiles")
+  /** Batch 1 — per-teacher completion of this lesson. */
+  progress CourseLessonProgress[]
   /** Phase 7 — assignments linked to this lesson. */
   assignments Assignment[]
   /** Phase 9 — surveys linked to this lesson. */
@@ -666,7 +696,7 @@ model AssessmentAttempt {
   /// (audit trail + per-question feedback after review).
   reviewScoresJson String?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    DateTime @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   user       User       @relation("AttemptOwner", fields: [userId], references: [id], onDelete: Restrict)
@@ -906,12 +936,21 @@ model Certificate {
   /// server-side at issuance (audit of WHAT qualified the teacher).
   criteriaSnapshotJson String?
 
+
+  /// School-signatory snapshot captured at ISSUANCE time from the active
+  /// SCHOOL_MANAGER user of the issuing school (server-resolved via
+  /// src/lib/certificates/signatory.ts — never client input, never
+  /// hardcoded). Null = legacy certificate or no manager existed then.
+  schoolSignatoryName  String?
+  schoolSignatoryTitle String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   events CertificateEvent[]
   /** Phase 9 — impact surveys linked to this certificate. */
   surveys Survey[]
+  /** Batch 1 — the course completion this certificate was auto-issued for. */
+  completionRecord CourseCompletion? @relation("CourseCompletionCertificate")
 
   /// One completion certificate per teacher per qualifying content.
   @@unique([teacherId, courseId])
@@ -1108,7 +1147,6 @@ model SurveyResponse {
   /// Null for anonymous surveys — identity is never persisted.
   respondentId String?
   respondent   User?   @relation("SurveyRespondent", fields: [respondentId], references: [id], onDelete: SetNull)
-
   /// Pseudonymous pairing key (SHA-256 of linkPairCode + user id +
   /// pepper) — present ONLY for anonymous surveys with linking enabled.
   /// Used exclusively for aggregate pre/post matching.
@@ -1465,4 +1503,211 @@ model EmailDelivery {
   @@index([schoolId, createdAt])
   @@index([toUserId, createdAt])
   @@map("email_deliveries")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Batch 1 — learning progress, course completion & course comments.
+//
+// Restores the original HTML platform's closed learning loop:
+//   enroll -> complete every published lesson -> pass the course
+//   assessment -> COMPLETION RECORD -> hours -> auto certificate
+//   -> impact survey.
+//
+// Tenancy: rows inherit the course's schoolId (null = platform-wide
+// course); CourseCompletion snapshots it at completion time so the
+// row stays auditable even if the course tenant changes later.
+//
+// Idempotency: unique (lessonId, userId) and unique (courseId, userId)
+// make progress marks and completion creation race-safe — retried
+// writes collapse into the same row instead of duplicating.
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * One teacher's completion of ONE published lesson. Written only by
+ * the server after access checks (lesson published + course visible +
+ * enrollment). Completing a lesson is a fact, not an editable state —
+ * there is no un-complete path, matching the original HTML behavior
+ * where watched videos stay watched.
+ */
+model CourseLessonProgress {
+  id          String   @id @default(cuid())
+  /// Denormalized owning course for fast gating queries.
+  courseId    String
+  lessonId    String
+  userId      String
+  completedAt DateTime @default(now())
+
+  course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user   User         @relation("LessonProgressOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([userId, courseId])
+  @@map("course_lesson_progress")
+}
+
+/**
+ * The completion record for one teacher and one course. Created
+ * atomically by the server when the course requirements are met
+ * (every published lesson completed AND every published assessment
+ * passed — the same eligibility the manual certificate flow checks).
+ * Snapshots the achieved results so later course edits cannot
+ * rewrite history.
+ */
+model CourseCompletion {
+  id             String   @id @default(cuid())
+  courseId       String
+  userId         String
+  /// Tenant snapshot of the course at completion time (null = platform).
+  courseSchoolId String?
+  /// Published-lesson totals at completion time.
+  totalLessons     Int
+  completedLessons Int
+  /// Best percentage among PASSED attempts of the course's published
+  /// assessments (null when the course has no assessments).
+  bestPercentage Int?
+  /// Snapshot of course.estimatedHours at completion (the hours the
+  /// teacher earns — mirrors the original HTML completion.hours).
+  hours          Float?
+  completedAt    DateTime @default(now())
+  /// Batch 2 — academic year this completion is counted in (1448هـ style).
+  academicYear   String?
+  /// The certificate auto-issued at completion (null = issuance was
+  /// blocked, e.g. no active school manager — it can be issued manually).
+  certificateId String? @unique
+
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user        User         @relation("CourseCompletionOwner", fields: [userId], references: [id], onDelete: Cascade)
+  certificate Certificate? @relation("CourseCompletionCertificate", fields: [certificateId], references: [id], onDelete: SetNull)
+  /// Reviewer who finalized a NEEDS_REVIEW attempt that completed the
+  /// course (null for auto-graded completions) — audit anchor.
+  certifiedById String?
+  certifiedBy   User?      @relation("CourseCompletionCertifier", fields: [certifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([courseId, userId])
+  @@index([userId])
+  @@index([courseSchoolId])
+  @@index([academicYear])
+  @@map("course_completions")
+}
+
+/**
+ * A course-wall comment. Visible to every viewer of the course
+ * learning page (teachers + school staff per the learning-view access
+ * rules); writes are tenant-scoped by the service layer. The HTML
+ * platform's teacher/supervisor dialogue happens here bound to real
+ * user ids — never name-string matching.
+ */
+model CourseComment {
+  id        String   @id @default(cuid())
+  courseId  String
+  /// Tenant snapshot of the course (null = platform-wide course).
+  schoolId  String?
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  author User   @relation("CourseCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, createdAt])
+  @@map("course_comments")
+}
+
+/* ------------------------------------------------------------------ */
+/* Batch 2 — professional growth ladder, supervisor messaging,          */
+/* yearly training archives and platform settings.                      */
+/*                                                                      */
+/* Level ids are the canonical strings "T0".."T5" (no SQLite enums);    */
+/* promotion rules live in src/config/growth.ts and are enforced by     */
+/* src/lib/growth/service.ts on every write.                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One entry of the professional growth ladder. Every classification or
+ * approved promotion writes ONE append-only row — the full history is
+ * kept, never overwritten (HTML parity: تصنيف المشرف / اعتماد الانتقال).
+ */
+model GrowthEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  /// Null for the very first classification.
+  fromLevel String?
+  toLevel   String
+  /// MANUAL_SUPERVISOR | PROMOTION_APPROVED | SEED
+  reason    String
+  /// Optional free-text note written by the acting supervisor.
+  note      String?
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  user  User  @relation("GrowthEventUser", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("GrowthEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([actorId])
+  @@map("growth_events")
+}
+
+/**
+ * A supervisor -> teacher platform message (HTML v38/v40 parity: type
+ * + body, delivered in-app). Rows are bound to real user ids; the
+ * recipient reads them at /messages and every delivery also flows
+ * through the notification center (category MESSAGES).
+ */
+model TeacherMessage {
+  id          String    @id @default(cuid())
+  senderId    String
+  recipientId String
+  /// FOLLOW_UP | PRAISE | GUIDANCE | ALERT | TASK | EVALUATION
+  type        String
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  sender    User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, createdAt])
+  @@index([senderId, createdAt])
+  @@map("teacher_messages")
+}
+
+/**
+ * A yearly training archive (HTML v26 parity). Re-archiving the same
+ * academic year for the same scope REPLACES the snapshot (unique
+ * scopeKey = year + school) — the payload is an immutable JSON copy of
+ * that year's courses, completions and certificates, so year
+ * boundaries never lose data. schoolId null = platform-wide archive.
+ */
+model TrainingArchive {
+  id                String   @id @default(cuid())
+  academicYear      String
+  /// Null = platform-wide archive (SUPER_ADMIN scope).
+  schoolId          String?
+  /// Unique per (year, scope): "1448هـ|platform" or "1448هـ|<schoolId>".
+  scopeKey          String   @unique
+  archivedAt        DateTime @default(now())
+  coursesCount      Int
+  completionsCount  Int
+  certificatesCount Int
+  /// JSON snapshot: { courses, completions, certificates }.
+  payloadJson       String
+  createdById       String?
+  createdBy         User?    @relation("TrainingArchiveActor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([academicYear])
+  @@map("training_archives")
+}
+
+/**
+ * A platform setting row (key/value). Used for the active academic
+ * year ("academicYear.active") — created on demand by the service.
+ */
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
 }

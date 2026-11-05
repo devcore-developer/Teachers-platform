@@ -26,11 +26,13 @@ export interface ViewerIdentity {
 
 /**
  * Phase 7 actor (write-capable back-office roles). Defined LOCALLY on
- * purpose: the platform's own AdminContext union covers only
- * SUPER_ADMIN + DEVELOPMENT_OFFICE_MANAGER, while assignments must also
- * accept EDUCATIONAL_SUPERVISOR (review) and EDUCATIONAL_DEPUTY
- * (read-only overview). Every value is built server-side from the
- * session user after an explicit role check — never from the payload.
+ * purpose: assignments must also accept EDUCATIONAL_SUPERVISOR (review)
+ * and EDUCATIONAL_DEPUTY (read-only overview) beyond the platform's own
+ * AdminContext union. SCHOOL_MANAGER is admitted with the same powers as
+ * the office manager — structurally confined to its own school by
+ * `assignmentScopeError` (its schoolId comes from the DB session, never
+ * from the client). Every value is built server-side from the session
+ * user after an explicit role check — never from the payload.
  * `name` is optional so callers may pass a bare identity projection.
  */
 export interface AssignmentActor {
@@ -39,6 +41,7 @@ export interface AssignmentActor {
   role:
     | "SUPER_ADMIN"
     | "DEVELOPMENT_OFFICE_MANAGER"
+    | "SCHOOL_MANAGER"
     | "EDUCATIONAL_SUPERVISOR"
     | "EDUCATIONAL_DEPUTY";
   schoolId: string | null;
@@ -48,14 +51,24 @@ export interface AssignmentActor {
 /* Role capabilities                                                    */
 /* ------------------------------------------------------------------ */
 
-/** Assignment management is school-office work — SUPER_ADMIN is stats-only. */
+/**
+ * Assignment management is school-office work — SUPER_ADMIN is
+ * stats-only. SCHOOL_MANAGER runs the same office inside its own school.
+ */
 export function canManageAssignments(role: string): boolean {
-  return role === "DEVELOPMENT_OFFICE_MANAGER";
+  return role === "DEVELOPMENT_OFFICE_MANAGER" || role === "SCHOOL_MANAGER";
 }
 
-/** Reviewing/grading: office manager (whole school) or supervisor (own teachers). */
+/**
+ * Reviewing/grading: office manager or school manager (whole school) or
+ * supervisor (own assigned teachers only).
+ */
 export function canReviewSubmissions(role: string): boolean {
-  return role === "DEVELOPMENT_OFFICE_MANAGER" || role === "EDUCATIONAL_SUPERVISOR";
+  return (
+    role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    role === "SCHOOL_MANAGER" ||
+    role === "EDUCATIONAL_SUPERVISOR"
+  );
 }
 
 /** Read-only summary roles (deputy) and platform stats (super admin). */
@@ -72,7 +85,8 @@ export function assignmentScopeError(
   schoolId: string | null
 ): AssignmentResult<never> | null {
   // Assignments are always school-owned; a null/missing school context
-  // can never match (this blocks SUPER_ADMIN operational access too).
+  // can never match (this blocks SUPER_ADMIN operational access too,
+  // and structurally confines SCHOOL_MANAGER to its own school).
   if (!schoolId || ctx.schoolId !== schoolId) {
     return assignmentFail(
       "لا تملك صلاحية الوصول إلى هذا التكليف — النطاق المدرسي مختلف",
@@ -85,7 +99,7 @@ export function assignmentScopeError(
 export function manageGuard(ctx: AssignmentActor): AssignmentResult<never> | null {
   if (!canManageAssignments(ctx.role)) {
     return assignmentFail(
-      "إدارة التكليفات متاحة لمديري مكاتب التطوير فقط",
+      "إدارة التكليفات متاحة لمديري مكاتب التطوير ومديري المدارس فقط",
       "FORBIDDEN"
     );
   }
@@ -95,7 +109,7 @@ export function manageGuard(ctx: AssignmentActor): AssignmentResult<never> | nul
 export function reviewGuard(ctx: AssignmentActor): AssignmentResult<never> | null {
   if (!canReviewSubmissions(ctx.role)) {
     return assignmentFail(
-      "مراجعة التسليمات متاحة للمشرفين التربويين ومديري مكاتب التطوير فقط",
+      "مراجعة التسليمات متاحة للمشرفين التربويين ومديري مكاتب التطوير ومديري المدارس فقط",
       "FORBIDDEN"
     );
   }

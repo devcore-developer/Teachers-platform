@@ -1,185 +1,205 @@
-/**
- * Phase 8 — certificate verification (AUTHORIZED NON-TEACHER ROLES
- * ONLY). Teachers never reach this page: the role check below and the
- * verifyGuard inside the service both reject TEACHER server-side, and
- * no teacher navigation entry exists.
- *
- * Search accepts a certificate number OR verification code. Tenant
- * semantics: school back-office roles search within their own school;
- * SUPER_ADMIN searches platform-wide (read-only). Out-of-scope and
- * unknown codes return the SAME "not found" state — no existence leak.
- *
- * The result shows the MINIMUM information needed to establish
- * validity: number, title, teacher name, school name, content title,
- * issue date, effective status. No emails, ids, scores or notes.
- */
-import {
-  AccessDenied,
-  Card,
-  PageHeader,
-  formatDate,
-} from "@/app/assignments/ui";
-import type { CertificateActor } from "@/lib/certificates/access";
-import { verifyCertificate } from "@/lib/certificates/service";
-import { getCurrentUser } from "@/lib/auth/session";
-import { EffectiveStatusBadge, formatIssueDate } from "@/app/certificates/ui";
+import { Prisma } from "@prisma/client";
 
+import { PLATFORM_NAME_AR } from "@/config/certificates";
+import { db } from "@/lib/db";
+import { VerifyForm } from "./verify-form";
+
+/**
+ * Batch 1 — صفحة التحقق العام من الشهادات (public certificate
+ * verification).
+ *
+ * The QR code printed on every certificate points here
+ * (/verify?code=...). Public, no session required — the page exposes
+ * ONLY the printed-on-the-sheet facts (holder name, title, school,
+ * issue date, effective status, signatory), the same information the
+ * original HTML verifyCertificate showed, and nothing else. Lookup
+ * accepts either the 16-char verification code or the MQ-YYYY-XXXXXX
+ * serial, dash/space-insensitive, case-insensitive.
+ */
 export const dynamic = "force-dynamic";
 
-const SCOPE_HINTS: Record<string, string> = {
-  DEVELOPMENT_OFFICE_MANAGER: "يشمل البحث شهادات مدرستك فقط.",
-  EDUCATIONAL_SUPERVISOR: "يشمل البحث شهادات مدرستك فقط.",
-  EDUCATIONAL_DEPUTY: "يشمل البحث شهادات مدرستك فقط.",
-  SUPER_ADMIN: "يشمل البحث شهادات جميع مدارس المنصة (قراءة فقط).",
-};
-
-function actorFrom(user: {
-  id: string;
-  role: string;
-  schoolId: string | null;
-}): CertificateActor | null {
-  if (
-    user.role === "DEVELOPMENT_OFFICE_MANAGER" ||
-    user.role === "EDUCATIONAL_SUPERVISOR" ||
-    user.role === "EDUCATIONAL_DEPUTY" ||
-    user.role === "SUPER_ADMIN"
-  ) {
-    return { id: user.id, role: user.role, schoolId: user.schoolId };
-  }
-  return null;
+function normalizeQuery(raw: string): string {
+  return raw.replace(/[\s-]+/g, "").toUpperCase();
 }
 
-export default async function VerifyCertificatePage({
+interface VerifiedCertificate {
+  certificateNumber: string;
+  titleAr: string;
+  teacherName: string;
+  schoolName: string;
+  contentTitle: string | null;
+  issuedAt: Date;
+  status: string;
+  expiresAt: Date | null;
+  signatoryName: string | null;
+  signatoryTitle: string | null;
+}
+
+async function lookup(query: string): Promise<VerifiedCertificate | null> {
+  const normalized = normalizeQuery(query);
+  if (!normalized) return null;
+  const row = await db.certificate.findFirst({
+    where: {
+      OR: [{ verificationCode: normalized }, { certificateNumber: normalized }],
+    },
+    select: {
+      certificateNumber: true,
+      titleAr: true,
+      status: true,
+      issuedAt: true,
+      expiresAt: true,
+      schoolSignatoryName: true,
+      schoolSignatoryTitle: true,
+      teacher: { select: { name: true } },
+      school: { select: { nameAr: true } },
+      course: { select: { titleAr: true } },
+      program: { select: { nameAr: true } },
+    },
+  });
+  if (!row) return null;
+  return {
+    certificateNumber: row.certificateNumber,
+    titleAr: row.titleAr,
+    teacherName: row.teacher.name,
+    schoolName: row.school.nameAr,
+    contentTitle: row.course?.titleAr ?? row.program?.nameAr ?? null,
+    issuedAt: row.issuedAt,
+    status: row.status,
+    expiresAt: row.expiresAt,
+    signatoryName: row.schoolSignatoryName,
+    signatoryTitle: row.schoolSignatoryTitle,
+  };
+}
+
+export default async function VerifyPage({
   searchParams,
 }: {
   searchParams: Promise<{ code?: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return <AccessDenied hint="الجلسة منتهية — سجّل الدخول من جديد." />;
-  }
-  const ctx = actorFrom(user);
-  if (!ctx) {
-    return (
-      <AccessDenied hint="التحقق من الشهادات متاح للأدوار الإدارية المعتمدة فقط ولا يشمل حسابات المعلمين." />
-    );
-  }
-
   const params = await searchParams;
-  const query = params.code?.trim() ?? "";
+  const query = (params.code ?? "").trim();
 
-  let result: Awaited<ReturnType<typeof verifyCertificate>> | null = null;
-  let validationMessage: string | null = null;
+  let result: VerifiedCertificate | null = null;
+  let lookupError: string | null = null;
   if (query) {
-    result = await verifyCertificate(ctx, { query });
-    if (!result.ok) {
-      validationMessage = result.message;
-      result = null;
+    try {
+      result = await lookup(query);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientInitializationError ||
+        error instanceof Prisma.PrismaClientKnownRequestError
+      ) {
+        lookupError = "تعذر الاتصال بسجل الشهادات — أعد المحاولة بعد قليل";
+      } else {
+        lookupError = "حدث خطأ غير متوقع أثناء التحقق";
+      }
     }
   }
 
+  const expired =
+    result?.expiresAt !== null &&
+    result?.expiresAt !== undefined &&
+    result.expiresAt.getTime() < Date.now();
+  const effectiveStatus = result
+    ? result.status === "REVOKED"
+      ? "REVOKED"
+      : expired
+        ? "EXPIRED"
+        : "ISSUED"
+    : null;
+
   return (
-    <div>
-      <PageHeader
-        title="التحقق من الشهادة"
-        subtitle="ابحث برقم الشهادة أو رمز التحقق المدون على وثيقة الشهادة للتأكد من صحتها"
-      />
-
-      <Card>
-        <form method="get" className="flex flex-wrap items-end gap-3">
-          <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-slate-500" htmlFor="code">
-              رقم الشهادة أو رمز التحقق
-            </label>
-            <input
-              id="code"
-              name="code"
-              defaultValue={query}
-              dir="ltr"
-              placeholder="MQ-2026-XXXXXX أو XXXX-XXXX-XXXX-XXXX"
-              className="w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#1D5BD6] focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-          <button
-            type="submit"
-            className="rounded-lg bg-[#1D5BD6] px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#174aa8]"
-          >
-            تحقق
-          </button>
-        </form>
-        <p className="mt-2 text-xs text-slate-400">{SCOPE_HINTS[ctx.role] ?? ""}</p>
-
-        {validationMessage ? (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-600">
-            {validationMessage}
+    <main className="flex min-h-screen items-start justify-center bg-slate-100 px-4 py-10">
+      <div className="w-full max-w-2xl">
+        <header className="text-center">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#1D5BD6]">
+            {PLATFORM_NAME_AR}
           </p>
-        ) : null}
+          <h1 className="mt-2 text-2xl font-extrabold text-slate-900">
+            التحقق من شهادة
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            أدخل رقم الشهادة أو رمز التحقق المطبوع عليها للتأكد من صحتها في
+            سجل المنصة.
+          </p>
+        </header>
 
-        {result && result.ok && !result.data.found ? (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
-            <p className="text-sm font-semibold text-slate-700">
-              لا توجد شهادة مطابقة لهذا الرقم أو الرمز
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              تأكد من إدخال الرقم كما هو مدون على الشهادة دون تغيير.
-            </p>
-          </div>
-        ) : null}
+        <VerifyForm initialQuery={query} />
 
-        {result && result.ok && result.data.found ? (
-          <div className="mt-6 rounded-xl border border-slate-200 p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-base font-bold text-slate-900">
-                {result.data.certificate.titleAr}
-              </p>
-              <EffectiveStatusBadge status={result.data.certificate.effectiveStatus} />
-            </div>
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-xs text-slate-400">رقم الشهادة</dt>
-                <dd dir="ltr" className="font-mono text-sm font-semibold text-slate-700">
-                  {result.data.certificate.certificateNumber}
-                </dd>
+        {query && (
+          <section className="mt-6">
+            {lookupError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center text-sm font-semibold text-red-700">
+                {lookupError}
               </div>
-              <div>
-                <dt className="text-xs text-slate-400">المعلم</dt>
-                <dd className="font-medium text-slate-700">
-                  {result.data.certificate.teacherName}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-400">المدرسة</dt>
-                <dd className="font-medium text-slate-700">
-                  {result.data.certificate.schoolName}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-400">المحتوى التدريبي</dt>
-                <dd className="font-medium text-slate-700">
-                  {result.data.certificate.contentTitle ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-400">تاريخ الإصدار</dt>
-                <dd className="font-medium text-slate-700">
-                  {formatIssueDate(result.data.certificate.issuedAt)}
-                </dd>
-              </div>
-              {result.data.certificate.revokedAt ? (
-                <div>
-                  <dt className="text-xs text-slate-400">تاريخ الإلغاء</dt>
-                  <dd className="font-medium text-red-600">
-                    {formatDate(result.data.certificate.revokedAt)}
-                  </dd>
+            ) : result ? (
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div
+                  className={
+                    effectiveStatus === "ISSUED"
+                      ? "bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white"
+                      : "bg-amber-600 px-5 py-3 text-sm font-extrabold text-white"
+                  }
+                >
+                  {effectiveStatus === "ISSUED"
+                    ? "✓ شهادة صحيحة ومسجلة في المنصة"
+                    : effectiveStatus === "REVOKED"
+                      ? "شهادة مُلغاة — لم تعد سارية"
+                      : "شهادة منتهية الصلاحية"}
                 </div>
-              ) : null}
-            </dl>
-            <p className="mt-4 text-xs text-slate-400">
-              هذه البيانات هي الحد الأدنى اللازم للتحقق فقط — تفاصيل التقييمات والدرجات لا تُعرض عبر أداة التحقق.
-            </p>
-          </div>
-        ) : null}
-      </Card>
-    </div>
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-3 p-5 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs font-semibold text-slate-400">حامل الشهادة</dt>
+                    <dd className="mt-0.5 font-bold text-slate-900">{result.teacherName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold text-slate-400">رقم الشهادة</dt>
+                    <dd className="mt-0.5 font-mono font-bold text-slate-900" dir="ltr">
+                      {result.certificateNumber}
+                    </dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-semibold text-slate-400">عنوان الشهادة</dt>
+                    <dd className="mt-0.5 font-bold text-slate-900">{result.titleAr}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold text-slate-400">الجهة المانحة</dt>
+                    <dd className="mt-0.5 font-semibold text-slate-800">{result.schoolName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold text-slate-400">تاريخ الإصدار</dt>
+                    <dd className="mt-0.5 font-semibold text-slate-800">
+                      {result.issuedAt.toLocaleDateString("ar-SA")}
+                    </dd>
+                  </div>
+                  {result.signatoryName && (
+                    <div className="sm:col-span-2">
+                      <dt className="text-xs font-semibold text-slate-400">توقيع المدرسة</dt>
+                      <dd className="mt-0.5 font-semibold text-slate-800">
+                        {result.signatoryName}
+                        {result.signatoryTitle ? ` — ${result.signatoryTitle}` : ""}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+                <p className="text-sm font-extrabold text-red-700">
+                  لم يتم العثور على شهادة بهذا الرقم في سجل المنصة
+                </p>
+                <p className="mt-1 text-xs text-red-500">
+                  تأكد من إدخال الرمز أو الرقم كما هو مطبوع على الشهادة.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        <footer className="mt-8 text-center text-[11px] text-slate-400">
+          صفحة تحقق عامة — تعرض بيانات الشهادة المطبوعة فقط دون أي بيانات حساسة.
+        </footer>
+      </div>
+    </main>
   );
 }

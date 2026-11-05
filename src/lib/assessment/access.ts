@@ -23,9 +23,18 @@ export interface ScopedAssessment {
   schoolId: string | null;
 }
 
-/** Administrative pair allowed to manage assessments. */
+/**
+ * Administrative trio allowed to manage assessments. SCHOOL_MANAGER
+ * manages its OWN school's assessments only — the fence is structural
+ * in `assessmentScopeError` below (platform-wide records stay
+ * SUPER_ADMIN-only).
+ */
 export function canManageAssessments(role: string): boolean {
-  return role === "SUPER_ADMIN" || role === "DEVELOPMENT_OFFICE_MANAGER";
+  return (
+    role === "SUPER_ADMIN" ||
+    role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    role === "SCHOOL_MANAGER"
+  );
 }
 
 /**
@@ -72,7 +81,10 @@ export type ScopeRejection = {
  * extended for nullable school scope):
  *   SUPER_ADMIN                -> any record (incl. platform-wide)
  *   DEVELOPMENT_OFFICE_MANAGER -> only records owned by their school
+ *   SCHOOL_MANAGER             -> only records owned by their school
  *   anything else              -> always rejected (defense in depth)
+ * Platform-wide records (schoolId null) can never be managed by a
+ * school-scoped role — no exceptions.
  */
 export function assessmentScopeError(
   ctx: AdminContext,
@@ -80,7 +92,8 @@ export function assessmentScopeError(
 ): ScopeRejection | null {
   if (ctx.role === "SUPER_ADMIN") return null;
   if (
-    ctx.role === "DEVELOPMENT_OFFICE_MANAGER" &&
+    (ctx.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+      ctx.role === "SCHOOL_MANAGER") &&
     recordSchoolId !== null &&
     recordSchoolId === ctx.schoolId
   ) {

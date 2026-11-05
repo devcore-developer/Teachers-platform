@@ -21,24 +21,24 @@ import {
 } from "@/components/ui/select";
 import { SectionCard } from "@/components/platform/section-card";
 import { roleLabel } from "@/lib/auth/roles";
-import { STAFF_CREATABLE_ROLES } from "@/lib/validation/users";
+import { CREATABLE_ROLES_BY_ACTOR } from "@/lib/validation/users";
 
 /* ------------------------------------------------------------------ */
 /* Staff account creation (school-scoped). The role select offers ONLY  */
-/* the whitelist (supervisor / deputy / teacher) — SUPER_ADMIN is not   */
-/* an option anywhere in the UI, and the service re-forces this         */
-/* server-side. New accounts are NOT pre-verified: a verification email */
-/* is sent through the existing Phase 3 flow and the honest emailSent   */
-/* state is displayed.                                                  */
+/* the roles the CURRENT actor may create (the client-safe mirror of    */
+/* the service matrix) — SUPER_ADMIN is not an option anywhere in the   */
+/* UI, and the service re-forces this server-side. New accounts are     */
+/* NOT pre-verified: a verification email is sent through the existing  */
+/* flow and the honest emailSent state is displayed.                    */
 /* ------------------------------------------------------------------ */
 
 interface StaffCreateFormProps {
   actorRole: string;
-  /** Platform schools (SUPER_ADMIN only); empty for office managers. */
+  /** Platform schools (SUPER_ADMIN only); empty for school-scoped admins. */
   schools: { id: string; nameAr: string; isActive: boolean }[];
-  /** Fixed school for office managers. */
+  /** Fixed school for school-scoped administrators. */
   schoolId?: string;
-  /** Branch options of the target school (office manager's school). */
+  /** Branch options of the target school. */
   branches: { id: string; nameAr: string }[];
 }
 
@@ -59,6 +59,7 @@ export function StaffCreateForm({
   branches,
 }: StaffCreateFormProps) {
   const isSuperAdmin = actorRole === "SUPER_ADMIN";
+  const creatableRoles = CREATABLE_ROLES_BY_ACTOR[actorRole] ?? [];
   const [state, formAction] = React.useActionState<UserFormState | null, FormData>(
     createStaffAccountAction,
     null
@@ -67,7 +68,7 @@ export function StaffCreateForm({
   return (
     <SectionCard
       title="إنشاء حساب جديد"
-      description="للمشرفين التربويين والوكلاء التعليميين والمعلمين — يُنشأ الحساب غير موثّق ويُرسل له رابط تأكيد البريد عبر مسار التحقق المعتمد."
+      description="الأدوار المتاحة لك وفق صلاحيتك — يُنشأ الحساب غير موثّق ويُرسل له رابط تأكيد البريد عبر مسار التحقق المعتمد."
     >
       <form action={formAction} className="space-y-4" noValidate>
         {state?.message && (
@@ -137,7 +138,7 @@ export function StaffCreateForm({
                 <SelectValue placeholder="اختر الدور" />
               </SelectTrigger>
               <SelectContent>
-                {STAFF_CREATABLE_ROLES.map((role) => (
+                {creatableRoles.map((role) => (
                   <SelectItem key={role} value={role}>
                     {roleLabel(role)}
                   </SelectItem>

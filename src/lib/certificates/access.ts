@@ -10,6 +10,9 @@
  * Role capability matrix (fixed by the product, enforced server-side):
  *   DEVELOPMENT_OFFICE_MANAGER — issue/revoke/list within OWN school,
  *                                growth roster for the school.
+ *   SCHOOL_MANAGER             — the same powers as the office manager,
+ *                                inside OWN school only (structural
+ *                                fence in certificateScopeError).
  *   EDUCATIONAL_SUPERVISOR     — view certificates + growth of ASSIGNED
  *                                teachers. Never issues/revokes.
  *   EDUCATIONAL_DEPUTY         — read-only certificates/growth within
@@ -31,6 +34,7 @@ export interface CertificateActor {
   role:
     | "SUPER_ADMIN"
     | "DEVELOPMENT_OFFICE_MANAGER"
+    | "SCHOOL_MANAGER"
     | "EDUCATIONAL_SUPERVISOR"
     | "EDUCATIONAL_DEPUTY";
   schoolId: string | null;
@@ -51,29 +55,34 @@ export interface CertificateViewer {
 /* Role capabilities                                                    */
 /* ------------------------------------------------------------------ */
 
-/** Issuance is school-office work — SUPER_ADMIN is intentionally excluded. */
+/**
+ * Issuance is school-office work — SUPER_ADMIN is intentionally
+ * excluded. SCHOOL_MANAGER signs its own school's certificates (the
+ * signatory snapshot is resolved server-side at issuance time).
+ */
 export function canIssueCertificates(role: string): boolean {
-  return role === "DEVELOPMENT_OFFICE_MANAGER";
+  return role === "DEVELOPMENT_OFFICE_MANAGER" || role === "SCHOOL_MANAGER";
 }
 
 /** Revocation follows the same rule as issuance (audit preserved). */
 export function canRevokeCertificates(role: string): boolean {
-  return role === "DEVELOPMENT_OFFICE_MANAGER";
+  return role === "DEVELOPMENT_OFFICE_MANAGER" || role === "SCHOOL_MANAGER";
 }
 
 /** Verification: authorized NON-teacher roles only (teachers never verify). */
 export function canVerifyCertificates(role: string): boolean {
   return (
     role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    role === "SCHOOL_MANAGER" ||
     role === "EDUCATIONAL_SUPERVISOR" ||
     role === "EDUCATIONAL_DEPUTY" ||
     role === "SUPER_ADMIN"
   );
 }
 
-/** Certificate management list pages (office manager workspace). */
+/** Certificate management list pages (office workspace). */
 export function canManageCertificateWorkspace(role: string): boolean {
-  return role === "DEVELOPMENT_OFFICE_MANAGER";
+  return role === "DEVELOPMENT_OFFICE_MANAGER" || role === "SCHOOL_MANAGER";
 }
 
 /**
@@ -84,6 +93,7 @@ export function canManageCertificateWorkspace(role: string): boolean {
 export function canReadCertificateRecords(role: string): boolean {
   return (
     role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    role === "SCHOOL_MANAGER" ||
     role === "EDUCATIONAL_SUPERVISOR" ||
     role === "EDUCATIONAL_DEPUTY" ||
     role === "SUPER_ADMIN"
@@ -94,6 +104,7 @@ export function canReadCertificateRecords(role: string): boolean {
 export function canViewGrowthRoster(role: string): boolean {
   return (
     role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    role === "SCHOOL_MANAGER" ||
     role === "EDUCATIONAL_SUPERVISOR" ||
     role === "EDUCATIONAL_DEPUTY"
   );
@@ -105,7 +116,8 @@ export function canViewGrowthRoster(role: string): boolean {
 
 /**
  * Certificates are always school-owned; a null/missing school context
- * can never match (this blocks SUPER_ADMIN operational access too).
+ * can never match (this blocks SUPER_ADMIN operational access too, and
+ * structurally confines SCHOOL_MANAGER to its own school).
  */
 export function certificateScopeError(
   ctx: CertificateActor,
@@ -123,7 +135,7 @@ export function certificateScopeError(
 export function issueGuard(ctx: CertificateActor): CertificateResult<never> | null {
   if (!canIssueCertificates(ctx.role)) {
     return certificateFail(
-      "إصدار الشهادات متاح لمديري مكاتب التطوير فقط",
+      "إصدار الشهادات متاح لمديري مكاتب التطوير ومديري المدارس فقط",
       "FORBIDDEN"
     );
   }

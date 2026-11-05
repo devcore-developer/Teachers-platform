@@ -117,6 +117,7 @@ export const ELIGIBILITY_RULE_LABELS: Record<EligibilityRuleKey, string> = {
 /** Issuing-authority labels snapshot (stored on the certificate). */
 export const ISSUER_ROLE_LABELS: Record<string, string> = {
   DEVELOPMENT_OFFICE_MANAGER: "مدير مكتب التطوير",
+  SCHOOL_MANAGER: "مدير المدرسة",
   SUPER_ADMIN: "الإدارة العامة للمنصة",
 };
 

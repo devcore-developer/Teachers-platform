@@ -7,6 +7,11 @@
  * layout that also stacks cleanly on mobile. Print rules live on the
  * certificate page (#certificate-print-area + .no-print).
  *
+ * Signatory: certificates issued WITH the snapshot show the school
+ * signatory captured at issuance time (name + «مدير المدرسة») — it
+ * never changes afterwards. Legacy certificates (snapshot null) keep
+ * rendering exactly as before.
+ *
  * Privacy: the sheet shows the teacher NAME, school name, certificate
  * number, verification code and the verification URL — never emails,
  * internal ids, scores or notes. The QR encodes the verification page
@@ -153,6 +158,20 @@ export function CertificateSheet({
                 ) : null}
                 {view.issuerRoleLabel ? (
                   <p className="mt-0.5 text-xs text-slate-500">{view.issuerRoleLabel}</p>
+                ) : null}
+                {view.schoolSignatory ? (
+                  <div
+                    className="mx-auto mt-3 w-fit border-t pt-2"
+                    style={{ borderColor: `${brand}33` }}
+                  >
+                    <p className="text-xs text-slate-400">توقيع مدير المدرسة</p>
+                    <p className="text-sm font-bold text-slate-800">
+                      {view.schoolSignatory.name}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-500">
+                      {view.schoolSignatory.title}
+                    </p>
+                  </div>
                 ) : null}
               </div>
 

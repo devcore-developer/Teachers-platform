@@ -1,7 +1,8 @@
 /**
- * Phase 8 — "إدارة الشهادات" (office manager): filterable list with
- * real metrics. Server component; every row is tenant-scoped by the
- * service (schoolId comes from the session, never the URL).
+ * Phase 8 — "إدارة الشهادات" (office manager / school manager):
+ * filterable list with real metrics. Server component; every row is
+ * tenant-scoped by the service (schoolId comes from the session, never
+ * the URL).
  */
 import Link from "next/link";
 
@@ -31,9 +32,12 @@ export default async function CertificatesManagePage({
   searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const ctx = await requireAdminContext();
-  if (ctx.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    ctx.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    ctx.role !== "SCHOOL_MANAGER"
+  ) {
     return (
-      <AccessDenied hint="إدارة الشهادات متاحة لمديري مكاتب التطوير فقط." />
+      <AccessDenied hint="إدارة الشهادات متاحة لمديري مكاتب التطوير ومديري المدارس فقط." />
     );
   }
 

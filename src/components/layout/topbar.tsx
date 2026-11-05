@@ -4,8 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Bell,
-  CheckCheck,
   ChevronDown,
   LogOut,
   Menu,
@@ -32,12 +30,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/actions/auth";
-import { mockNotifications } from "@/lib/mock-data";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import type {
-  AppNotification,
   CurrentUser,
   NavItem,
 } from "@/lib/types";
@@ -51,8 +46,15 @@ interface TopbarProps {
 /**
  * Top application bar: clean white surface with the module search,
  * notifications, and the user identity + menu. Every visible control
- * performs a real action (navigation, local state change, or an
- * explicit "coming in a later phase" notice) — no dead buttons.
+ * performs a real action (navigation or a persisted state change) —
+ * no dead buttons, no demo data.
+ *
+ * Notifications are REAL (Batch 1): the bell is the persisted
+ * `NotificationBell` component — it reads the session-scoped
+ * `/api/notifications` API, marks rows read through the same
+ * owner-scoped API (the write is enforced server-side), and tapping a
+ * notification navigates to the internal destination the server built
+ * for it (course deep links carry the REAL course id).
  *
  * The user-menu "الإعدادات" entry renders only for roles whose
  * role-filtered `items` actually include the settings module — the
@@ -63,13 +65,9 @@ export function Topbar({
   items,
   onOpenMobileNav,
 }: TopbarProps) {
-  const { toast } = useToast();
   const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [searchOpen, setSearchOpen] = React.useState(false);
-  const [notificationList, setNotificationList] =
-    React.useState<AppNotification[]>(mockNotifications);
-  const unreadCount = notificationList.filter((n) => !n.read).length;
   const canSeeSettings = items.some((item) => item.id === "settings");
 
   const normalizedQuery = query.trim();
@@ -87,16 +85,6 @@ export function Topbar({
     setQuery("");
     router.push(href);
   }
-
-  function markAllRead() {
-    setNotificationList((prev) => prev.map((n) => ({ ...n, read: true })));
-  }
-
-  const laterPhaseNotice = (feature: string) =>
-    toast({
-      title: `${feature} — قيد التطوير`,
-      description: "هذه الميزة جزء من مرحلة لاحقة من خطة التطوير.",
-    });
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border/70 bg-card/90 px-4 backdrop-blur-md sm:gap-3 sm:px-6">
@@ -176,84 +164,13 @@ export function Topbar({
         </PopoverContent>
       </Popover>
 
+      {/* Notifications — real and persisted (Batch 1).
+          The bell fetches the signed-in user's notifications from
+          /api/notifications, supports "تحديد الكل كمقروء" through the
+          same owner-scoped API, navigates each row to its server-built
+          internal destination, and polls every minute. */}
+      <NotificationBell />
 
-      {/* Notifications */}
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative rounded-xl"
-            aria-label={`الإشعارات${unreadCount > 0 ? ` (${unreadCount} غير مقروءة)` : ""}`}
-          >
-            <Bell className="size-5" />
-            {unreadCount > 0 && (
-              <span
-                className="absolute end-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-error text-[10px] font-bold text-white"
-                aria-hidden="true"
-              >
-                {unreadCount}
-              </span>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-[min(22rem,92vw)] rounded-xl p-0">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <p className="text-sm font-bold">الإشعارات</p>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={markAllRead}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
-              >
-                <CheckCheck className="size-3.5" aria-hidden="true" />
-                تحديد الكل كمقروء
-              </button>
-            )}
-          </div>
-          <ul className="scrollbar-thin max-h-80 overflow-y-auto" role="list">
-            {notificationList.length === 0 ? (
-              <li className="px-4 py-8 text-center text-sm text-muted-foreground">
-                لا توجد إشعارات حالياً
-              </li>
-            ) : (
-              notificationList.map((n) => (
-                <li
-                  key={n.id}
-                  className={cn(
-                    "border-b px-4 py-3 last:border-b-0",
-                    !n.read && "bg-brand-50/70"
-                  )}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span
-                      className={cn(
-                        "mt-1.5 size-2 shrink-0 rounded-full",
-                        n.read ? "bg-muted" : "bg-brand-600"
-                      )}
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold leading-snug">{n.title}</p>
-                      {n.description && (
-                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                          {n.description}
-                        </p>
-                      )}
-                      <p className="mt-1 text-[11px] text-muted-foreground/70">{n.time}</p>
-                    </div>
-                  </div>
-                </li>
-              ))
-            )}
-          </ul>
-          <div className="border-t px-4 py-2.5 text-center">
-            <span className="text-xs text-muted-foreground">
-              بيانات إشعارات تجريبية — الإشعارات الفعلية في مرحلة لاحقة
-            </span>
-          </div>
-        </PopoverContent>
-      </Popover>
       {/* Flank (end side): pushes the user profile to the extreme left edge of the topbar (logical end in RTL). */}
       <div className="flex-1" aria-hidden="true" />
 

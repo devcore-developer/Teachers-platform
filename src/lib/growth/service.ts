@@ -1,943 +1,1254 @@
-/**
- * Phase 8 — professional growth service: single-teacher projections,
- * role-scoped rosters and platform-wide aggregates.
- *
- * Every number here is derived from PERSISTED data (enrollments,
- * assessment attempts, assignment submissions, certificates) — nothing
- * is invented, cached or duplicated into an independent source of
- * truth. "Course requirements met" reuses the SAME rule as the
- * certificate eligibility engine (imported from the certificates
- * service) so the growth view can never disagree with issuance.
- *
- * Scope rules (server-enforced):
- *   TEACHER               → own projection only.
- *   EDUCATIONAL_SUPERVISOR → assigned teachers only (explicit teacher
- *                            assignment or branch coverage, same
- *                            school).
- *   EDUCATIONAL_DEPUTY     → teachers covered by persisted grants.
- *   DEVELOPMENT_OFFICE_MANAGER → all active teachers of own school.
- *   SUPER_ADMIN            → platform-wide AGGREGATES only (never a
- *                            single teacher's profile).
- */
-import type {
-  CertificateActor,
-  CertificateViewer,
-} from "@/lib/certificates/access";
-import {
-  effectiveStatusOf,
-  summarizeAssessments,
-} from "@/lib/certificates/service";
 import { db } from "@/lib/db";
 import {
-  GROWTH_HISTORY_LIMIT,
-  GROWTH_ROSTER_LIMIT,
-  PLATFORM_SCHOOLS_LIMIT,
-  type CertificateEffectiveStatus,
-} from "@/config/certificates";
-import { certificateFail, type CertificateResult } from "@/lib/validation/certificates";
-import {
-  isTeacherTargeted,
-  parseJsonIds,
-} from "@/lib/assignments/access";
+  ANNUAL_HOURS_TARGET,
+  GROWTH_LEVELS,
+  PROMOTION_THRESHOLD_PERCENT,
+  growthLevelLabel,
+  isGrowthLevelId,
+  nextGrowthLevel,
+  suggestedGrowthLevel,
+  type GrowthLevelId,
+} from "@/config/growth";
+import { notifyGrowthLevelChanged } from "@/lib/notifications/center";
+import { getActiveAcademicYear } from "@/lib/academic-year";
+import { teacherHoursSummary } from "@/lib/training/hours";
 
 /* ------------------------------------------------------------------ */
-/* Serializable projection shapes                                       */
+/* Batch 2 — professional growth engine (HTML v48 + v13 parity).        */
+/*                                                                      */
+/* The persisted level lives on User.growthLevel (default "T0"). Every  */
+/* change writes ONE append-only GrowthEvent row (the full history is   */
+/* never rewritten) and notifies the teacher through the notification   */
+/* center. The SUGGESTED level (v13 thresholds) is advisory only.       */
+/*                                                                      */
+/* Permissions (fail-closed, server-side):                              */
+/*   - EDUCATIONAL_SUPERVISOR: only teachers inside their own scope        */
+/*     (explicit assignment OR branch coverage) and own school.         */
+/*   - DEVELOPMENT_OFFICE_MANAGER: only teachers of their own school.   */
+/*   - SUPER_ADMIN: any teacher.                                        */
 /* ------------------------------------------------------------------ */
 
-export interface GrowthCourseRow {
-  courseId: string;
-  courseTitle: string;
-  programName: string | null;
-  enrolledAt: Date;
-  requirementsMet: boolean;
-  assessmentsTotal: number;
-  assessmentsPassed: number;
-  lastActivityAt: Date | null;
+export type GrowthServiceResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; message: string; code?: "FORBIDDEN" | "NOT_FOUND" | "VALIDATION_ERROR" };
+
+/** The acting supervisor/admin resolved from the session (never client input). */
+export interface GrowthActor {
+  id: string;
+  role: string;
+  schoolId: string | null;
 }
 
-export interface GrowthAssessmentRow {
-  assessmentId: string;
-  titleAr: string;
-  courseTitle: string;
-  attemptsCount: number;
-  bestPercentage: number | null;
-  passed: boolean;
-  lastSubmittedAt: Date | null;
+/* ------------------------------------------------------------------ */
+/* Stats                                                                */
+/* ------------------------------------------------------------------ */
+
+export interface TeacherGrowthStats {
+  /** Published courses assigned to this teacher (platform-wide + own school). */
+  assigned: number;
+  completed: number;
+  /** Accumulated completed-course hours (all completions — HTML parity). */
+  hours: number;
+  /** Mean of the best passed-assessment percentages (null when no exams). */
+  avgPercentage: number | null;
+  certificates: number;
+  /** Round(completed / assigned * 100) — 0 when nothing is assigned. */
+  percent: number;
 }
 
-export interface GrowthAssignmentRow {
+export interface GrowthTeacherRow {
+  teacher: {
+    id: string;
+    name: string;
+    email: string;
+    schoolId: string | null;
+    schoolName: string | null;
+    branchName: string | null;
+    stage: string | null;
+    subject: string | null;
+    isActive: boolean;
+  };
+  currentLevel: GrowthLevelId;
+  suggestedLevel: GrowthLevelId;
+  stats: TeacherGrowthStats;
+  eligible: boolean;
+  nextLevel: GrowthLevelId | null;
+}
+
+interface TeacherRecord {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  schoolId: string | null;
+  branchId?: string | null;
+  growthLevel: string;
+  stage: string | null;
+  subject: string | null;
+  isActive: boolean;
+  school?: { nameAr: string } | null;
+  branch?: { nameAr: string } | null;
+}
+
+/** Exported for the messaging recipients list (same scope, same shape). */
+export type ScopedTeacherRecord = TeacherRecord;
+
+/**
+ * Build growth rows for a set of teachers with BATCHED queries (no
+ * per-teacher round trips — a school roster can hold hundreds of
+ * teachers). Assigned published courses are resolved per distinct
+ * schoolId exactly like the HTML v13AssignedCourses: platform-wide
+ * courses (schoolId null) reach everyone; school courses reach that
+ * school's teachers only.
+ */
+export async function buildGrowthRows(
+  teachers: TeacherRecord[]
+): Promise<GrowthTeacherRow[]> {
+  if (teachers.length === 0) return [];
+
+  const teacherIds = teachers.map((teacher) => teacher.id);
+  const schoolIds = [
+    ...new Set(
+      teachers.map((teacher) => teacher.schoolId).filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  // Published courses per scope — platform-wide once, then one per school.
+  const scopeCourses = new Map<string, Set<string>>();
+  const platformCourses = await db.course.findMany({
+    where: { status: "PUBLISHED", schoolId: null },
+    select: { id: true },
+  });
+  const platformIds = new Set(platformCourses.map((course) => course.id));
+  for (const schoolId of schoolIds) {
+    const schoolCourses = await db.course.findMany({
+      where: { status: "PUBLISHED", schoolId },
+      select: { id: true },
+    });
+    scopeCourses.set(schoolId, new Set(schoolCourses.map((course) => course.id)));
+  }
+
+  const completions = await db.courseCompletion.findMany({
+    where: { userId: { in: teacherIds } },
+    select: {
+      userId: true,
+      courseId: true,
+      hours: true,
+      bestPercentage: true,
+    },
+  });
+  const certificateCounts = await db.certificate.groupBy({
+    by: ["teacherId"],
+    where: { teacherId: { in: teacherIds }, status: "ISSUED" },
+    _count: { _all: true },
+  });
+  const certCountByTeacher = new Map(
+    certificateCounts.map((row) => [row.teacherId, row._count._all])
+  );
+
+  const completionsByTeacher = new Map<string, typeof completions>();
+  for (const completion of completions) {
+    const list = completionsByTeacher.get(completion.userId) ?? [];
+    list.push(completion);
+    completionsByTeacher.set(completion.userId, list);
+  }
+
+  return teachers.map((teacher) => {
+    const assignedIds = new Set(platformIds);
+    if (teacher.schoolId) {
+      const schoolSet = scopeCourses.get(teacher.schoolId);
+      if (schoolSet) {
+        for (const id of schoolSet) assignedIds.add(id);
+      }
+    }
+    const own = completionsByTeacher.get(teacher.id) ?? [];
+    const done = own.filter((completion) => assignedIds.has(completion.courseId));
+    const assigned = assignedIds.size;
+    const percent =
+      assigned === 0 ? 0 : Math.round((done.length / assigned) * 100);
+    const hours = own.reduce((sum, completion) => sum + Number(completion.hours ?? 0), 0);
+    const percentages = own
+      .map((completion) => completion.bestPercentage)
+      .filter((value): value is number => typeof value === "number");
+    const avgPercentage = percentages.length
+      ? Math.round(
+          (percentages.reduce((sum, value) => sum + value, 0) / percentages.length) * 10
+        ) / 10
+      : null;
+
+    const currentLevel: GrowthLevelId = isGrowthLevelId(teacher.growthLevel)
+      ? teacher.growthLevel
+      : "T0";
+    const suggestedLevel = suggestedGrowthLevel({ hours, assignedPercent: percent });
+    const nextLevel = nextGrowthLevel(currentLevel);
+    const eligible =
+      assigned > 0 &&
+      percent >= PROMOTION_THRESHOLD_PERCENT &&
+      nextLevel !== null;
+
+    return {
+      teacher: {
+        id: teacher.id,
+        name: teacher.name,
+        email: teacher.email,
+        schoolId: teacher.schoolId,
+        schoolName: teacher.school?.nameAr ?? null,
+        branchName: teacher.branch?.nameAr ?? null,
+        stage: teacher.stage,
+        subject: teacher.subject,
+        isActive: teacher.isActive,
+      },
+      currentLevel,
+      suggestedLevel,
+      stats: {
+        assigned,
+        completed: done.length,
+        hours,
+        avgPercentage,
+        certificates: certCountByTeacher.get(teacher.id) ?? 0,
+        percent,
+      },
+      eligible,
+      nextLevel,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Scope resolution                                                     */
+/* ------------------------------------------------------------------ */
+
+/** Supervisor scope = explicit assignments ∪ branch coverage, own school. */
+async function supervisorOwnsTeacher(
+  supervisorId: string,
+  teacherId: string
+): Promise<boolean> {
+  const supervisor = await db.user.findUnique({
+    where: { id: supervisorId },
+    select: { role: true, schoolId: true, supervisorAssignments: { select: { branchId: true } } },
+  });
+  if (!supervisor || supervisor.role !== "EDUCATIONAL_SUPERVISOR" || !supervisor.schoolId) {
+    return false;
+  }
+  const teacher = await db.user.findUnique({
+    where: { id: teacherId },
+    select: { role: true, schoolId: true, branchId: true },
+  });
+  if (!teacher || teacher.role !== "TEACHER" || teacher.schoolId !== supervisor.schoolId) {
+    return false;
+  }
+  const explicit = await db.teacherSupervisorAssignment.findFirst({
+    where: { teacherId, supervisorId, schoolId: supervisor.schoolId },
+    select: { id: true },
+  });
+  if (explicit) return true;
+  const branchIds = supervisor.supervisorAssignments.map((row) => row.branchId);
+  return Boolean(teacher.branchId && branchIds.includes(teacher.branchId));
+}
+
+function adminOwnsTeacher(actor: GrowthActor, teacherSchoolId: string | null): boolean {
+  if (actor.role === "SUPER_ADMIN") return true;
+  if (actor.role === "DEVELOPMENT_OFFICE_MANAGER") {
+    return Boolean(actor.schoolId) && teacherSchoolId === actor.schoolId;
+  }
+  return false;
+}
+
+/** Fail-closed permission check for reading/writing one teacher's growth. */
+export async function canManageTeacherGrowth(
+  actor: GrowthActor,
+  teacherId: string
+): Promise<boolean> {
+  if (actor.role === "EDUCATIONAL_SUPERVISOR") {
+    return supervisorOwnsTeacher(actor.id, teacherId);
+  }
+  const teacher = await db.user.findUnique({
+    where: { id: teacherId },
+    select: { role: true, schoolId: true },
+  });
+  if (!teacher || teacher.role !== "TEACHER") return false;
+  return adminOwnsTeacher(actor, teacher.schoolId);
+}
+
+/* ------------------------------------------------------------------ */
+/* Boards                                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The supervisor's authorized teacher records (explicit assignments ∪
+ * branch coverage, confined to the supervisor's school). Shared by the
+ * growth board and the messaging recipients list — one scope, one query
+ * path, everywhere.
+ */
+export async function supervisorScopedTeacherRecords(
+  supervisorId: string
+): Promise<GrowthServiceResult<TeacherRecord[]>> {
+  const supervisor = await db.user.findUnique({
+    where: { id: supervisorId },
+    select: {
+      role: true,
+      schoolId: true,
+      supervisorAssignments: { select: { branchId: true } },
+    },
+  });
+  if (!supervisor || supervisor.role !== "EDUCATIONAL_SUPERVISOR" || !supervisor.schoolId) {
+    return { ok: false, message: "هذه الصفحة متاحة للمشرفين التربويين فقط", code: "FORBIDDEN" };
+  }
+
+  const branchIds = supervisor.supervisorAssignments.map((row) => row.branchId);
+  const branchDerived =
+    branchIds.length > 0
+      ? await db.user.findMany({
+          where: {
+            role: "TEACHER",
+            schoolId: supervisor.schoolId,
+            branchId: { in: branchIds },
+          },
+          select: growthTeacherSelect,
+        })
+      : [];
+  const explicitRows = await db.teacherSupervisorAssignment.findMany({
+    where: { supervisorId, schoolId: supervisor.schoolId },
+    select: { teacher: { select: growthTeacherSelect } },
+  });
+
+  const byId = new Map<string, TeacherRecord>();
+  for (const teacher of branchDerived) byId.set(teacher.id, teacher);
+  for (const row of explicitRows) {
+    if (row.teacher && row.teacher.schoolId === supervisor.schoolId) {
+      byId.set(row.teacher.id, row.teacher);
+    }
+  }
+  return { ok: true, data: [...byId.values()] };
+}
+
+/**
+ * The supervisor's growth board (HTML v48Page): every teacher inside
+ * the supervisor's authorized scope with stats + eligibility.
+ */
+export async function supervisorGrowthBoard(
+  supervisorId: string
+): Promise<GrowthServiceResult<GrowthTeacherRow[]>> {
+  const scoped = await supervisorScopedTeacherRecords(supervisorId);
+  if (!scoped.ok) return scoped;
+  const rows = await buildGrowthRows(scoped.data);
+  rows.sort((a, b) => a.teacher.name.localeCompare(b.teacher.name, "ar"));
+  return { ok: true, data: rows };
+}
+
+/**
+ * The administrative teachers board (/teachers): all teachers of the
+ * actor's school (office) or the whole platform (super admin).
+ */
+export async function adminGrowthBoard(
+  actor: GrowthActor
+): Promise<GrowthServiceResult<GrowthTeacherRow[]>> {
+  if (actor.role !== "SUPER_ADMIN" && actor.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+    return { ok: false, message: "هذه الصفحة متاحة للإدارة فقط", code: "FORBIDDEN" };
+  }
+  const teachers = await db.user.findMany({
+    where: {
+      role: "TEACHER",
+      ...(actor.role === "DEVELOPMENT_OFFICE_MANAGER" ? { schoolId: actor.schoolId } : {}),
+    },
+    select: growthTeacherSelect,
+    orderBy: { name: "asc" },
+  });
+  const rows = await buildGrowthRows(teachers);
+  return { ok: true, data: rows };
+}
+
+const growthTeacherSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  schoolId: true,
+  branchId: true,
+  growthLevel: true,
+  stage: true,
+  subject: true,
+  isActive: true,
+  school: { select: { nameAr: true } },
+  branch: { select: { nameAr: true } },
+} as const;
+
+/* ------------------------------------------------------------------ */
+/* Writes                                                               */
+/* ------------------------------------------------------------------ */
+
+export interface LevelChangeOutcome {
+  changed: boolean;
+  from: GrowthLevelId;
+  to: GrowthLevelId;
+}
+
+/**
+ * v48SetTeacherLevel — the supervisor classifies the teacher directly.
+ * Idempotent: classifying the same level again changes nothing (and
+ * writes no duplicate history row).
+ */
+export async function setTeacherLevel(
+  actor: GrowthActor,
+  teacherId: string,
+  level: string,
+  note?: string
+): Promise<GrowthServiceResult<LevelChangeOutcome>> {
+  if (!isGrowthLevelId(level)) {
+    return { ok: false, message: "مستوى النمو غير صالح", code: "VALIDATION_ERROR" };
+  }
+  const teacher = await db.user.findUnique({
+    where: { id: teacherId },
+    select: { id: true, name: true, role: true, schoolId: true, growthLevel: true, isActive: true },
+  });
+  if (!teacher || teacher.role !== "TEACHER") {
+    return { ok: false, message: "المعلم غير موجود", code: "NOT_FOUND" };
+  }
+  if (!(await canManageTeacherGrowth(actor, teacherId))) {
+    return { ok: false, message: "لا تملك صلاحية تصنيف هذا المعلم", code: "FORBIDDEN" };
+  }
+
+  const from: GrowthLevelId = isGrowthLevelId(teacher.growthLevel)
+    ? teacher.growthLevel
+    : "T0";
+  if (from === level) {
+    return { ok: true, data: { changed: false, from, to: level } };
+  }
+
+  await db.$transaction([
+    db.user.update({ where: { id: teacherId }, data: { growthLevel: level } }),
+    db.growthEvent.create({
+      data: {
+        userId: teacherId,
+        fromLevel: from,
+        toLevel: level,
+        reason: "MANUAL_SUPERVISOR",
+        note: note?.trim() ? note.trim().slice(0, 300) : null,
+        actorId: actor.id,
+      },
+    }),
+  ]);
+
+  await notifyGrowthLevelChanged({
+    teacherId,
+    fromLevel: from,
+    toLevel: level,
+    kind: "MANUAL",
+  });
+
+  return { ok: true, data: { changed: true, from, to: level } };
+}
+
+/**
+ * v48CheckPromotion + approve in one server-side step. The 60% gate is
+ * re-checked HERE (never trusted from the client) and only ever moves
+ * the teacher exactly ONE level up.
+ */
+export async function approvePromotion(
+  actor: GrowthActor,
+  teacherId: string
+): Promise<
+  GrowthServiceResult<
+    | { promoted: true; from: GrowthLevelId; to: GrowthLevelId }
+    | { promoted: false; message: string; completed: number; assigned: number; percent: number }
+  >
+> {
+  const teacher = await db.user.findUnique({
+    where: { id: teacherId },
+    select: { id: true, name: true, role: true, schoolId: true, growthLevel: true },
+  });
+  if (!teacher || teacher.role !== "TEACHER") {
+    return { ok: false, message: "المعلم غير موجود", code: "NOT_FOUND" };
+  }
+  if (!(await canManageTeacherGrowth(actor, teacherId))) {
+    return { ok: false, message: "لا تملك صلاحية اعتماد انتقال هذا المعلم", code: "FORBIDDEN" };
+  }
+
+  const [row] = await buildGrowthRows([
+    {
+      id: teacher.id,
+      name: teacher.name,
+      email: "",
+      schoolId: teacher.schoolId,
+      branchId: null,
+      role: teacher.role,
+      growthLevel: teacher.growthLevel,
+      stage: null,
+      subject: null,
+      isActive: teacher.role === "TEACHER",
+      school: null,
+      branch: null,
+    },
+  ]);
+
+  if (!row.nextLevel) {
+    return {
+      ok: true,
+      data: {
+        promoted: false,
+        message: "المعلم على أعلى مستوى بالفعل (T5 — باحث تربوي)",
+        completed: row.stats.completed,
+        assigned: row.stats.assigned,
+        percent: row.stats.percent,
+      },
+    };
+  }
+  if (!row.eligible) {
+    return {
+      ok: true,
+      data: {
+        promoted: false,
+        message: `لم يكتمل شرط ${PROMOTION_THRESHOLD_PERCENT}% بعد. المكتمل: ${row.stats.completed} من ${row.stats.assigned} دورة (${row.stats.percent}%).`,
+        completed: row.stats.completed,
+        assigned: row.stats.assigned,
+        percent: row.stats.percent,
+      },
+    };
+  }
+
+  const from = row.currentLevel;
+  const to = row.nextLevel;
+  await db.$transaction([
+    db.user.update({ where: { id: teacherId }, data: { growthLevel: to } }),
+    db.growthEvent.create({
+      data: {
+        userId: teacherId,
+        fromLevel: from,
+        toLevel: to,
+        reason: "PROMOTION_APPROVED",
+        actorId: actor.id,
+      },
+    }),
+  ]);
+
+  await notifyGrowthLevelChanged({ teacherId, fromLevel: from, toLevel: to, kind: "PROMOTION" });
+
+  return { ok: true, data: { promoted: true, from, to } };
+}
+
+/* ------------------------------------------------------------------ */
+/* History + teacher self view                                          */
+/* ------------------------------------------------------------------ */
+
+export interface GrowthHistoryRow {
+  id: string;
+  fromLevel: string | null;
+  toLevel: string;
+  reason: string;
+  note: string | null;
+  actorName: string | null;
+  createdAt: Date;
+}
+
+/** The teacher's own level + suggestion + last events (for /reports). */
+export async function teacherGrowthSummary(teacherId: string): Promise<{
+  currentLevel: GrowthLevelId;
+  suggestedLevel: GrowthLevelId;
+  history: GrowthHistoryRow[];
+  stats: TeacherGrowthStats;
+} | null> {
+  const teacher = await db.user.findUnique({
+    where: { id: teacherId },
+    select: growthTeacherSelect,
+  });
+  if (!teacher) return null;
+  const [row] = await buildGrowthRows([teacher]);
+  const history = await db.growthEvent.findMany({
+    where: { userId: teacherId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      fromLevel: true,
+      toLevel: true,
+      reason: true,
+      note: true,
+      actor: { select: { name: true } },
+      createdAt: true,
+    },
+  });
+  return {
+    currentLevel: row.currentLevel,
+    suggestedLevel: row.suggestedLevel,
+    stats: row.stats,
+    history: history.map((event) => ({
+      id: event.id,
+      fromLevel: event.fromLevel,
+      toLevel: event.toLevel,
+      reason: event.reason,
+      note: event.note,
+      actorName: event.actor?.name ?? null,
+      createdAt: event.createdAt,
+    })),
+  };
+}
+
+/** Levels metadata for UI selects (stable order T0..T5). */
+export function allGrowthLevels(): typeof GROWTH_LEVELS {
+  return GROWTH_LEVELS;
+}
+
+/* ================================================================== */
+/* Batch 2 (part 2/2) — page-facing growth views.                      */
+/*                                                                     */
+/* Everything below reads REAL database rows only (no mock data):      */
+/*   - listGrowthRoster        -> /growth table + analytics module     */
+/*   - getPlatformGrowthStats  -> /growth stat cards + per-school grid */
+/*   - getTeacherGrowth        -> /growth/[teacherId] + /my-growth     */
+/*   - teacherGrowthHistory    -> the growth journey timeline          */
+/* The persisted level, the 60% gate and the 35-hour target all come   */
+/* from the engine above and from src/config/growth.ts.                */
+/* ================================================================== */
+
+const REASON_LABELS: Record<string, string> = {
+  MANUAL_SUPERVISOR: "تصنيف المشرف",
+  PROMOTION_APPROVED: "اعتماد انتقال — شرط 60%",
+  SEED: "تصنيف ابتدائي",
+};
+
+function reasonLabel(reason: string): string {
+  return REASON_LABELS[reason] ?? reason;
+}
+
+/** One row of the append-only growth journey (HTML v48 GL-events parity). */
+export interface GrowthHistoryEvent {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  fromLevel: GrowthLevelId | null;
+  fromLabel: string | null;
+  toLevel: GrowthLevelId;
+  toLabel: string;
+  /** Raw machine reason (MANUAL_SUPERVISOR | PROMOTION_APPROVED | SEED). */
+  reason: string;
+  /** Arabic label used directly in the timeline UI. */
+  reasonLabel: string;
+  note: string | null;
+  actorName: string | null;
+  createdAt: Date;
+}
+
+/**
+ * The teacher's growth journey, newest first. Backed exclusively by
+ * GrowthEvent rows (append-only — the history is never rewritten).
+ */
+export async function teacherGrowthHistory(
+  teacherId: string,
+  limit = 20
+): Promise<GrowthHistoryEvent[]> {
+  const events = await db.growthEvent.findMany({
+    where: { userId: teacherId },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(Math.max(limit, 1), 100),
+    select: {
+      id: true,
+      fromLevel: true,
+      toLevel: true,
+      reason: true,
+      note: true,
+      actor: { select: { name: true } },
+      createdAt: true,
+      user: { select: { id: true, name: true } },
+    },
+  });
+
+  return events.map((event) => {
+    const fromLevel = event.fromLevel && isGrowthLevelId(event.fromLevel) ? event.fromLevel : null;
+    const toLevel = isGrowthLevelId(event.toLevel) ? event.toLevel : "T0";
+    return {
+      id: event.id,
+      teacherId: event.user.id,
+      teacherName: event.user.name,
+      fromLevel,
+      fromLabel: fromLevel ? growthLevelLabel(fromLevel) : null,
+      toLevel,
+      toLabel: growthLevelLabel(toLevel),
+      reason: event.reason,
+      reasonLabel: reasonLabel(event.reason),
+      note: event.note,
+      actorName: event.actor?.name ?? null,
+      createdAt: event.createdAt,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Roster                                                              */
+/* ------------------------------------------------------------------ */
+
+/** Flat roster row — consumed by /growth and by the analytics module. */
+export interface GrowthRosterRow {
+  teacherId: string;
+  teacherName: string;
+  email: string;
+  schoolId: string | null;
+  schoolName: string | null;
+  /** Home branch name (null when the teacher has no branch). */
+  branchName: string | null;
+  stage: string | null;
+  subject: string | null;
+  level: GrowthLevelId;
+  levelLabel: string;
+  suggestedLevel: GrowthLevelId;
+  nextLevel: GrowthLevelId | null;
+  nextLevelLabel: string | null;
+  /** Published courses assigned to this teacher (platform + own school). */
+  coursesEnrolled: number;
+  coursesCompleted: number;
+  /** Round(completed/assigned*100) — the 60% promotion gate value. */
+  completionPercentage: number;
+  certificatesActive: number;
+  hoursCompleted: number;
+  hoursTarget: number;
+  avgBestPercentage: number | null;
+  eligible: boolean;
+  isActive: boolean;
+}
+
+/**
+ * Tolerant scope so every caller compiles against one signature:
+ *   - nothing          -> whole platform (callers already tenant-scoped)
+ *   - "schoolId"       -> one school (bare string also accepted)
+ *   - { id, schoolId, supervisorId, teacherIds } -> explicit scope object
+ *
+ * `id` (the acting user) is accepted for backward compatibility with the
+ * analytics/dashboard callers: when `supervisorId` is not passed and the
+ * id belongs to an EDUCATIONAL_SUPERVISOR, the roster collapses to
+ * exactly their teachers; for any other role it is safely ignored.
+ */
+export type GrowthRosterScope =
+  | string
+  | {
+      [key: string]: unknown;   // ← السطر الجديد — ضيفه بالظبط كده
+      id?: string | null;
+      schoolId?: string | null;
+      supervisorId?: string | null;
+      teacherIds?: string[];
+    }
+  | null
+  | undefined;
+
+function normalizeRosterScope(scope: GrowthRosterScope): {
+  actorId: string | null;
+  schoolId: string | null;
+  supervisorId: string | null;
+  teacherIds: string[] | null;
+} {
+  if (typeof scope === "string") {
+    return {
+      actorId: null,
+      schoolId: scope || null,
+      supervisorId: null,
+      teacherIds: null,
+    };
+  }
+  if (!scope) {
+    return { actorId: null, schoolId: null, supervisorId: null, teacherIds: null };
+  }
+  return {
+    actorId: scope.id ?? null,
+    schoolId: scope.schoolId ?? null,
+    supervisorId: scope.supervisorId ?? null,
+    teacherIds: Array.isArray(scope.teacherIds) ? scope.teacherIds.filter(Boolean) : null,
+  };
+}
+
+/**
+ * The roster result: the rows array itself, augmented with the
+ * `{ ok: true, data: { rows } }` envelope so BOTH consumption styles
+ * compile and behave identically:
+ *   - array style   -> roster.length, roster.map(...)          (pages)
+ *   - envelope style-> roster.ok ? roster.data.rows : []       (analytics)
+ */
+export type GrowthRosterCollection = GrowthRosterRow[] & {
+  ok: true;
+  data: { rows: GrowthRosterRow[] };
+};
+
+/**
+ * The growth roster: every teacher of the requested scope with their
+ * level, the 60% gate numbers, hours vs the 35-hour target, active
+ * certificates and the mean of best assessment percentages.
+ * Supervisors pass their own id — the scope then collapses to exactly
+ * the teachers they are authorized to see (assignments ∪ branches).
+ *
+ * Returns a GrowthRosterCollection: the rows array augmented with the
+ * `{ ok: true, data: { rows } }` envelope (see the type above), so
+ * legacy ActionState-style callers keep compiling unchanged.
+ */
+export async function listGrowthRoster(
+  scope?: GrowthRosterScope
+): Promise<GrowthRosterCollection> {
+  const { actorId, schoolId, supervisorId: explicitSupervisorId, teacherIds } =
+    normalizeRosterScope(scope);
+
+  // Backward-compatible actor scoping: a bare `id` only narrows the
+  // roster when it really belongs to an educational supervisor —
+  // admins and office managers keep the whole (school-scoped) roster.
+  let supervisorId = explicitSupervisorId;
+  if (!supervisorId && actorId) {
+    const actor = await db.user.findUnique({
+      where: { id: actorId },
+      select: { role: true },
+    });
+    if (actor?.role === "EDUCATIONAL_SUPERVISOR") supervisorId = actorId;
+  }
+
+  let teachers: TeacherRecord[];
+  if (supervisorId) {
+    const scoped = await supervisorScopedTeacherRecords(supervisorId);
+    teachers = scoped.ok ? scoped.data : [];
+    if (schoolId) {
+      teachers = teachers.filter((teacher) => teacher.schoolId === schoolId);
+    }
+  } else if (teacherIds && teacherIds.length > 0) {
+    teachers = await db.user.findMany({
+      where: {
+        role: "TEACHER",
+        id: { in: teacherIds },
+        ...(schoolId ? { schoolId } : {}),
+      },
+      select: growthTeacherSelect,
+    });
+  } else {
+    teachers = await db.user.findMany({
+      where: { role: "TEACHER", ...(schoolId ? { schoolId } : {}) },
+      select: growthTeacherSelect,
+      orderBy: { name: "asc" },
+    });
+  }
+
+  const rows = await buildGrowthRows(teachers);
+  const roster: GrowthRosterRow[] = rows.map((row) => ({
+    teacherId: row.teacher.id,
+    teacherName: row.teacher.name,
+    email: row.teacher.email,
+    schoolId: row.teacher.schoolId,
+    schoolName: row.teacher.schoolName,
+    branchName: row.teacher.branchName,
+    stage: row.teacher.stage,
+    subject: row.teacher.subject,
+    level: row.currentLevel,
+    levelLabel: growthLevelLabel(row.currentLevel),
+    suggestedLevel: row.suggestedLevel,
+    nextLevel: row.nextLevel,
+    nextLevelLabel: row.nextLevel ? growthLevelLabel(row.nextLevel) : null,
+    coursesEnrolled: row.stats.assigned,
+    coursesCompleted: row.stats.completed,
+    completionPercentage: row.stats.percent,
+    certificatesActive: row.stats.certificates,
+    hoursCompleted: row.stats.hours,
+    hoursTarget: ANNUAL_HOURS_TARGET,
+    avgBestPercentage: row.stats.avgPercentage,
+    eligible: row.eligible,
+    isActive: row.teacher.isActive,
+  }));
+
+  // Envelope augmentation — `rows` is a shallow copy so the collection
+  // stays JSON-serializable (no self-referencing cycle).
+  return Object.assign(roster, {
+    ok: true as const,
+    data: { rows: roster.slice() },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Platform / school stats                                             */
+/* ------------------------------------------------------------------ */
+
+export interface GrowthSchoolStats {
+  schoolId: string | null;
+  schoolName: string;
+  teachers: number;
+  eligible: number;
+  certificates: number;
+  /** Hours accumulated in the ACTIVE academic year (real completions). */
+  hoursThisYear: number;
+  /** Mean of the teachers' completion percentages (0 when empty). */
+  avgCompletion: number;
+  levelCounts: Record<GrowthLevelId, number>;
+}
+
+export interface PlatformGrowthStats {
+  academicYear: string;
+  targetHours: number;
+  totals: {
+    teachers: number;
+    eligible: number;
+    certificates: number;
+    hoursThisYear: number;
+    avgCompletion: number;
+  };
+  byLevel: Array<{ id: GrowthLevelId; nameAr: string; count: number }>;
+  schools: GrowthSchoolStats[];
+}
+
+/**
+ * Aggregated growth statistics for the /growth landing page. `schoolId`
+ * narrows everything to one school (office manager); null = platform.
+ */
+export async function getPlatformGrowthStats(
+  schoolId?: string | null
+): Promise<PlatformGrowthStats> {
+  const academicYear = await getActiveAcademicYear();
+
+  const [teachers, yearCompletions] = await Promise.all([
+    db.user.findMany({
+      where: { role: "TEACHER", ...(schoolId ? { schoolId } : {}) },
+      select: growthTeacherSelect,
+      orderBy: { name: "asc" },
+    }),
+    db.courseCompletion.findMany({
+      where: { academicYear },
+      select: { hours: true, user: { select: { id: true, schoolId: true } } },
+    }),
+  ]);
+
+  const rows = await buildGrowthRows(teachers);
+
+  const hoursByTeacher = new Map<string, number>();
+  for (const completion of yearCompletions) {
+    if (schoolId && completion.user.schoolId !== schoolId) continue;
+    hoursByTeacher.set(
+      completion.user.id,
+      (hoursByTeacher.get(completion.user.id) ?? 0) + Number(completion.hours ?? 0)
+    );
+  }
+
+  const emptyLevels = (): Record<GrowthLevelId, number> => ({
+    T0: 0, T1: 0, T2: 0, T3: 0, T4: 0, T5: 0,
+  });
+
+  const schools = new Map<string, GrowthSchoolStats>();
+  for (const row of rows) {
+    const key = row.teacher.schoolId ?? "platform";
+    let bucket = schools.get(key);
+    if (!bucket) {
+      bucket = {
+        schoolId: row.teacher.schoolId,
+        schoolName: row.teacher.schoolName ?? "غير محدد",
+        teachers: 0,
+        eligible: 0,
+        certificates: 0,
+        hoursThisYear: 0,
+        avgCompletion: 0,
+        levelCounts: emptyLevels(),
+      };
+      schools.set(key, bucket);
+    }
+    bucket.teachers += 1;
+    if (row.eligible) bucket.eligible += 1;
+    bucket.certificates += row.stats.certificates;
+    bucket.hoursThisYear += hoursByTeacher.get(row.teacher.id) ?? 0;
+    bucket.avgCompletion += row.stats.percent;
+    bucket.levelCounts[row.currentLevel] += 1;
+  }
+
+  const schoolList = [...schools.values()].map((bucket) => ({
+    ...bucket,
+    hoursThisYear: Math.round(bucket.hoursThisYear * 10) / 10,
+    avgCompletion:
+      bucket.teachers === 0
+        ? 0
+        : Math.round(bucket.avgCompletion / bucket.teachers),
+  }));
+  schoolList.sort((a, b) => a.schoolName.localeCompare(b.schoolName, "ar"));
+
+  const byLevel = GROWTH_LEVELS.map((level) => ({
+    id: level.id,
+    nameAr: level.nameAr,
+    count: schoolList.reduce((sum, bucket) => sum + bucket.levelCounts[level.id], 0),
+  }));
+
+  const totalTeachers = rows.length;
+  const totalPercent = rows.reduce((sum, row) => sum + row.stats.percent, 0);
+
+  return {
+    academicYear,
+    targetHours: ANNUAL_HOURS_TARGET,
+    totals: {
+      teachers: totalTeachers,
+      eligible: rows.filter((row) => row.eligible).length,
+      certificates: rows.reduce((sum, row) => sum + row.stats.certificates, 0),
+      hoursThisYear:
+        Math.round(
+          [...hoursByTeacher.values()].reduce((sum, hours) => sum + hours, 0) * 10
+        ) / 10,
+      avgCompletion:
+        totalTeachers === 0 ? 0 : Math.round(totalPercent / totalTeachers),
+    },
+    byLevel,
+    schools: schoolList,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* One teacher — full projection                                       */
+/* ------------------------------------------------------------------ */
+
+export interface TeacherGrowthProjectionCourse {
   id: string;
   titleAr: string;
-  courseTitle: string | null;
+  hours: number | null;
+  status: string;
+  completed: boolean;
+  completedAt: Date | null;
+  bestPercentage: number | null;
+  certificateId: string | null;
+}
+
+export interface TeacherGrowthProjectionAssessment {
+  id: string;
+  titleAr: string;
+  status: string;
+  attempts: number;
+  bestPercentage: number | null;
+  passed: boolean | null;
+  lastAttemptAt: Date | null;
+}
+
+export interface TeacherGrowthProjectionAssignment {
+  id: string;
+  titleAr: string;
+  status: string;
   dueAt: Date;
-  myStatus: string | null;
-  isLate: boolean | null;
-  scoreTotal: number | null;
+  submissionStatus: string | null;
+  submittedAt: Date | null;
+  score: number | null;
   totalPoints: number;
 }
 
-export interface GrowthCertificateRow {
+export interface TeacherGrowthProjectionCertificate {
   id: string;
   certificateNumber: string;
   titleAr: string;
-  contentTitle: string | null;
+  status: string;
   issuedAt: Date;
-  effectiveStatus: CertificateEffectiveStatus;
 }
 
-export interface GrowthHistoryEvent {
-  date: Date;
-  /** ENROLLMENT | ASSESSMENT | ASSIGNMENT | CERTIFICATE */
-  type: string;
-  label: string;
-  detail: string | null;
-}
-
-export interface TeacherGrowthTotals {
-  coursesEnrolled: number;
-  coursesCompleted: number;
-  assessmentsPassed: number;
-  assessmentsTotal: number;
-  assignmentsTargeted: number;
-  assignmentsGraded: number;
-  certificatesActive: number;
-  /** Average of per-assessment best percentages (null when no grades). */
-  avgBestPercentage: number | null;
-  /** 0..100 average course progress (null when no enrolled courses). */
-  overallProgressPercent: number | null;
-}
-
+/**
+ * The complete growth projection of ONE teacher: ladder position + the
+ * 60% gate + the 35-hour annual target + every real learning artifact
+ * (courses, assessments, assignments, certificates) + the journey
+ * history. Consumed by /growth/[teacherId] and /my-growth.
+ */
 export interface TeacherGrowthProjection {
   teacher: {
     id: string;
     name: string;
-    branchName: string | null;
-    schoolId: string | null;
+    schoolName: string | null;
+    stage: string | null;
+    subject: string | null;
   };
-  totals: TeacherGrowthTotals;
-  courses: GrowthCourseRow[];
-  assessments: GrowthAssessmentRow[];
-  assignments: GrowthAssignmentRow[];
-  certificates: GrowthCertificateRow[];
+  currentLevel: GrowthLevelId;
+  currentLabel: string;
+  nextLevel: GrowthLevelId | null;
+  nextLabel: string | null;
+  suggestedLevel: GrowthLevelId;
+  suggestedLabel: string;
+  completionPercentage: number;
+  coursesAssigned: number;
+  coursesCompleted: number;
+  eligible: boolean;
+  academicYear: string;
+  hoursCompleted: number;
+  hoursTarget: number;
+  hoursPercent: number;
+  courses: TeacherGrowthProjectionCourse[];
+  assessments: TeacherGrowthProjectionAssessment[];
+  assignments: TeacherGrowthProjectionAssignment[];
+  certificates: TeacherGrowthProjectionCertificate[];
   history: GrowthHistoryEvent[];
 }
 
-export interface GrowthRosterRow {
-  teacherId: string;
-  teacherName: string;
-  branchName: string | null;
-  coursesEnrolled: number;
-  coursesCompleted: number;
-  certificatesActive: number;
-  avgBestPercentage: number | null;
-}
-
-export interface GrowthRosterData {
-  rows: GrowthRosterRow[];
-  /** Arabic description of the enforced scope (for the page header). */
-  scopeLabel: string;
-}
-
-export interface PlatformSchoolRow {
-  schoolId: string;
-  schoolName: string;
-  teachers: number;
-  certificatesIssued: number;
-  certificatesActive: number;
-  assessmentsPassed: number;
-  assignmentsGraded: number;
-}
-
-export interface PlatformGrowthStats {
-  totals: {
-    schools: number;
-    teachers: number;
-    certificatesIssued: number;
-    certificatesActive: number;
-    assessmentsPassed: number;
-    assignmentsGraded: number;
-  };
-  schools: PlatformSchoolRow[];
-}
-
-/* ------------------------------------------------------------------ */
-/* Scope checks                                                         */
-/* ------------------------------------------------------------------ */
-
-async function supervisorCoversTeacher(
-  supervisorId: string,
-  schoolId: string,
-  teacher: { id: string; schoolId: string | null; branchId: string | null }
-): Promise<boolean> {
-  if (teacher.schoolId !== schoolId) return false;
-  const assigned = await db.teacherSupervisorAssignment.findFirst({
-    where: { supervisorId, teacherId: teacher.id },
-    select: { id: true },
+/** Assessments the teacher can actually see (course-bound + school-wide). */
+async function teacherVisibleAssessments(teacherId: string, schoolId: string | null) {
+  return db.assessment.findMany({
+    where: {
+      status: "PUBLISHED",
+      OR: [
+        ...(schoolId ? [{ schoolId }] : []),
+        { course: { completions: { some: { userId: teacherId } } } },
+      ],
+    },
+    select: {
+      id: true,
+      titleAr: true,
+      status: true,
+      attempts: {
+        where: { userId: teacherId },
+        orderBy: { startedAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          percentage: true,
+          passed: true,
+          submittedAt: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
   });
-  if (assigned) return true;
-  if (!teacher.branchId) return false;
-  const branchGrant = await db.supervisorAssignment.findFirst({
-    where: { supervisorId, schoolId, branchId: teacher.branchId },
-    select: { id: true },
-  });
-  return branchGrant !== null;
-}
-
-async function deputyCoversTeacher(
-  deputyId: string,
-  teacher: { schoolId: string | null; branchId: string | null }
-): Promise<boolean> {
-  if (!teacher.schoolId) return false;
-  const grants = await db.deputyGrant.findMany({
-    where: { userId: deputyId },
-    select: { schoolId: true, branchId: true },
-  });
-  return grants.some(
-    (grant) =>
-      grant.schoolId === teacher.schoolId &&
-      (grant.branchId === null || grant.branchId === teacher.branchId)
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Single-teacher projection                                            */
-/* ------------------------------------------------------------------ */
-
-function targetingOf(row: {
-  audienceMode: string;
-  targetTeacherIdsJson: string | null;
-  targetBranchIdsJson: string | null;
-}) {
-  return {
-    audienceMode: row.audienceMode,
-    targetTeacherIds: parseJsonIds(row.targetTeacherIdsJson),
-    targetBranchIds: parseJsonIds(row.targetBranchIdsJson),
-  };
-}
-
-function attemptOutcomeLabel(status: string, percentage: number | null): string {
-  if (status === "PASSED") {
-    return `اجتاز بنسبة ${percentage !== null ? `${percentage}%` : "مكتملة"}`;
-  }
-  if (status === "FAILED") {
-    return `لم يجتز${percentage !== null ? ` (${percentage}%)` : ""}`;
-  }
-  if (status === "NEEDS_REVIEW") return "بانتظار مراجعة يدوية";
-  if (status === "EXPIRED") return "انتهى وقت المحاولة دون تسليم";
-  return "محاولة جارية";
-}
-
-function submissionOutcomeLabel(
-  status: string,
-  scoreTotal: number | null,
-  totalPoints: number,
-  isLate: boolean
-): string {
-  const late = isLate ? " (متأخر)" : "";
-  if (status === "SUBMITTED") return `تم التسليم${late}`;
-  if (status === "UNDER_REVIEW") return `قيد المراجعة${late}`;
-  if (status === "RETURNED") return "أُعيد للتعديل";
-  if (status === "GRADED") {
-    return `تم التقييم — الدرجة ${scoreTotal ?? "—"}/${totalPoints}`;
-  }
-  return status;
 }
 
 export async function getTeacherGrowth(
-  viewer: CertificateViewer,
   teacherId: string
-): Promise<CertificateResult<TeacherGrowthProjection>> {
-  const subject = await db.user.findUnique({
+): Promise<TeacherGrowthProjection | null> {
+  const teacher = await db.user.findUnique({
     where: { id: teacherId },
+    select: growthTeacherSelect,
+  });
+  if (!teacher || teacher.role !== "TEACHER") return null;
+
+  const [rows, hours, history] = await Promise.all([
+    buildGrowthRows([teacher]),
+    teacherHoursSummary(teacherId),
+    teacherGrowthHistory(teacherId, 20),
+  ]);
+  const row = rows[0];
+  if (!row) return null;
+
+  // Assigned published courses (platform-wide + own school), HTML parity.
+  const assignedCourses = await db.course.findMany({
+    where: {
+      status: "PUBLISHED",
+      OR: [{ schoolId: null }, ...(teacher.schoolId ? [{ schoolId: teacher.schoolId }] : [])],
+    },
+    select: { id: true, titleAr: true, estimatedHours: true, status: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const completions = await db.courseCompletion.findMany({
+    where: { userId: teacherId, courseId: { in: assignedCourses.map((course) => course.id) } },
     select: {
-      id: true,
-      name: true,
-      role: true,
-      schoolId: true,
-      branchId: true,
-      isActive: true,
-      branch: { select: { nameAr: true } },
+      courseId: true,
+      completedAt: true,
+      bestPercentage: true,
+      certificateId: true,
     },
   });
-  if (!subject || subject.role !== "TEACHER") {
-    return certificateFail("بيانات النمو المهني غير موجودة", "NOT_FOUND");
-  }
+  const completionByCourse = new Map(completions.map((item) => [item.courseId, item]));
 
-  // ---- role/scope enforcement (server-side) -----------------------
-  if (viewer.role === "TEACHER") {
-    if (viewer.id !== subject.id) {
-      return certificateFail(
-        "لا تملك صلاحية الاطلاع على النمو المهني لمعلم آخر",
-        "FORBIDDEN"
-      );
-    }
-  } else if (viewer.role === "EDUCATIONAL_SUPERVISOR") {
-    const covered = await supervisorCoversTeacher(
-      viewer.id,
-      viewer.schoolId ?? "__none__",
-      subject
-    );
-    if (!covered) {
-      return certificateFail(
-        "لا تملك صلاحية الاطلاع على نمو هذا المعلم — خارج نطاق إشرافك",
-        "FORBIDDEN"
-      );
-    }
-  } else if (viewer.role === "EDUCATIONAL_DEPUTY") {
-    const covered = await deputyCoversTeacher(viewer.id, subject);
-    if (!covered) {
-      return certificateFail(
-        "لا تملك صلاحية الاطلاع على نمو هذا المعلم — خارج نطاق التفويض",
-        "FORBIDDEN"
-      );
-    }
-  } else if (viewer.role === "DEVELOPMENT_OFFICE_MANAGER") {
-    if (!viewer.schoolId || subject.schoolId !== viewer.schoolId) {
-      return certificateFail(
-        "لا تملك صلاحية الاطلاع على نمو هذا المعلم — النطاق المدرسي مختلف",
-        "FORBIDDEN"
-      );
-    }
-  } else {
-    // SUPER_ADMIN deliberately gets aggregates only (no per-teacher
-    // profile view) and any other role is rejected outright.
-    return certificateFail(
-      "العرض التجميعي على مستوى المنصة متاح عبر صفحة الإحصاءات",
-      "FORBIDDEN"
-    );
-  }
-
-  // ---- data loading (all persisted, no duplication) ----------------
-  const enrollments = await db.courseEnrollment.findMany({
-    where: { userId: subject.id },
-    include: {
-      course: {
+  const assessments = await teacherVisibleAssessments(teacherId, teacher.schoolId);
+  const assignments = teacher.schoolId
+    ? await db.assignment.findMany({
+        where: {
+          schoolId: teacher.schoolId,
+          status: { in: ["PUBLISHED", "CLOSED"] },
+          OR: [
+            { audienceMode: "ALL_TEACHERS" },
+            {
+              audienceMode: "TEACHERS",
+              targetTeacherIdsJson: { contains: teacher.id },
+            },
+            ...(teacher.branchId
+              ? [{ audienceMode: "BRANCHES", targetBranchIdsJson: { contains: teacher.branchId } }]
+              : []),
+          ],
+        },
         select: {
           id: true,
           titleAr: true,
           status: true,
-          program: { select: { nameAr: true } },
+          dueAt: true,
+          totalPoints: true,
+          submissions: {
+            where: { teacherId },
+            select: { status: true, submittedAt: true, scoreTotal: true },
+          },
         },
-      },
+        orderBy: { dueAt: "desc" },
+        take: 50,
+      })
+    : [];
+
+  const certificates = await db.certificate.findMany({
+    where: { teacherId },
+    orderBy: { issuedAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      certificateNumber: true,
+      titleAr: true,
+      status: true,
+      issuedAt: true,
     },
-    orderBy: { enrolledAt: "desc" },
   });
-  const courseIds = enrollments.map((enrollment) => enrollment.course.id);
 
-  const [assessments, certificates, schoolAssignments] = await Promise.all([
-    courseIds.length > 0
-      ? db.assessment.findMany({
-          where: { courseId: { in: courseIds }, status: "PUBLISHED" },
-          select: { id: true, titleAr: true, courseId: true },
-          orderBy: { titleAr: "asc" },
-        })
-      : Promise.resolve([]),
-    db.certificate.findMany({
-      where: { teacherId: subject.id },
-      include: {
-        course: { select: { titleAr: true } },
-        program: { select: { nameAr: true } },
-      },
-      orderBy: { issuedAt: "desc" },
+  return {
+    teacher: {
+      id: teacher.id,
+      name: teacher.name,
+      schoolName: teacher.school?.nameAr ?? null,
+      stage: teacher.stage,
+      subject: teacher.subject,
+    },
+    currentLevel: row.currentLevel,
+    currentLabel: growthLevelLabel(row.currentLevel),
+    nextLevel: row.nextLevel,
+    nextLabel: row.nextLevel ? growthLevelLabel(row.nextLevel) : null,
+    suggestedLevel: row.suggestedLevel,
+    suggestedLabel: growthLevelLabel(row.suggestedLevel),
+    completionPercentage: row.stats.percent,
+    coursesAssigned: row.stats.assigned,
+    coursesCompleted: row.stats.completed,
+    eligible: row.eligible,
+    academicYear: hours.academicYear,
+    hoursCompleted: hours.hours,
+    hoursTarget: hours.target,
+    hoursPercent: hours.percent,
+    courses: assignedCourses.map((course) => {
+      const completion = completionByCourse.get(course.id);
+      return {
+        id: course.id,
+        titleAr: course.titleAr,
+        hours: course.estimatedHours,
+        status: course.status,
+        completed: Boolean(completion),
+        completedAt: completion?.completedAt ?? null,
+        bestPercentage: completion?.bestPercentage ?? null,
+        certificateId: completion?.certificateId ?? null,
+      };
     }),
-    subject.schoolId
-      ? db.assignment.findMany({
-          where: { schoolId: subject.schoolId, status: { in: ["PUBLISHED", "CLOSED"] } },
-          include: {
-            course: { select: { titleAr: true } },
-            submissions: { where: { teacherId: subject.id } },
-          },
-          orderBy: { dueAt: "asc" },
-        })
-      : Promise.resolve([]),
-  ]);
-
-  const assessmentIds = assessments.map((assessment) => assessment.id);
-  const attempts =
-    assessmentIds.length > 0
-      ? await db.assessmentAttempt.findMany({
-          where: { userId: subject.id, assessmentId: { in: assessmentIds } },
-          select: {
-            assessmentId: true,
-            status: true,
-            passed: true,
-            percentage: true,
-            submittedAt: true,
-            updatedAt: true,
-          },
-        })
-      : [];
-
-  const attemptsByAssessment = new Map<string, typeof attempts>();
-  for (const attempt of attempts) {
-    const list = attemptsByAssessment.get(attempt.assessmentId);
-    if (list) list.push(attempt);
-    else attemptsByAssessment.set(attempt.assessmentId, [attempt]);
-  }
-
-  const courseById = new Map(enrollments.map((enrollment) => [enrollment.course.id, enrollment.course]));
-  // Where-clause guarantees bound courses; explicit type refinement
-  // (Assessment.courseId is nullable in the schema).
-  const boundAssessments: { id: string; titleAr: string; courseId: string }[] = [];
-  for (const assessment of assessments) {
-    if (assessment.courseId !== null) {
-      boundAssessments.push({
+    assessments: assessments.map((assessment) => {
+      const graded = assessment.attempts.filter(
+        (attempt) => attempt.percentage !== null
+      );
+      const best = graded.reduce<number | null>(
+        (best, attempt) =>
+          best === null || (attempt.percentage ?? 0) > best
+            ? (attempt.percentage ?? 0)
+            : best,
+        null
+      );
+      return {
         id: assessment.id,
         titleAr: assessment.titleAr,
-        courseId: assessment.courseId,
-      });
-    }
-  }
-  const assessmentsByCourse = new Map<string, { id: string; titleAr: string }[]>();
-  for (const assessment of boundAssessments) {
-    const list = assessmentsByCourse.get(assessment.courseId);
-    if (list) list.push(assessment);
-    else assessmentsByCourse.set(assessment.courseId, [assessment]);
-  }
-
-  // ---- course rows -------------------------------------------------
-  const courseRows: GrowthCourseRow[] = enrollments.map((enrollment) => {
-    const courseAssessments = assessmentsByCourse.get(enrollment.course.id) ?? [];
-    const standings = summarizeAssessments(
-      courseAssessments,
-      courseAssessments.flatMap((assessment) => {
-        const list = attemptsByAssessment.get(assessment.id);
-        return (list ?? []).map((attempt) => ({
-          assessmentId: attempt.assessmentId,
-          status: attempt.status,
-          passed: attempt.passed,
-          percentage: attempt.percentage,
-        }));
-      })
-    );
-    const passedCount = standings.filter((standing) => standing.passed).length;
-    const activityDates = courseAssessments.flatMap((assessment) => {
-      const list = attemptsByAssessment.get(assessment.id);
-      return (list ?? []).map(
-        (attempt) => attempt.submittedAt ?? attempt.updatedAt
-      );
-    });
-    const lastActivityAt =
-      activityDates.length > 0
-        ? activityDates.reduce((latest, current) =>
-            current.getTime() > latest.getTime() ? current : latest
-          )
-        : null;
-    return {
-      courseId: enrollment.course.id,
-      courseTitle: enrollment.course.titleAr,
-      programName: enrollment.course.program?.nameAr ?? null,
-      enrolledAt: enrollment.enrolledAt,
-      // Same rule as certificate eligibility: every published assessment
-      // bound to the course has a passed attempt (vacuously true when
-      // the course has none — no invented completion signals).
-      requirementsMet: standings.every((standing) => standing.passed),
-      assessmentsTotal: standings.length,
-      assessmentsPassed: passedCount,
-      lastActivityAt,
-    };
-  });
-
-  // ---- assessment rows ---------------------------------------------
-  const assessmentRows: GrowthAssessmentRow[] = boundAssessments.map((assessment) => {
-    const own = attemptsByAssessment.get(assessment.id) ?? [];
-    const standings = summarizeAssessments([assessment], own);
-    const standing = standings[0];
-    const submittedDates = own
-      .map((attempt) => attempt.submittedAt)
-      .filter((date): date is Date => date !== null);
-    return {
-      assessmentId: assessment.id,
-      titleAr: assessment.titleAr,
-      courseTitle: courseById.get(assessment.courseId)?.titleAr ?? "—",
-      attemptsCount: own.length,
-      bestPercentage: standing.bestPercentage,
-      passed: standing.passed,
-      lastSubmittedAt:
-        submittedDates.length > 0
-          ? submittedDates.reduce((latest, current) =>
-              current.getTime() > latest.getTime() ? current : latest
-            )
-          : null,
-    };
-  });
-
-  // ---- assignment rows (Phase 7 data, server-side targeting) -------
-  const assignmentRows: GrowthAssignmentRow[] = schoolAssignments
-    .filter((row) =>
-      isTeacherTargeted(
-        targetingOf(row),
-        subject as { id: string; branchId: string | null }
-      )
-    )
-    .map((row) => {
-      const submission = row.submissions[0];
-      const graded = submission?.status === "GRADED";
-      return {
-        id: row.id,
-        titleAr: row.titleAr,
-        courseTitle: row.course?.titleAr ?? null,
-        dueAt: row.dueAt,
-        myStatus: submission?.status ?? null,
-        isLate: submission?.isLate ?? null,
-        scoreTotal: graded ? (submission?.scoreTotal ?? null) : null,
-        totalPoints: row.totalPoints,
+        status: assessment.status,
+        attempts: assessment.attempts.length,
+        bestPercentage: best,
+        passed: graded.some((attempt) => attempt.passed === true),
+        lastAttemptAt: assessment.attempts[0]?.submittedAt ?? null,
       };
-    });
-
-  // ---- certificate rows ---------------------------------------------
-  const certificateRows: GrowthCertificateRow[] = certificates.map((certificate) => ({
-    id: certificate.id,
-    certificateNumber: certificate.certificateNumber,
-    titleAr: certificate.titleAr,
-    contentTitle: certificate.course?.titleAr ?? certificate.program?.nameAr ?? null,
-    issuedAt: certificate.issuedAt,
-    effectiveStatus: effectiveStatusOf(certificate),
-  }));
-
-  // ---- totals --------------------------------------------------------
-  const bestPercentages = assessmentRows
-    .map((row) => row.bestPercentage)
-    .filter((value): value is number => value !== null);
-  const courseProgresses = courseRows
-    .map((row) => {
-      if (row.requirementsMet) return 100;
-      if (row.assessmentsTotal > 0) {
-        return Math.round((row.assessmentsPassed / row.assessmentsTotal) * 100);
-      }
-      return null;
-    })
-    .filter((value): value is number => value !== null);
-
-  const totals: TeacherGrowthTotals = {
-    coursesEnrolled: courseRows.length,
-    coursesCompleted: courseRows.filter((row) => row.requirementsMet).length,
-    assessmentsPassed: assessmentRows.filter((row) => row.passed).length,
-    assessmentsTotal: assessmentRows.length,
-    assignmentsTargeted: assignmentRows.length,
-    assignmentsGraded: assignmentRows.filter((row) => row.myStatus === "GRADED").length,
-    certificatesActive: certificateRows.filter(
-      (row) => row.effectiveStatus === "ISSUED"
-    ).length,
-    avgBestPercentage:
-      bestPercentages.length > 0
-        ? Math.round(
-            bestPercentages.reduce((sum, value) => sum + value, 0) /
-              bestPercentages.length
-          )
-        : null,
-    overallProgressPercent:
-      courseProgresses.length > 0
-        ? Math.round(
-            courseProgresses.reduce((sum, value) => sum + value, 0) /
-              courseProgresses.length
-          )
-        : null,
-  };
-
-  // ---- chronological history (merged, capped) -----------------------
-  const history: GrowthHistoryEvent[] = [];
-
-  for (const enrollment of enrollments) {
-    history.push({
-      date: enrollment.enrolledAt,
-      type: "ENROLLMENT",
-      label: `التحاق بدورة «${enrollment.course.titleAr}»`,
-      detail: null,
-    });
-  }
-
-  for (const assessment of assessments) {
-    const own = attemptsByAssessment.get(assessment.id) ?? [];
-    for (const attempt of own) {
-      if (attempt.status === "IN_PROGRESS") continue;
-      history.push({
-        date: attempt.submittedAt ?? attempt.updatedAt,
-        type: "ASSESSMENT",
-        label: `تقييم «${assessment.titleAr}»`,
-        detail: attemptOutcomeLabel(attempt.status, attempt.percentage),
-      });
-    }
-  }
-
-  for (const row of schoolAssignments) {
-    if (!isTeacherTargeted(targetingOf(row), subject as { id: string; branchId: string | null })) {
-      continue;
-    }
-    const submission = row.submissions[0];
-    if (!submission || submission.status === "DRAFT") continue;
-    history.push({
-      date: submission.lastSubmittedAt ?? submission.updatedAt,
-      type: "ASSIGNMENT",
-      label: `تكليف «${row.titleAr}»`,
-      detail: submissionOutcomeLabel(
-        submission.status,
-        submission.status === "GRADED" ? submission.scoreTotal : null,
-        row.totalPoints,
-        submission.isLate
-      ),
-    });
-  }
-
-  for (const certificate of certificates) {
-    history.push({
-      date: certificate.issuedAt,
-      type: "CERTIFICATE",
-      label: `إصدار شهادة «${certificate.titleAr}»`,
-      detail: certificate.status === "REVOKED" ? "أُلغيت لاحقًا" : "صادرة",
-    });
-  }
-
-  history.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-  return {
-    ok: true,
-    data: {
-      teacher: {
-        id: subject.id,
-        name: subject.name,
-        branchName: subject.branch?.nameAr ?? null,
-        schoolId: subject.schoolId,
-      },
-      totals,
-      courses: courseRows,
-      assessments: assessmentRows,
-      assignments: assignmentRows,
-      certificates: certificateRows,
-      history: history.slice(0, GROWTH_HISTORY_LIMIT),
-    },
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/* Growth roster (manager / supervisor / deputy)                        */
-/* ------------------------------------------------------------------ */
-
-interface RosterTeacherRow {
-  id: string;
-  name: string;
-  branchId: string | null;
-  branchName: string | null;
-}
-
-async function loadRosterTeachers(ctx: CertificateActor): Promise<RosterTeacherRow[]> {
-  if (ctx.role === "DEVELOPMENT_OFFICE_MANAGER") {
-    const teachers = await db.user.findMany({
-      where: { schoolId: ctx.schoolId, role: "TEACHER", isActive: true },
-      select: { id: true, name: true, branchId: true, branch: { select: { nameAr: true } } },
-      orderBy: { name: "asc" },
-      take: GROWTH_ROSTER_LIMIT,
-    });
-    return teachers.map((teacher) => ({
-      id: teacher.id,
-      name: teacher.name,
-      branchId: teacher.branchId,
-      branchName: teacher.branch?.nameAr ?? null,
-    }));
-  }
-
-  if (ctx.role === "EDUCATIONAL_SUPERVISOR") {
-    const [assigned, branchGrants] = await Promise.all([
-      db.teacherSupervisorAssignment.findMany({
-        where: { supervisorId: ctx.id },
-        select: { teacherId: true },
-      }),
-      db.supervisorAssignment.findMany({
-        where: { supervisorId: ctx.id },
-        select: { branchId: true },
-      }),
-    ]);
-    const assignedIds = assigned.map((row) => row.teacherId);
-    const branchIds = branchGrants.map((row) => row.branchId);
-    const teachers = await db.user.findMany({
-      where: {
-        schoolId: ctx.schoolId,
-        role: "TEACHER",
-        isActive: true,
-        OR: [{ id: { in: assignedIds } }, { branchId: { in: branchIds } }],
-      },
-      select: { id: true, name: true, branchId: true, branch: { select: { nameAr: true } } },
-      orderBy: { name: "asc" },
-      take: GROWTH_ROSTER_LIMIT,
-    });
-    return teachers.map((teacher) => ({
-      id: teacher.id,
-      name: teacher.name,
-      branchId: teacher.branchId,
-      branchName: teacher.branch?.nameAr ?? null,
-    }));
-  }
-
-  // EDUCATIONAL_DEPUTY — teachers covered by persisted grants.
-  const grants = await db.deputyGrant.findMany({
-    where: { userId: ctx.id },
-    select: { schoolId: true, branchId: true },
-  });
-  if (grants.length === 0) return [];
-  const schoolIds = Array.from(new Set(grants.map((grant) => grant.schoolId)));
-  const candidates = await db.user.findMany({
-    where: { schoolId: { in: schoolIds }, role: "TEACHER", isActive: true },
-    select: { id: true, name: true, schoolId: true, branchId: true, branch: { select: { nameAr: true } } },
-    orderBy: { name: "asc" },
-    take: GROWTH_ROSTER_LIMIT,
-  });
-  return candidates
-    .filter((teacher) =>
-      grants.some(
-        (grant) =>
-          grant.schoolId === teacher.schoolId &&
-          (grant.branchId === null || grant.branchId === teacher.branchId)
-      )
-    )
-    .map((teacher) => ({
-      id: teacher.id,
-      name: teacher.name,
-      branchId: teacher.branchId,
-      branchName: teacher.branch?.nameAr ?? null,
-    }));
-}
-
-/**
- * Batched roster summary — 5 grouped queries total regardless of the
- * teacher count. "Completed" reuses the certificate eligibility rule.
- */
-export async function listGrowthRoster(
-  ctx: CertificateActor
-): Promise<CertificateResult<GrowthRosterData>> {
-  if (
-    ctx.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
-    ctx.role !== "EDUCATIONAL_SUPERVISOR" &&
-    ctx.role !== "EDUCATIONAL_DEPUTY"
-  ) {
-    return certificateFail(
-      "قائمة النمو المهني متاحة لمديري المكاتب والمشرفين والوكالات التربوية فقط",
-      "FORBIDDEN"
-    );
-  }
-  if (ctx.role !== "EDUCATIONAL_DEPUTY" && !ctx.schoolId) {
-    return certificateFail("النطاق المدرسي غير محدد", "FORBIDDEN");
-  }
-
-  const teachers = await loadRosterTeachers(ctx);
-  const teacherIds = teachers.map((teacher) => teacher.id);
-  const scopeLabel =
-    ctx.role === "DEVELOPMENT_OFFICE_MANAGER"
-      ? "جميع معلمي مدرستك"
-      : ctx.role === "EDUCATIONAL_SUPERVISOR"
-        ? "المعلمون ضمن نطاق إشرافك"
-        : "المعلمون ضمن نطاق التفويض";
-
-  if (teacherIds.length === 0) {
-    return { ok: true, data: { rows: [], scopeLabel } };
-  }
-
-  const enrollments = await db.courseEnrollment.findMany({
-    where: { userId: { in: teacherIds } },
-    select: { userId: true, courseId: true },
-  });
-  const enrolledCourseIds = Array.from(
-    new Set(enrollments.map((enrollment) => enrollment.courseId))
-  );
-
-  const assessments =
-    enrolledCourseIds.length > 0
-      ? await db.assessment.findMany({
-          where: { courseId: { in: enrolledCourseIds }, status: "PUBLISHED" },
-          select: { id: true, courseId: true },
-        })
-      : [];
-  // Explicit refinement (Assessment.courseId is nullable in the
-  // schema; the where-clause guarantees bound courses).
-  const boundAssessments: { id: string; courseId: string }[] = [];
-  for (const assessment of assessments) {
-    if (assessment.courseId !== null) {
-      boundAssessments.push({ id: assessment.id, courseId: assessment.courseId });
-    }
-  }
-  const [attempts, certificates] = await Promise.all([
-    boundAssessments.length > 0
-      ? db.assessmentAttempt.findMany({
-          where: {
-            userId: { in: teacherIds },
-            assessmentId: {
-              in: boundAssessments.map((assessment) => assessment.id),
-            },
-          },
-          select: {
-            userId: true,
-            assessmentId: true,
-            status: true,
-            passed: true,
-            percentage: true,
-          },
-        })
-      : Promise.resolve([]),
-    db.certificate.findMany({
-      where: { teacherId: { in: teacherIds } },
-      select: {
-        teacherId: true,
-        status: true,
-        expiresAt: true,
-      },
     }),
-  ]);
-
-  const assessmentsByCourse = new Map<string, string[]>();
-  for (const assessment of boundAssessments) {
-    const list = assessmentsByCourse.get(assessment.courseId);
-    if (list) list.push(assessment.id);
-    else assessmentsByCourse.set(assessment.courseId, [assessment.id]);
-  }
-  const passedPairs = new Set<string>();
-  const percentageByUser = new Map<string, number[]>();
-  for (const attempt of attempts) {
-    if (attempt.passed === true || attempt.status === "PASSED") {
-      passedPairs.add(`${attempt.userId}:${attempt.assessmentId}`);
-    }
-    if (typeof attempt.percentage === "number") {
-      const list = percentageByUser.get(attempt.userId);
-      if (list) list.push(attempt.percentage);
-      else percentageByUser.set(attempt.userId, [attempt.percentage]);
-    }
-  }
-  const enrollmentsByUser = new Map<string, string[]>();
-  for (const enrollment of enrollments) {
-    const list = enrollmentsByUser.get(enrollment.userId);
-    if (list) list.push(enrollment.courseId);
-    else enrollmentsByUser.set(enrollment.userId, [enrollment.courseId]);
-  }
-  const activeCertsByUser = new Map<string, number>();
-  for (const certificate of certificates) {
-    if (effectiveStatusOf(certificate) === "ISSUED") {
-      activeCertsByUser.set(
-        certificate.teacherId,
-        (activeCertsByUser.get(certificate.teacherId) ?? 0) + 1
-      );
-    }
-  }
-
-  const rows: GrowthRosterRow[] = teachers.map((teacher) => {
-    const courseIds = enrollmentsByUser.get(teacher.id) ?? [];
-    const completed = courseIds.filter((courseId) => {
-      const requiredIds = assessmentsByCourse.get(courseId) ?? [];
-      return requiredIds.every((assessmentId) =>
-        passedPairs.has(`${teacher.id}:${assessmentId}`)
-      );
-    }).length;
-    const percentages = percentageByUser.get(teacher.id) ?? [];
-    return {
-      teacherId: teacher.id,
-      teacherName: teacher.name,
-      branchName: teacher.branchName,
-      coursesEnrolled: courseIds.length,
-      coursesCompleted: completed,
-      certificatesActive: activeCertsByUser.get(teacher.id) ?? 0,
-      avgBestPercentage:
-        percentages.length > 0
-          ? Math.round(
-              percentages.reduce((sum, value) => sum + value, 0) / percentages.length
-            )
-          : null,
-    };
-  });
-
-  return { ok: true, data: { rows, scopeLabel } };
-}
-
-/* ------------------------------------------------------------------ */
-/* Platform-wide aggregate (SUPER_ADMIN, read-only)                     */
-/* ------------------------------------------------------------------ */
-
-export async function getPlatformGrowthStats(
-  ctx: CertificateActor
-): Promise<CertificateResult<PlatformGrowthStats>> {
-  if (ctx.role !== "SUPER_ADMIN") {
-    return certificateFail(
-      "إحصاءات النمو على مستوى المنصة متاحة للإدارة العامة فقط",
-      "FORBIDDEN"
-    );
-  }
-
-  const now = new Date();
-  const [schools, teachers, certGroups, activeCertGroups, attemptsPassed, gradedGroups] =
-    await Promise.all([
-      db.school.findMany({
-        select: { id: true, nameAr: true },
-        orderBy: { nameAr: "asc" },
-        take: PLATFORM_SCHOOLS_LIMIT,
-      }),
-      db.user.findMany({
-        where: { role: "TEACHER", isActive: true },
-        select: { id: true, schoolId: true },
-      }),
-      db.certificate.groupBy({ by: ["schoolId"], _count: { _all: true } }),
-      db.certificate.groupBy({
-        by: ["schoolId"],
-        where: { status: "ISSUED", OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] },
-        _count: { _all: true },
-      }),
-      db.assessmentAttempt.findMany({
-        where: { passed: true },
-        select: { userId: true },
-      }),
-      db.assignmentSubmission.groupBy({
-        by: ["schoolId"],
-        where: { status: "GRADED" },
-        _count: { _all: true },
-      }),
-    ]);
-
-  const teachersBySchool = new Map<string, number>();
-  const teacherSchoolById = new Map<string, string>();
-  for (const teacher of teachers) {
-    if (!teacher.schoolId) continue;
-    teachersBySchool.set(
-      teacher.schoolId,
-      (teachersBySchool.get(teacher.schoolId) ?? 0) + 1
-    );
-    teacherSchoolById.set(teacher.id, teacher.schoolId);
-  }
-
-  const passedBySchool = new Map<string, number>();
-  for (const attempt of attemptsPassed) {
-    const schoolId = teacherSchoolById.get(attempt.userId);
-    if (schoolId) {
-      passedBySchool.set(schoolId, (passedBySchool.get(schoolId) ?? 0) + 1);
-    }
-  }
-
-  const certBySchool = new Map(
-    certGroups.map((group) => [group.schoolId, group._count._all])
-  );
-  const activeCertBySchool = new Map(
-    activeCertGroups.map((group) => [group.schoolId, group._count._all])
-  );
-  const gradedBySchool = new Map(
-    gradedGroups.map((group) => [group.schoolId, group._count._all])
-  );
-
-  const schoolRows: PlatformSchoolRow[] = schools.map((school) => ({
-    schoolId: school.id,
-    schoolName: school.nameAr,
-    teachers: teachersBySchool.get(school.id) ?? 0,
-    certificatesIssued: certBySchool.get(school.id) ?? 0,
-    certificatesActive: activeCertBySchool.get(school.id) ?? 0,
-    assessmentsPassed: passedBySchool.get(school.id) ?? 0,
-    assignmentsGraded: gradedBySchool.get(school.id) ?? 0,
-  }));
-
-  return {
-    ok: true,
-    data: {
-      totals: {
-        schools: schools.length,
-        teachers: teachers.length,
-        certificatesIssued: schoolRows.reduce((sum, row) => sum + row.certificatesIssued, 0),
-        certificatesActive: schoolRows.reduce((sum, row) => sum + row.certificatesActive, 0),
-        assessmentsPassed: schoolRows.reduce((sum, row) => sum + row.assessmentsPassed, 0),
-        assignmentsGraded: schoolRows.reduce((sum, row) => sum + row.assignmentsGraded, 0),
-      },
-      schools: schoolRows,
-    },
+    assignments: assignments.map((assignment) => ({
+      id: assignment.id,
+      titleAr: assignment.titleAr,
+      status: assignment.status,
+      dueAt: assignment.dueAt,
+      submissionStatus: assignment.submissions[0]?.status ?? null,
+      submittedAt: assignment.submissions[0]?.submittedAt ?? null,
+      score: assignment.submissions[0]?.scoreTotal ?? null,
+      totalPoints: assignment.totalPoints,
+    })),
+    certificates: certificates.map((certificate) => ({
+      id: certificate.id,
+      certificateNumber: certificate.certificateNumber,
+      titleAr: certificate.titleAr,
+      status: certificate.status,
+      issuedAt: certificate.issuedAt,
+    })),
+    history,
   };
 }

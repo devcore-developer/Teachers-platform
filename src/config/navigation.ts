@@ -1,4 +1,5 @@
 import {
+  Archive,
   Award,
   BarChart3,
   BookOpen,
@@ -8,8 +9,11 @@ import {
   GraduationCap,
   Landmark,
   LayoutDashboard,
+  MessageSquare,
   MonitorPlay,
   Settings,
+  ShieldCheck,
+  TrendingUp,
   UserCheck,
   UserRound,
   Users,
@@ -21,14 +25,10 @@ import type { NavItem } from "@/lib/types";
 /**
  * Central navigation configuration.
  *
- * Every item below resolves to a real, implemented module route
- * (audited against src/app/**). Teacher management lives inside the
- * users directory (roles, statuses, supervisor assignments, school and
- * branch filters) — the dedicated /teachers placeholder route now
- * redirects there, so no duplicate sidebar entry is kept for it.
- *
- * The only intentionally-incomplete module left is "settings", which
- * keeps its honest "قريباً" badge until its phase begins.
+ * Phase 2 introduced real URL routes: every item now resolves to an
+ * actual page. "Schools & branches" is the first fully implemented
+ * administrative module; the remaining items render a clearly labelled
+ * placeholder until their phases begin.
  */
 export const navItems: NavItem[] = [
   {
@@ -60,6 +60,15 @@ export const navItems: NavItem[] = [
     label: "دليل المستخدمين",
     href: "/users",
     description: "حسابات المنصة: الأدوار والحالات والإسنادات داخل نطاق صلاحيتك.",
+    icon: Users,
+    plannedFeatures: [],
+  },
+  {
+    id: "teachers",
+    label: "إدارة المعلمين",
+    href: "/teachers",
+    description:
+      "السجل المهني للمعلمين: التصنيف والساعات والشهادات، التعديل الإداري، واستيراد الإسنادات من Excel.",
     icon: Users,
     plannedFeatures: [],
   },
@@ -109,7 +118,12 @@ export const navItems: NavItem[] = [
     href: "/assignments",
     description: "التكليفات التربوية والمتابعات المعلقة وحالتها.",
     icon: ClipboardList,
-    plannedFeatures: [],
+    badge: "قريباً",
+    plannedFeatures: [
+      "إسناد التكليفات التربوية للمعلمين ومتابعة تنفيذها",
+      "سجل المتابعات المعلقة وتواريخ استحقاقها",
+      "إشعارات التذكير بالمتابعات المتأخرة",
+    ],
   },
   {
     id: "certificates",
@@ -117,13 +131,19 @@ export const navItems: NavItem[] = [
     href: "/certificates",
     description: "إصدار الشهادات للمشاركين والتحقق من صحتها.",
     icon: Award,
-    plannedFeatures: [],
+    badge: "قريباً",
+    plannedFeatures: [
+      "إصدار شهادات إتمام البرامج التدريبية",
+      "التحقق من صحة الشهادة عبر رمز فريد",
+      "أرشيف الشهادات الصادرة لكل معلم",
+    ],
   },
   {
     id: "reports",
     label: "التقارير",
     href: "/reports",
-    description: "تقارير تحليلية عن التدريب والمشاركة وأثرها.",
+    description:
+      "تقارير حقيقية من قاعدة البيانات: الساعات السنوية وهدف 35 ساعة، النمو المهني، الشهادات — مع تصدير CSV/JSON وطباعة.",
     icon: BarChart3,
     plannedFeatures: [],
   },
@@ -148,6 +168,41 @@ export const navItems: NavItem[] = [
       "الإعدادات العامة للمنصة",
     ],
   },
+  {
+    id: "messages",
+    label: "الرسائل",
+    href: "/messages",
+    description:
+      "رسائل المشرفين والمكتب — استلم رسائلك، وأرسل توجيهاتك المهنية للمعلمين داخل المنصة.",
+    icon: MessageSquare,
+    plannedFeatures: [],
+  },
+  {
+    id: "account-security",
+    label: "أمان الحساب",
+    href: "/account-security",
+    description: "تغيير كلمة المرور والبريد الإلكتروني بحماية كاملة وجلسات آمنة.",
+    icon: ShieldCheck,
+    plannedFeatures: [],
+  },
+  {
+    id: "training-archive",
+    label: "السجل التدريبي السنوي",
+    href: "/training-archive",
+    description:
+      "بيانات التدريب للعام الدراسي الحالي مع هدف 35 ساعة والأرشفة السنوية دون فقد أي بيانات.",
+    icon: Archive,
+    plannedFeatures: [],
+  },
+  {
+    id: "growth",
+    label: "النمو المهني",
+    href: "/supervision/growth",
+    description:
+      "تصنيف معلميك من T0 إلى T5 واعتماد انتقالاتهم المهنية وفق شرط 60% — وإرسال رسالة للمعلم.",
+    icon: TrendingUp,
+    plannedFeatures: [],
+  },
 ];
 
 /** Find a nav item by its stable id. */
@@ -166,7 +221,7 @@ export function isNavItemActive(pathname: string, href: string): boolean {
 }
 
 /**
- * Single best-matching item id for a pathname: the longest href wins.
+ * Resolves the ONE active nav item for a pathname (longest href wins).
  * Prevents double highlighting on nested routes — e.g. inside
  * /academy/manage/12 only "course-management" is active, not its
  * parent "academy" too. Returns null when nothing matches.

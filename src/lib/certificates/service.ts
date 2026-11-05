@@ -76,6 +76,7 @@ import {
   type CertificateResult,
 } from "@/lib/validation/certificates";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { resolveSchoolSignatory } from "@/lib/certificates/signatory";
 
 export type { CertificateErrorCode, CertificateResult } from "@/lib/validation/certificates";
 
@@ -199,6 +200,12 @@ export interface CertificateView {
   contentSubtitle: string | null;
   issuerName: string | null;
   issuerRoleLabel: string | null;
+  /**
+   * School signatory snapshot captured at ISSUANCE time (the active
+   * SCHOOL_MANAGER of the issuing school). Null for legacy certificates
+   * issued before the snapshot existed — they keep rendering unchanged.
+   */
+  schoolSignatory: { name: string; title: string } | null;
   revocation: { at: Date; reason: string; byName: string | null } | null;
   /** Parsed criteria snapshot (null for legacy rows / parse failures). */
   snapshot: {
@@ -716,6 +723,18 @@ export async function issueCertificate(
     );
   }
 
+  // School signatory snapshot (Part 3): the certificate is signed by the
+  // ACTIVE SCHOOL_MANAGER of the issuing school, resolved server-side and
+  // captured AT ISSUANCE time — never recomputed later, never hardcoded,
+  // never a fallback name. No active manager -> issuance is BLOCKED.
+  const signatory = await resolveSchoolSignatory(ctx.schoolId);
+  if (!signatory) {
+    return certificateFail(
+      "لا يمكن إصدار الشهادة — لا يوجد مدير مدرسة نشط لتوقيعها. عيّن مديرًا للمدرسة أولًا",
+      "NOT_ELIGIBLE"
+    );
+  }
+
   // Sensible defaults; the issuer may override via validated input.
   const typeLabel = CERT_CONTENT_TYPE_LABELS[snapshot.type];
   const titleAr = input.titleAr ?? `شهادة إتمام ${typeLabel} «${snapshot.titleAr}»`;
@@ -763,6 +782,8 @@ export async function issueCertificate(
             issuedById: ctx.id,
             issuerRoleLabel: ISSUER_ROLE_LABELS[ctx.role] ?? null,
             criteriaSnapshotJson: criteriaSnapshot,
+            schoolSignatoryName: signatory.name,
+            schoolSignatoryTitle: signatory.title,
           },
         });
         await tx.certificateEvent.create({
@@ -1073,6 +1094,7 @@ export async function getCertificateView(
     // read-only platform-wide access — allowed
   } else if (
     viewer.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    viewer.role === "SCHOOL_MANAGER" ||
     viewer.role === "EDUCATIONAL_SUPERVISOR" ||
     viewer.role === "EDUCATIONAL_DEPUTY"
   ) {
@@ -1125,6 +1147,10 @@ export async function getCertificateView(
             : null,
       issuerName: row.issuedBy?.name ?? null,
       issuerRoleLabel: row.issuerRoleLabel,
+      schoolSignatory:
+        row.schoolSignatoryName && row.schoolSignatoryTitle
+          ? { name: row.schoolSignatoryName, title: row.schoolSignatoryTitle }
+          : null,
       revocation,
       snapshot: parseSnapshot(row.criteriaSnapshotJson),
       events: row.events.map((event) => ({
@@ -1230,15 +1256,18 @@ export async function getCertificateMetrics(
 ): Promise<CertificateResult<CertificateMetrics>> {
   if (
     ctx.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    ctx.role !== "SCHOOL_MANAGER" &&
     ctx.role !== "SUPER_ADMIN"
   ) {
     return certificateFail(
-      "إحصاءات الشهادات متاحة لمديري مكاتب التطوير والإدارة العامة فقط",
+      "إحصاءات الشهادات متاحة لمديري مكاتب التطوير ومديري المدارس والإدارة العامة فقط",
       "FORBIDDEN"
     );
   }
-  const schoolScope = ctx.role === "DEVELOPMENT_OFFICE_MANAGER" ? ctx.schoolId : null;
-  if (ctx.role === "DEVELOPMENT_OFFICE_MANAGER" && !schoolScope) {
+  const isSchoolScoped =
+    ctx.role === "DEVELOPMENT_OFFICE_MANAGER" || ctx.role === "SCHOOL_MANAGER";
+  const schoolScope = isSchoolScoped ? ctx.schoolId : null;
+  if (isSchoolScoped && !schoolScope) {
     return certificateFail("النطاق المدرسي غير محدد", "FORBIDDEN");
   }
 

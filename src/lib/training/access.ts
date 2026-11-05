@@ -22,9 +22,18 @@ export interface ScopedRecord {
   schoolId: string | null;
 }
 
-/** Administrative pair allowed to manage programs/courses/content. */
+/**
+ * Administrative trio allowed to manage programs/courses/content.
+ * SCHOOL_MANAGER manages its OWN school's records only — the fence is
+ * structural in `trainingScopeError` below (platform-wide records stay
+ * SUPER_ADMIN-only).
+ */
 export function canManageTraining(role: string): boolean {
-  return role === "SUPER_ADMIN" || role === "DEVELOPMENT_OFFICE_MANAGER";
+  return (
+    role === "SUPER_ADMIN" ||
+    role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    role === "SCHOOL_MANAGER"
+  );
 }
 
 /**
@@ -71,7 +80,10 @@ export interface ScopeRejection {
  * `schoolScopeError` semantics, extended for nullable school scope):
  *   SUPER_ADMIN                -> any record (incl. platform-wide)
  *   DEVELOPMENT_OFFICE_MANAGER -> only records owned by their school
+ *   SCHOOL_MANAGER             -> only records owned by their school
  *   anything else              -> always rejected (defense in depth)
+ * Platform-wide records (schoolId null) can never be managed by a
+ * school-scoped role — no exceptions.
  */
 export function trainingScopeError(
   ctx: AdminContext,
@@ -79,7 +91,8 @@ export function trainingScopeError(
 ): ScopeRejection | null {
   if (ctx.role === "SUPER_ADMIN") return null;
   if (
-    ctx.role === "DEVELOPMENT_OFFICE_MANAGER" &&
+    (ctx.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+      ctx.role === "SCHOOL_MANAGER") &&
     recordSchoolId !== null &&
     recordSchoolId === ctx.schoolId
   ) {
