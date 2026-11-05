@@ -1,14 +1,29 @@
-// Manarat Qurtubah — Phase 2 data model
-// SQLite for the development phase; the same schema maps to PostgreSQL
-// later without model changes (only the datasource provider changes).
+// Manarat Qurtubah — data model (production: PostgreSQL on Neon).
+//
+// The schema was designed database-agnostic from day one: no native
+// enums (canonical English string keys validated with Zod on every
+// write), JSON payloads kept in text columns, cuid() string primary
+// keys, no autoincrement integers — so the PostgreSQL cutover required
+// NO model changes, only the datasource provider below.
+//
+// Connection layout (Neon):
+//   DATABASE_URL          pooled connection string (…-pooler…, with
+//                         pgbouncer=true) — used by the application at
+//                         runtime (Next.js server / serverless).
+//   DIRECT_DATABASE_URL   direct (non-pooled) connection string — used
+//                         ONLY by Prisma Migrate (migrate deploy /
+//                         migrate diff), because DDL must never run
+//                         through PgBouncer transaction pooling.
+// Local development uses the same two variables; see .env.example.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 /**
@@ -706,7 +721,7 @@ model AssessmentAttempt {
   /// (audit trail + per-question feedback after review).
   reviewScoresJson String?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    DateTime  @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   user       User       @relation("AttemptOwner", fields: [userId], references: [id], onDelete: Restrict)
@@ -1157,6 +1172,7 @@ model SurveyResponse {
   /// Null for anonymous surveys — identity is never persisted.
   respondentId String?
   respondent   User?   @relation("SurveyRespondent", fields: [respondentId], references: [id], onDelete: SetNull)
+
   /// Pseudonymous pairing key (SHA-256 of linkPairCode + user id +
   /// pepper) — present ONLY for anonymous surveys with linking enabled.
   /// Used exclusively for aggregate pre/post matching.

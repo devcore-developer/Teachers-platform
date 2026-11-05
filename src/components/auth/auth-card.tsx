@@ -46,6 +46,7 @@ export function AuthCard({
   className,
 }: AuthCardProps) {
   const resolved = branding ?? defaultBranding;
+  const year = new Date().getFullYear();
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-gradient-to-b from-brand-50/80 via-background to-background">
@@ -57,10 +58,16 @@ export function AuthCard({
         <div className="absolute bottom-[18%] start-[6%] hidden size-40 rounded-full border border-brand-200/40 lg:block" />
       </div>
 
-      <main className="relative flex flex-1 items-center justify-center px-4 py-10 sm:px-6 sm:py-14">
-        <div className={cn("w-full", compact ? "max-w-md" : "max-w-lg", className)}>
+      <main className="relative flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8">
+        <div
+          className={cn(
+            "w-full animate-in fade-in slide-in-from-bottom-2 duration-500 motion-reduce:animate-none",
+            compact ? "max-w-md" : "max-w-lg",
+            className
+          )}
+        >
           {/* Identity header — visually connected to the card above it */}
-          <div className="mb-8 flex justify-center">
+          <div className="mb-4 flex justify-center sm:mb-5">
             <BrandLogo
               branding={resolved}
               variant="light"
@@ -70,12 +77,12 @@ export function AuthCard({
           </div>
 
           {/* The card — one elevated surface, brand accent on top */}
-          <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-xl shadow-brand-950/10 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-xl shadow-brand-900/10 backdrop-blur-sm">
             <div
               aria-hidden="true"
-              className="h-1 w-full bg-gradient-to-l from-brand-600 via-brand-400 to-brand-600"
+              className="h-1 w-full bg-gradient-to-l from-brand-600 via-brand-300 to-brand-600"
             />
-            <div className="p-6 sm:p-10">
+            <div className="p-6 sm:p-8">
               <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
                 {title}
               </h1>
@@ -84,9 +91,9 @@ export function AuthCard({
                   {description}
                 </p>
               )}
-              <div className="mt-7">{children}</div>
+              <div className="mt-5">{children}</div>
 
-              <p className="mt-8 flex items-center justify-center gap-1.5 border-t border-border/60 pt-4 text-[11px] font-medium text-muted-foreground/80">
+              <p className="mt-5 flex items-center justify-center gap-1.5 border-t border-border/60 pt-3 text-[11px] font-medium text-muted-foreground/80">
                 <ShieldCheck className="size-3.5 text-brand-600" aria-hidden="true" />
                 جلسة آمنة — جميع التحققات تتم على الخادم
               </p>
@@ -102,8 +109,8 @@ export function AuthCard({
       </main>
 
       {/* Platform footer — subtle, consistent identity */}
-      <footer className="relative px-4 py-6 text-center">
-        <p className="text-xs font-medium text-muted-foreground">
+      <footer className="relative px-4 py-4 text-center">
+        <p className="text-sm font-semibold text-muted-foreground">
           <Link
             href="/"
             className="transition-colors hover:text-brand-700"
@@ -112,8 +119,8 @@ export function AuthCard({
           </Link>{" "}
           — {resolved.subtitle}
         </p>
-        <p className="mt-1 text-[11px] text-muted-foreground/70">
-          © 2025 منارة — مكتب التطوير التربوي · جميع الحقوق محفوظة
+        <p className="mt-1 text-xs text-muted-foreground/80">
+          © {year} منارة — مكتب التطوير التربوي · جميع الحقوق محفوظة
         </p>
       </footer>
     </div>

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { resolvePublicBranding } from "@/lib/branding";
@@ -26,11 +27,14 @@ interface LoginPageProps {
  * links). Only PUBLIC branding fields are ever resolved from it — name,
  * logo and colors — so a manipulated parameter cannot leak or mutate
  * tenant data; authentication itself stays school-agnostic (email +
- * password). Without the parameter the platform identity renders.
+ * password). Without the parameter the platform identity renders
+ * («منارة — مكتب التطوير التربوي»).
  *
  * The premium composition (identity header, decorated background,
  * elevated card and platform footer) lives in the shared AuthCard so
- * every gate screen stays consistent.
+ * every gate screen stays consistent. The footer call-to-action adapts:
+ * with a school context it links to that school's registration page,
+ * otherwise it keeps the generic hint — never a hardcoded school name.
  */
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { next, reset, school } = await searchParams;
@@ -43,6 +47,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     ? `/forgot-password?school=${encodeURIComponent(resolved.school.slug)}`
     : "/forgot-password";
 
+  const footer = resolved.school ? (
+    <>
+      معلم جديد في {resolved.branding.productName}؟{" "}
+      <Link
+        href={`/register/${encodeURIComponent(resolved.school.slug)}`}
+        className="font-semibold text-brand-600 transition-colors hover:text-brand-700 hover:underline"
+      >
+        أنشئ حسابك الآن
+      </Link>
+    </>
+  ) : (
+    <span>
+      معلم جديد؟ التسجيل يتم عبر رابط مدرستك —
+      <span className="mx-1 text-muted-foreground/70" dir="ltr">
+        /register/اسم-المدرسة
+      </span>
+    </span>
+  );
+
   return (
     <div style={wrapperStyle}>
       <AuthCard
@@ -50,14 +73,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         className="max-w-md"
         title="تسجيل الدخول"
         description={`ادخل بيانات حسابك للوصول إلى مساحة عملك في ${resolved.branding.productName}.`}
-        footer={
-          <span>
-            معلم جديد؟ التسجيل يتم عبر رابط مدرستك —
-            <span className="mx-1 text-muted-foreground/70" dir="ltr">
-              /register/اسم-المدرسة
-            </span>
-          </span>
-        }
+        footer={footer}
       >
         {reset === "1" && (
           <div

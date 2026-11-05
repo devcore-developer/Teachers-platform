@@ -29,8 +29,8 @@ const SIZE_STYLES = {
     subtitle: "text-xs",
   },
   lg: {
-    box: "size-20 rounded-2xl sm:size-24",
-    icon: "size-9 sm:size-10",
+    box: "size-16 rounded-2xl sm:size-20",
+    icon: "size-8 sm:size-9",
     name: "text-2xl sm:text-3xl",
     subtitle: "text-sm",
   },
@@ -43,9 +43,11 @@ const SIZE_STYLES = {
  * AS-IS with its natural aspect ratio — no artificial white container
  * on light surfaces. Only the navy sidebar keeps a subtle white plate
  * behind uploaded logos, because dark logos would vanish against it.
- * Without a logo the platform mark is drawn with brand colors that
- * follow the runtime CSS variables, so the same component serves every
- * tenant without hardcoding any school.
+ * On light gate screens the logo is height-constrained instead of
+ * boxed, so wide logos render at their real proportions (no cropping,
+ * no padding plate). Without a logo the platform mark is drawn with
+ * brand colors that follow the runtime CSS variables, so the same
+ * component serves every tenant without hardcoding any school.
  */
 export function BrandLogo({
   branding,
@@ -64,7 +66,7 @@ export function BrandLogo({
       className={cn(
         "flex",
         stacked
-          ? "flex-col items-center gap-4 text-center"
+          ? "flex-col items-center gap-3 text-center"
           : "items-center gap-3 text-start",
         className
       )}
@@ -78,8 +80,13 @@ export function BrandLogo({
           draggable={false}
           className={cn(
             "shrink-0 object-contain",
-            s.box,
-            !light && "bg-white p-0.5 shadow-sm ring-1 ring-black/5"
+            light
+              ? size === "lg"
+                ? // Gate screens: height-driven, keeps the natural aspect
+                  // ratio of any uploaded logo — no plate, no cropping.
+                  "h-16 w-auto max-w-48 sm:h-20 sm:max-w-56"
+                : s.box
+              : cn(s.box, "bg-white p-0.5 shadow-sm ring-1 ring-black/5")
           )}
         />
       ) : (
