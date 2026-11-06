@@ -18,31 +18,31 @@ interface BrandLogoProps {
 
 /**
  * Name sizes are EXPLICIT pixel ranges handed to <FitText>, which
- * auto-shrinks the school name so it always stays on ONE line inside
- * the rail (min readable size, truncation only as a last resort).
- * Previously these were fixed text-* classes — long Arabic school names
- * either overflowed or were cut by truncate; now they scale fluidly.
+ * measures the real rendered width of the school name and shrinks the
+ * font so it ALWAYS stays on ONE line (min readable floor, ellipsis +
+ * tooltip only beyond that floor). Previously these were fixed text-*
+ * classes — long Arabic school names overflowed the rail.
  */
 const SIZE_STYLES = {
   sm: {
     box: "size-10 rounded-xl",
     icon: "size-5.5",
     nameMaxPx: 16,
-    nameMinPx: 10,
+    nameMinPx: 9,
     subtitle: "text-xs",
   },
   md: {
     box: "size-12 rounded-xl",
     icon: "size-6.5",
     nameMaxPx: 18,
-    nameMinPx: 11,
+    nameMinPx: 10,
     subtitle: "text-xs",
   },
   lg: {
     box: "size-16 rounded-2xl sm:size-20",
     icon: "size-8 sm:size-9",
     nameMaxPx: 30,
-    nameMinPx: 14,
+    nameMinPx: 13,
     subtitle: "text-sm",
   },
 } as const;
@@ -50,15 +50,17 @@ const SIZE_STYLES = {
 /**
  * Dynamic identity wordmark — platform or school.
  *
- * When the resolved branding carries a school logo the image renders
- * AS-IS with its natural aspect ratio — no artificial white container
- * on light surfaces. Only the navy sidebar keeps a subtle white plate
- * behind uploaded logos, because dark logos would vanish against it.
- * On light gate screens the logo is height-constrained instead of
- * boxed, so wide logos render at their real proportions (no cropping,
- * no padding plate). Without a logo the platform mark is drawn with
- * brand colors that follow the runtime CSS variables, so the same
- * component serves every tenant without hardcoding any school.
+ * ROOT-CAUSE NOTE (sidebar overflow fix): this component renders as a
+ * flex child inside rails and headers. A flex item's default
+ * `min-width: auto` makes it refuse to shrink below its content width,
+ * which let a long nowrap wordmark inflate this box past the sidebar
+ * edge and disconnect the inner <FitText> measurement from the real
+ * available width. The root is therefore pinned with min-w-0 /
+ * max-w-full / overflow-hidden so the available width is ALWAYS the
+ * parent's content box minus the fixed-size logo.
+ *
+ * The logo itself is FIXED-SIZE (shrink-0) — text never pushes it out
+ * of the sidebar.
  */
 export function BrandLogo({
   branding,
@@ -75,10 +77,10 @@ export function BrandLogo({
   return (
     <div
       className={cn(
-        "flex",
+        "flex min-w-0 max-w-full overflow-hidden",
         stacked
           ? "flex-col items-center gap-3 text-center"
-          : "items-center gap-3 text-start",
+          : "flex-1 items-center gap-3 text-start",
         className
       )}
     >
@@ -117,7 +119,7 @@ export function BrandLogo({
       <div
         className={cn(
           "min-w-0 leading-tight",
-          stacked ? "space-y-1" : "flex-1"
+          stacked ? "w-full space-y-1" : "flex-1"
         )}
       >
         <FitText

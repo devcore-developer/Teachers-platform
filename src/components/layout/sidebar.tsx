@@ -81,12 +81,13 @@ function groupNavItems(
  * exactly one item (e.g. /academy/manage/12 highlights "إدارة الدورات"
  * without also highlighting "الأكاديمية التدريبية").
  *
- * Overflow contract: every text run inside the rail lives in a
- * min-w-0 flex child. School names use <FitText> — the font scales
- * DOWN fluidly so the full name stays on ONE line within the fixed
- * 18rem rail (min readable size, then truncate + tooltip as an
- * absolute last resort). No horizontal scroll and no rail growth on
- * desktop, tablet or mobile widths.
+ * Overflow contract (verified in a real browser with 44-character
+ * Arabic school names): the rail is a fixed 18rem; the school wordmark
+ * and the identity-card name use <FitText>, which MEASURES the real
+ * available width and scales the font down so the full name stays on
+ * ONE line — never wrapping, never leaving the rail. The logo keeps a
+ * fixed size; the operator signature line is a constant string (the
+ * school name is already fully rendered twice above it).
  */
 export function Sidebar({ branding, items, canManageBranding, className }: SidebarProps) {
   const pathname = usePathname();
@@ -104,8 +105,9 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
         className
       )}
     >
-      {/* Brand — school wordmark auto-fits on one line */}
-      <div className="flex h-16 w-full min-w-0 shrink-0 items-center overflow-hidden border-b border-sidebar-border/70 px-5">
+      {/* Brand — school wordmark auto-fits on one line. px-4 (not px-5)
+          buys extra width for the name; the logo stays size-10 fixed. */}
+      <div className="flex h-16 w-full min-w-0 shrink-0 items-center overflow-hidden border-b border-sidebar-border/70 px-4">
         <BrandLogo branding={branding} variant="sidebar" />
       </div>
 
@@ -172,13 +174,13 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
       {/* School identity card — real tenant identity (multi-school
           branding). When the signed-in role may manage branding, the
           whole card links to the branding manager. The school name
-          auto-fits on one line via <FitText> (fluid font shrink), with
-          the full name always available as a tooltip. */}
+          auto-fits on one line via <FitText> (measured fluid font
+          shrink), full name always available as a tooltip. */}
       <div className="w-full min-w-0 shrink-0 overflow-hidden border-t border-sidebar-border/70 p-4">
         {canManageBranding ? (
           <Link
             href="/schools/branding"
-            className="group block w-full min-w-0 overflow-hidden rounded-xl bg-white/[0.06] p-3.5 ring-1 ring-white/10 transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="group block w-full min-w-0 overflow-hidden rounded-xl bg-white/[0.06] p-3 ring-1 ring-white/10 transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
             <div className="flex w-full min-w-0 items-center gap-2.5">
               {branding.currentSchool?.logoUrl ? (
@@ -197,7 +199,7 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
               <div className="min-w-0 flex-1 leading-tight">
                 <FitText
                   maxPx={12}
-                  minPx={10}
+                  minPx={8}
                   className="font-bold text-sidebar-foreground"
                   title={schoolName ?? undefined}
                 >
@@ -211,7 +213,7 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
             </div>
           </Link>
         ) : (
-          <div className="w-full min-w-0 overflow-hidden rounded-xl bg-white/[0.06] p-3.5 ring-1 ring-white/10">
+          <div className="w-full min-w-0 overflow-hidden rounded-xl bg-white/[0.06] p-3 ring-1 ring-white/10">
             <div className="flex w-full min-w-0 items-center gap-2.5">
               {branding.currentSchool?.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -229,7 +231,7 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
               <div className="min-w-0 flex-1 leading-tight">
                 <FitText
                   maxPx={12}
-                  minPx={10}
+                  minPx={8}
                   className="font-bold text-sidebar-foreground"
                   title={schoolName ?? "مساحة عمل المدرسة"}
                 >
@@ -242,13 +244,16 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
             </div>
           </div>
         )}
+        {/* Operator signature — a CONSTANT platform string. The school
+            name is already fully rendered in the header and the card;
+            repeating it here was the tightest overflow surface. */}
         <FitText
           maxPx={11}
           minPx={9}
           className="mt-3 text-center text-sidebar-foreground/40"
-          title={`${branding.productName} · منارة — مكتب التطوير التربوي`}
+          title="منارة — مكتب التطوير التربوي"
         >
-          {`${branding.productName} · منارة — مكتب التطوير التربوي`}
+          {"منارة — مكتب التطوير التربوي"}
         </FitText>
       </div>
     </aside>

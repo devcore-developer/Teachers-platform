@@ -532,6 +532,10 @@ model Attachment {
   storageKey   String   @unique
   mimeType     String
   sizeBytes    Int
+  /// Storage backend holding the object:
+  ///   LOCAL — legacy local-disk uploads (pre-R2 history, still served).
+  ///   R2    — Cloudflare R2 object (presigned direct upload).
+  provider     String   @default("LOCAL")
   /// COVER | RESOURCE — canonical key, validated with Zod.
   kind         String
   /// Owning course (required for every attachment).
@@ -559,7 +563,6 @@ model Attachment {
   @@index([programId])
   @@map("attachments")
 }
-
 /**
  * A teacher's enrollment in one course. Unique (courseId, userId)
  * prevents duplicates. Completion tracking and lesson analytics are
