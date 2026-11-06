@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   MonitorPlay,
+  Palette,
   Settings,
   ShieldCheck,
   TrendingUp,
@@ -25,10 +26,10 @@ import type { NavItem } from "@/lib/types";
 /**
  * Central navigation configuration.
  *
- * Phase 2 introduced real URL routes: every item now resolves to an
- * actual page. "Schools & branches" is the first fully implemented
- * administrative module; the remaining items render a clearly labelled
- * placeholder until their phases begin.
+ * Every item resolves to a real page. "الإعدادات" is role-aware since
+ * Batch 3: platform settings for SUPER_ADMIN, school workspace hub for
+ * the school-administration pair. The stale "قريباً" badges on
+ * التكليفات and الشهادات are gone — both modules are live.
  */
 export const navItems: NavItem[] = [
   {
@@ -56,10 +57,28 @@ export const navItems: NavItem[] = [
     plannedFeatures: [],
   },
   {
+    id: "school-branding",
+    label: "هوية المدرسة",
+    href: "/schools/branding",
+    description:
+      "شعار مدرستك واسمها المعروض وألوان هويتها البصرية — تُطبق فورًا على كل المنصة.",
+    icon: Palette,
+    plannedFeatures: [],
+  },
+  {
     id: "users",
     label: "دليل المستخدمين",
     href: "/users",
     description: "حسابات المنصة: الأدوار والحالات والإسنادات داخل نطاق صلاحيتك.",
+    icon: Users,
+    plannedFeatures: [],
+  },
+  {
+    id: "school-users",
+    label: "مستخدمو المدرسة",
+    href: "/school-users",
+    description:
+      "عرض للقراءة فقط: معلمو المدرسة والمشرفون وأدوارهم داخل نطاق الاطلاع الممنوح لك.",
     icon: Users,
     plannedFeatures: [],
   },
@@ -116,27 +135,17 @@ export const navItems: NavItem[] = [
     id: "assignments",
     label: "التكليفات والمتابعة",
     href: "/assignments",
-    description: "التكليفات التربوية والمتابعات المعلقة وحالتها.",
+    description: "إنشاء التكليفات التربوية ونشرها للمعلمين ومتابعة التسليمات والتصحيح.",
     icon: ClipboardList,
-    badge: "قريباً",
-    plannedFeatures: [
-      "إسناد التكليفات التربوية للمعلمين ومتابعة تنفيذها",
-      "سجل المتابعات المعلقة وتواريخ استحقاقها",
-      "إشعارات التذكير بالمتابعات المتأخرة",
-    ],
+    plannedFeatures: [],
   },
   {
     id: "certificates",
     label: "الشهادات",
     href: "/certificates",
-    description: "إصدار الشهادات للمشاركين والتحقق من صحتها.",
+    description: "إصدار شهادات إتمام البرامج وإدارتها والتحقق من صحتها برمز فريد.",
     icon: Award,
-    badge: "قريباً",
-    plannedFeatures: [
-      "إصدار شهادات إتمام البرامج التدريبية",
-      "التحقق من صحة الشهادة عبر رمز فريد",
-      "أرشيف الشهادات الصادرة لكل معلم",
-    ],
+    plannedFeatures: [],
   },
   {
     id: "reports",
@@ -159,14 +168,9 @@ export const navItems: NavItem[] = [
     id: "settings",
     label: "الإعدادات",
     href: "/settings",
-    description: "إعدادات المنصة وهوية المدرسة والصلاحيات.",
+    description: "إعدادات المنصة لمدير المنصة، ومساحة إعدادات مدرستك للإدارة المدرسية.",
     icon: Settings,
-    badge: "قريباً",
-    plannedFeatures: [
-      "تخصيص هوية المدرسة والشعار والمراحل التعليمية",
-      "إدارة الصلاحيات والأدوار",
-      "الإعدادات العامة للمنصة",
-    ],
+    plannedFeatures: [],
   },
   {
     id: "messages",
