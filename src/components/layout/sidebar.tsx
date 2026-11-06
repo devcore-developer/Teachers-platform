@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Landmark, Palette } from "lucide-react";
 
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { FitText } from "@/components/layout/fit-text";
 import { activeNavItemId } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 import type { NavItem, PlatformBranding } from "@/lib/types";
@@ -80,10 +81,12 @@ function groupNavItems(
  * exactly one item (e.g. /academy/manage/12 highlights "إدارة الدورات"
  * without also highlighting "الأكاديمية التدريبية").
  *
- * Overflow contract (Batch 3): every text run inside the rail lives in
- * a min-w-0 flex child with truncate — exceptionally long Arabic school
- * or module names can never push the 18rem rail wider or cause
- * horizontal scroll, on desktop, tablet or mobile widths.
+ * Overflow contract: every text run inside the rail lives in a
+ * min-w-0 flex child. School names use <FitText> — the font scales
+ * DOWN fluidly so the full name stays on ONE line within the fixed
+ * 18rem rail (min readable size, then truncate + tooltip as an
+ * absolute last resort). No horizontal scroll and no rail growth on
+ * desktop, tablet or mobile widths.
  */
 export function Sidebar({ branding, items, canManageBranding, className }: SidebarProps) {
   const pathname = usePathname();
@@ -101,7 +104,7 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
         className
       )}
     >
-      {/* Brand */}
+      {/* Brand — school wordmark auto-fits on one line */}
       <div className="flex h-16 w-full min-w-0 shrink-0 items-center overflow-hidden border-b border-sidebar-border/70 px-5">
         <BrandLogo branding={branding} variant="sidebar" />
       </div>
@@ -168,8 +171,9 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
 
       {/* School identity card — real tenant identity (multi-school
           branding). When the signed-in role may manage branding, the
-          whole card links to the branding manager. Long school names
-          truncate with the full name available as a tooltip. */}
+          whole card links to the branding manager. The school name
+          auto-fits on one line via <FitText> (fluid font shrink), with
+          the full name always available as a tooltip. */}
       <div className="w-full min-w-0 shrink-0 overflow-hidden border-t border-sidebar-border/70 p-4">
         {canManageBranding ? (
           <Link
@@ -191,12 +195,14 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
                 </div>
               )}
               <div className="min-w-0 flex-1 leading-tight">
-                <p
-                  className="truncate text-xs font-bold text-sidebar-foreground"
+                <FitText
+                  maxPx={12}
+                  minPx={10}
+                  className="font-bold text-sidebar-foreground"
                   title={schoolName ?? undefined}
                 >
                   {schoolName ?? "هوية المدرسة"}
-                </p>
+                </FitText>
                 <p className="truncate text-[11px] text-sidebar-foreground/60">
                   تخصيص الشعار والألوان
                 </p>
@@ -221,12 +227,14 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
                 </div>
               )}
               <div className="min-w-0 flex-1 leading-tight">
-                <p
-                  className="truncate text-xs font-bold text-sidebar-foreground"
+                <FitText
+                  maxPx={12}
+                  minPx={10}
+                  className="font-bold text-sidebar-foreground"
                   title={schoolName ?? "مساحة عمل المدرسة"}
                 >
                   {schoolName ?? "مساحة عمل المدرسة"}
-                </p>
+                </FitText>
                 <p className="truncate text-[11px] text-sidebar-foreground/60">
                   {branding.subtitle}
                 </p>
@@ -234,9 +242,14 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
             </div>
           </div>
         )}
-        <p className="mt-3 truncate text-center text-[11px] text-sidebar-foreground/40">
-          {branding.productName} · منارة — مكتب التطوير التربوي
-        </p>
+        <FitText
+          maxPx={11}
+          minPx={9}
+          className="mt-3 text-center text-sidebar-foreground/40"
+          title={`${branding.productName} · منارة — مكتب التطوير التربوي`}
+        >
+          {`${branding.productName} · منارة — مكتب التطوير التربوي`}
+        </FitText>
       </div>
     </aside>
   );

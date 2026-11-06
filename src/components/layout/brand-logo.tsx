@@ -1,5 +1,6 @@
 import { GraduationCap } from "lucide-react";
 
+import { FitText } from "@/components/layout/fit-text";
 import { cn } from "@/lib/utils";
 import type { PlatformBranding } from "@/lib/types";
 
@@ -15,23 +16,33 @@ interface BrandLogoProps {
   className?: string;
 }
 
+/**
+ * Name sizes are EXPLICIT pixel ranges handed to <FitText>, which
+ * auto-shrinks the school name so it always stays on ONE line inside
+ * the rail (min readable size, truncation only as a last resort).
+ * Previously these were fixed text-* classes — long Arabic school names
+ * either overflowed or were cut by truncate; now they scale fluidly.
+ */
 const SIZE_STYLES = {
   sm: {
     box: "size-10 rounded-xl",
     icon: "size-5.5",
-    name: "text-base",
+    nameMaxPx: 16,
+    nameMinPx: 10,
     subtitle: "text-xs",
   },
   md: {
     box: "size-12 rounded-xl",
     icon: "size-6.5",
-    name: "text-lg",
+    nameMaxPx: 18,
+    nameMinPx: 11,
     subtitle: "text-xs",
   },
   lg: {
     box: "size-16 rounded-2xl sm:size-20",
     icon: "size-8 sm:size-9",
-    name: "text-2xl sm:text-3xl",
+    nameMaxPx: 30,
+    nameMinPx: 14,
     subtitle: "text-sm",
   },
 } as const;
@@ -103,16 +114,23 @@ export function BrandLogo({
           <GraduationCap className={s.icon} strokeWidth={1.8} />
         </div>
       )}
-      <div className={cn("min-w-0 leading-tight", stacked && "space-y-1")}>
-        <p
+      <div
+        className={cn(
+          "min-w-0 leading-tight",
+          stacked ? "space-y-1" : "flex-1"
+        )}
+      >
+        <FitText
+          maxPx={s.nameMaxPx}
+          minPx={s.nameMinPx}
           className={cn(
-            "truncate font-extrabold tracking-tight",
-            s.name,
+            "font-extrabold tracking-tight",
             light ? "text-foreground" : "text-white"
           )}
+          title={branding.productName}
         >
           {branding.productName}
-        </p>
+        </FitText>
         {withSubtitle && (
           <p
             className={cn(
