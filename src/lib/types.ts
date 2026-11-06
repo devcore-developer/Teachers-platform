@@ -7,7 +7,7 @@ import type { LucideIcon } from "lucide-react";
 /** Educational stages a school can serve (used by future school config). */
 export type EducationalStage =
   | "المرحلة الابتدائية"
-  | "المرحلة الإعدادية"
+  | "المرحلة المتوسطة"
   | "المرحلة الثانوية";
 
 /**

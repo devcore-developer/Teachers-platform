@@ -12,7 +12,7 @@ export type BranchStage = (typeof BRANCH_STAGES)[number];
 /** Arabic labels for the canonical stage keys (UI only — never stored). */
 export const BRANCH_STAGE_LABELS: Record<BranchStage, string> = {
   primary: "المرحلة الابتدائية",
-  intermediate: "المرحلة الإعدادية",
+  intermediate: "المرحلة المتوسطة",
   secondary: "المرحلة الثانوية",
 };
 

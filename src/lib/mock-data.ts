@@ -92,7 +92,7 @@ export const mockTrainingProgress: TrainingProgressPoint[] = [
 /** Teacher distribution across educational stages — sums to 128. */
 export const mockTeachersByStage: StageDistributionPoint[] = [
   { stage: "المرحلة الابتدائية", count: 54 },
-  { stage: "المرحلة الإعدادية", count: 41 },
+  { stage: "المرحلة المتوسطة", count: 41 },
   { stage: "المرحلة الثانوية", count: 33 },
 ];
 
