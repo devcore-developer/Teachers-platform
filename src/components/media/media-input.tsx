@@ -280,7 +280,9 @@ export function MediaInput({
         bad: true,
         text: raw.startsWith("R2_REJECTED_")
           ? "رفض التخزين السحابي الملف — تحقق من إعدادات الـ bucket والصيغة."
-          : "انقطع الاتصال أثناء الرفع — حاول مرة أخرى.",
+          : raw === "NETWORK"
+            ? "تعذّر الوصول للتخزين السحابي من المتصفح — الأغلب أن سياسة CORS غير مضبوطة على bucket في Cloudflare (bucket ← Settings ← CORS policy: أضف نطاق الموقع مع الطريقة PUT). جرّب مرة أخرى بعد ضبطها."
+            : "انقطع الاتصال أثناء الرفع — حاول مرة أخرى.",
       });
     } finally {
       setPhase("idle");

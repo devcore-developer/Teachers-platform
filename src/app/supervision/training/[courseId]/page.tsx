@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { publicUrlFor } from "@/lib/media/r2";
 import {
   getSupervisorCourse,
+  getSupervisorCoursePolicy,
   listSupervisorCategoryOptions,
   listSupervisorEnrollments,
   listSupervisorProgramOptions,
@@ -50,7 +51,7 @@ export default async function SupervisorCourseBuilderPage({
 
   const course = detail.data;
 
-  const [teachers, enrollments, programs, categories, coverAttachment, courseAssessments] =
+  const [teachers, enrollments, programs, categories, coverAttachment, courseAssessments, policy] =
     await Promise.all([
       listSupervisorTeachers(ctx),
       listSupervisorEnrollments(ctx, courseId),
@@ -67,6 +68,7 @@ export default async function SupervisorCourseBuilderPage({
         select: { id: true, titleAr: true, status: true, _count: { select: { questions: true } } },
         orderBy: { updatedAt: "desc" },
       }),
+      getSupervisorCoursePolicy(ctx, courseId),
     ]);
 
   const coverUrl = coverAttachment ? publicUrlFor(coverAttachment.storageKey) : null;
@@ -105,6 +107,11 @@ export default async function SupervisorCourseBuilderPage({
         platformWide: program.platformWide,
       }))}
       categories={categories}
+      policy={
+        policy.ok
+          ? policy.data
+          : { requireSequentialLessons: true, lessonCompletionThreshold: 95 }
+      }
     />
   );
 }

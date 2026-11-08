@@ -3,10 +3,11 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { getCourseForViewer } from "@/lib/training/service";
 import { getCourseLearningStatus } from "@/lib/training/progress";
+import { computeSequentialLocks } from "@/lib/training/sequence";
 import { getMyImpactStatus } from "@/lib/surveys/impact";
 import { listCourseComments } from "@/lib/comments/service";
 import { AccessDenied } from "@/app/assignments/ui";
-import { LessonChecklist } from "./lesson-checklist";
+import { LessonChecklist, type ChecklistLesson } from "./lesson-checklist";
 import { ImpactForm } from "./impact-form";
 import { CourseComments } from "./course-comments";
 
@@ -16,7 +17,9 @@ import { CourseComments } from "./course-comments";
  * The teacher's single page for the whole journey — the Next.js
  * equivalent of the original HTML training player (openTraining +
  * v11 player + test gating + certificate + impact measurement):
- *   - published lessons with per-lesson completion toggles,
+ *   - published lessons with per-lesson completion state,
+ *   - mandatory sequential unlocking + mandatory video playback
+ *     (server-enforced; the UI only mirrors the server decision),
  *   - progress bar + exam gate state (locked until lessons are done),
  *   - completion card with the auto-issued certificate link,
  *   - impact measurement form (after completion),
@@ -58,6 +61,50 @@ export default async function CourseLearnPage({
 
   const completion = status?.completion ?? null;
   const isTeacher = user.role === "TEACHER";
+  const threshold = status?.lessonCompletionThreshold ?? 95;
+
+  // Mandatory sequential unlocking — computed on the SERVER from the
+  // completion ledger; the checklist only renders the verdict.
+  const orderedLessons = view.sections.flatMap((section) =>
+    section.lessons.map((lesson) => ({ id: lesson.id, titleAr: lesson.titleAr }))
+  );
+  const enforceSequence = isTeacher && (status?.requireSequentialLessons ?? true);
+  const locks = computeSequentialLocks(
+    orderedLessons,
+    status?.completedLessonIds ?? [],
+    enforceSequence
+  );
+  const watchByLesson = new Map(
+    (status?.watchStates ?? []).map((row) => [row.lessonId, row])
+  );
+
+  const buildChecklistLesson = (
+    lesson: (typeof view.sections)[number]["lessons"][number]
+  ): ChecklistLesson => {
+    const lock = locks.get(lesson.id);
+    const watch = watchByLesson.get(lesson.id);
+    return {
+      id: lesson.id,
+      titleAr: lesson.titleAr,
+      type: lesson.type,
+      typeLabel: LESSON_TYPE_LABELS[lesson.type] ?? lesson.type,
+      description: lesson.description,
+      content: lesson.content,
+      videoUrl: lesson.videoUrl,
+      attachmentName: lesson.attachmentName,
+      durationSeconds: null,
+      locked: lock?.locked ?? false,
+      lockedByTitle: lock?.lockedByTitle ?? null,
+      current: lock?.current ?? false,
+      watch: watch
+        ? {
+            lastPositionSeconds: watch.lastPositionSeconds,
+            maxPositionSeconds: watch.maxPositionSeconds,
+            watchSeconds: watch.watchSeconds,
+          }
+        : null,
+    };
+  };
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -128,6 +175,15 @@ export default async function CourseLearnPage({
         </div>
       </div>
 
+      {/* Mandatory learning notice */}
+      {isTeacher && enforceSequence && !completion && (
+        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs leading-relaxed text-[#1D5BD6]">
+          <span className="font-extrabold">تعلّم تسلسلي إلزامي: </span>
+          تُفتح الدروس بالترتيب بعد إكمال ما قبلها، ويُحتسب درس الفيديو منجزًا
+          فقط بعد مشاهدة {threshold}% منه — بدون تخطٍ للأمام وبتشغيل سرعة 1x.
+        </div>
+      )}
+
       {/* Completion blocked note (certificate pending) */}
       {completion && !completion.certificateId && (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -149,17 +205,9 @@ export default async function CourseLearnPage({
             <LessonChecklist
               courseId={courseId}
               isTeacher={isTeacher}
+              thresholdPercent={threshold}
               completedIds={status?.completedLessonIds ?? []}
-              lessons={section.lessons.map((lesson) => ({
-                id: lesson.id,
-                titleAr: lesson.titleAr,
-                type: lesson.type,
-                typeLabel: LESSON_TYPE_LABELS[lesson.type] ?? lesson.type,
-                description: lesson.description,
-                content: lesson.content,
-                videoUrl: lesson.videoUrl,
-                attachmentName: lesson.attachmentName,
-              }))}
+              lessons={section.lessons.map(buildChecklistLesson)}
             />
           </section>
         ))}

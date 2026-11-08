@@ -23,6 +23,7 @@ import {
   moveSupervisorLesson,
   moveSupervisorQuestion,
   moveSupervisorSection,
+  saveSupervisorCoursePolicy,
   saveSupervisorLesson,
   saveSupervisorSection,
   setSupervisorAssessmentStatus,
@@ -66,6 +67,11 @@ export async function moveSupervisorSectionAction(sectionId: string, direction: 
 export async function saveSupervisorLessonAction(input: unknown) {
   const ctx = await requireSupervisorContext();
   return saveSupervisorLesson(ctx, input);
+}
+
+export async function saveSupervisorCoursePolicyAction(input: unknown) {
+  const ctx = await requireSupervisorContext();
+  return saveSupervisorCoursePolicy(ctx, input);
 }
 
 export async function deleteSupervisorLessonAction(lessonId: string) {

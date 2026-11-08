@@ -365,6 +365,9 @@ const lessonSchema = z
     content: z.string().trim().max(20000).optional(),
     videoUrl: z.string().trim().max(1000).optional(),
     isPublished: z.boolean().optional(),
+    /** Media length in seconds — captured from the instructor's browser
+     * and used by the mandatory-playback completion threshold. */
+    durationSeconds: z.coerce.number().int().min(1).max(43200).optional(),
   })
   .superRefine((value, refineCtx) => {
     if (value.type === "TEXT" && (!value.content || value.content.trim().length === 0)) {
@@ -399,7 +402,7 @@ export async function saveSupervisorLesson(
 ): Promise<SupervisorResult<{ id: string }>> {
   const parsed = lessonSchema.safeParse(raw);
   if (!parsed.success) return zodFail(parsed.error);
-  const { sectionId, lessonId, titleAr, description, type, content, videoUrl, isPublished } =
+  const { sectionId, lessonId, titleAr, description, type, content, videoUrl, isPublished, durationSeconds } =
     parsed.data;
 
   const section = await db.courseSection.findUnique({
@@ -426,6 +429,7 @@ export async function saveSupervisorLesson(
         type,
         content: type === "TEXT" ? (content ?? null) : null,
         videoUrl: type === "TEXT" ? null : (videoUrl ?? null),
+        durationSeconds: type === "TEXT" ? null : (durationSeconds ?? null),
         ...(typeof isPublished === "boolean" ? { isPublished } : {}),
       },
       select: { id: true },
@@ -442,6 +446,7 @@ export async function saveSupervisorLesson(
       type,
       content: type === "TEXT" ? (content ?? null) : null,
       videoUrl: type === "TEXT" ? null : (videoUrl ?? null),
+      durationSeconds: type === "TEXT" ? null : (durationSeconds ?? null),
       isPublished: isPublished ?? false,
       orderIndex: count,
     },
@@ -1172,4 +1177,63 @@ export async function listSupervisorImpactCourseOptions(
     take: 200,
   });
   return rows;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mandatory learning policy — per-course settings                      */
+/* ------------------------------------------------------------------ */
+
+const coursePolicySchema = z.object({
+  courseId: z.string().trim().min(1),
+  /** Sequential unlocking: every lesson opens only after the previous one. */
+  requireSequentialLessons: z.boolean(),
+  /** Watched percentage (50..100) that completes an uploaded-video lesson. */
+  lessonCompletionThreshold: z.coerce.number().int().min(50).max(100),
+});
+
+/** Read the mandatory-learning policy of one in-scope course. */
+export async function getSupervisorCoursePolicy(
+  ctx: SupervisorTrainingContext,
+  courseId: string
+): Promise<SupervisorResult<{
+  requireSequentialLessons: boolean;
+  lessonCompletionThreshold: number;
+}>> {
+  const course = await courseInScope(ctx, courseId);
+  if (!course) return fail("الدورة غير موجودة أو خارج نطاق مدرستك", "FORBIDDEN");
+  const row = await db.course.findUnique({
+    where: { id: courseId },
+    select: {
+      requireSequentialLessons: true,
+      lessonCompletionThreshold: true,
+    },
+  });
+  return {
+    ok: true,
+    data: {
+      requireSequentialLessons: row?.requireSequentialLessons ?? true,
+      lessonCompletionThreshold: row?.lessonCompletionThreshold ?? 95,
+    },
+  };
+}
+
+/** Save the mandatory-learning policy (tenant-fenced). */
+export async function saveSupervisorCoursePolicy(
+  ctx: SupervisorTrainingContext,
+  raw: unknown
+): Promise<SupervisorResult<{ id: string }>> {
+  const parsed = coursePolicySchema.safeParse(raw);
+  if (!parsed.success) return zodFail(parsed.error);
+  const { courseId, requireSequentialLessons, lessonCompletionThreshold } =
+    parsed.data;
+
+  const course = await courseInScope(ctx, courseId);
+  if (!course) return fail("الدورة غير موجودة أو خارج نطاق مدرستك", "FORBIDDEN");
+
+  const updated = await db.course.update({
+    where: { id: courseId },
+    data: { requireSequentialLessons, lessonCompletionThreshold },
+    select: { id: true },
+  });
+  return { ok: true, data: updated };
 }

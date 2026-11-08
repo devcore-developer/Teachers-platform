@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { ViewerIdentity } from "@/lib/training/access";
 import { canManageTraining } from "@/lib/training/access";
 import { db } from "@/lib/db";
+import { getActiveAcademicYear } from "@/lib/academic-year";
 import {
   issueCourseCompletionCertificate,
   type CompletionCertificateOutcome,
@@ -37,6 +38,8 @@ export type ProgressErrorCode =
   | "ENROLLMENT_REQUIRED"
   | "LESSON_NOT_PUBLISHED"
   | "ALREADY_COMPLETED"
+  | /** manual completion rejected for video lessons */ "VIDEO_WATCH_REQUIRED"
+  | /** sequential gate: previous lessons incomplete */ "LESSON_LOCKED"
   | "UNKNOWN";
 
 export type ProgressResult<T> =
@@ -70,9 +73,22 @@ export interface LessonProgressRow {
   completedAt: Date | null;
 }
 
+/** Mandatory-playback watch ledger rows (resume + progress restore). */
+export interface LessonWatchStateRow {
+  lessonId: string;
+  watchSeconds: number;
+  maxPositionSeconds: number;
+  lastPositionSeconds: number;
+}
+
 export interface CourseLearningStatus {
   courseId: string;
   enrolled: boolean;
+  /** Mandatory-learning policy snapshot for the UI. */
+  requireSequentialLessons: boolean;
+  lessonCompletionThreshold: number;
+  /** Watch ledger rows keyed by lesson (see LessonWatchStateRow). */
+  watchStates: LessonWatchStateRow[];
   /** Published lessons of the course (the requirement pool). */
   totalLessons: number;
   completedLessons: number;
@@ -120,6 +136,8 @@ export async function getCourseLearningStatus(
       status: true,
       schoolId: true,
       estimatedHours: true,
+      requireSequentialLessons: true,
+      lessonCompletionThreshold: true,
       sections: {
         orderBy: { orderIndex: "asc" },
         select: {
@@ -157,7 +175,7 @@ export async function getCourseLearningStatus(
     return progressFail("هذه الدورة غير متاحة لك", "FORBIDDEN");
   }
 
-  const [progressRows, enrollment, attempts, completion] = await Promise.all([
+  const [progressRows, enrollment, attempts, completion, watchRows] = await Promise.all([
     db.courseLessonProgress.findMany({
       where: { courseId: course.id, userId: viewer.id },
       select: { lessonId: true, completedAt: true },
@@ -190,6 +208,15 @@ export async function getCourseLearningStatus(
         bestPercentage: true,
         hours: true,
         certificateId: true,
+      },
+    }),
+    db.lessonWatchState.findMany({
+      where: { courseId: course.id, userId: viewer.id },
+      select: {
+        lessonId: true,
+        watchSeconds: true,
+        maxPositionSeconds: true,
+        lastPositionSeconds: true,
       },
     }),
   ]);
@@ -242,6 +269,14 @@ export async function getCourseLearningStatus(
     data: {
       courseId: course.id,
       enrolled: enrollment !== null,
+      requireSequentialLessons: course.requireSequentialLessons,
+      lessonCompletionThreshold: course.lessonCompletionThreshold,
+      watchStates: watchRows.map((row) => ({
+        lessonId: row.lessonId,
+        watchSeconds: row.watchSeconds,
+        maxPositionSeconds: row.maxPositionSeconds,
+        lastPositionSeconds: row.lastPositionSeconds,
+      })),
       totalLessons,
       completedLessons,
       lessonsPercent:
@@ -329,17 +364,22 @@ export interface MarkLessonOutcome {
 export async function markLessonComplete(
   viewer: ViewerIdentity,
   courseId: string,
-  lessonId: string
+  lessonId: string,
+  /** "watch" = called by the mandatory-playback heartbeat (trusted path). */
+  options?: { source?: "manual" | "watch" }
 ): Promise<ProgressResult<MarkLessonOutcome>> {
   const lesson = await db.courseLesson.findUnique({
     where: { id: lessonId },
     select: {
       id: true,
+      type: true,
       isPublished: true,
       section: {
         select: {
           courseId: true,
-          course: { select: { id: true, status: true, schoolId: true } },
+          course: {
+            select: { id: true, status: true, schoolId: true, requireSequentialLessons: true },
+          },
         },
       },
     },
@@ -360,6 +400,52 @@ export async function markLessonComplete(
   }
   if (!lesson.isPublished) {
     return progressFail("هذا الدرس غير منشور بعد", "LESSON_NOT_PUBLISHED");
+  }
+
+  // Mandatory playback: uploaded-video lessons complete ONLY through the
+  // server-validated watch threshold — a manual toggle can never mark
+  // them (the heartbeat path passes source:"watch" and skips this).
+  if (lesson.type === "VIDEO" && options?.source !== "watch") {
+    return progressFail(
+      "تُنجز دروس الفيديو تلقائيًا بعد مشاهدة النسبة المطلوبة من الفيديو",
+      "VIDEO_WATCH_REQUIRED"
+    );
+  }
+
+  // Sequential gate — every published lesson BEFORE this one must be
+  // completed when the course enforces sequential learning. Applies to
+  // BOTH paths (manual + heartbeat): API requests cannot skip ahead.
+  if (course.requireSequentialLessons && viewer.role === "TEACHER") {
+    const sections = await db.courseSection.findMany({
+      where: { courseId: course.id },
+      orderBy: { orderIndex: "asc" },
+      select: {
+        lessons: {
+          where: { isPublished: true },
+          orderBy: { orderIndex: "asc" },
+          select: { id: true, titleAr: true },
+        },
+      },
+    });
+    const ordered = sections.flatMap((section) => section.lessons);
+    const index = ordered.findIndex((entry) => entry.id === lesson.id);
+    if (index > 0) {
+      const previousIds = ordered.slice(0, index).map((entry) => entry.id);
+      const completedRows = await db.courseLessonProgress.findMany({
+        where: { userId: viewer.id, lessonId: { in: previousIds } },
+        select: { lessonId: true },
+      });
+      const completedSet = new Set(completedRows.map((row) => row.lessonId));
+      if (completedSet.size < previousIds.length) {
+        const blocker = ordered
+          .slice(0, index)
+          .find((entry) => !completedSet.has(entry.id));
+        return progressFail(
+          `الدرس مقفل — أكمل درس «${blocker?.titleAr ?? "الدرس السابق"}» أولًا بالترتيب`,
+          "LESSON_LOCKED"
+        );
+      }
+    }
   }
 
   // Only teachers build progress; staff previews never write rows.
@@ -568,6 +654,10 @@ export async function maybeCompleteCourse(
         bestPercentage,
         hours: course.estimatedHours ?? null,
         certifiedById: certifiedById ?? null,
+        // Batch 2 — stamp the ACTIVE ACADEMIC YEAR so the annual hours,
+        // the 35-hour target and the yearly archive count this row in
+        // the right year (HTML v26 parity).
+        academicYear: await getActiveAcademicYear(),
       },
       select: { id: true },
     });

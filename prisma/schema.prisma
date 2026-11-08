@@ -217,6 +217,7 @@ model User {
   deputyAssignments  TeacherSupervisorAssignment[] @relation("TeacherSupervisionDeputy")
   /** Batch 1 — learning progress, completions and course comments. */
   lessonProgress      CourseLessonProgress[] @relation("LessonProgressOwner")
+  watchStates         LessonWatchState[]     @relation("LessonWatchOwner")
   courseCompletions   CourseCompletion[]     @relation("CourseCompletionOwner")
   courseComments      CourseComment[]        @relation("CourseCommentAuthor")
   certifiedCompletions CourseCompletion[]    @relation("CourseCompletionCertifier")
@@ -415,6 +416,10 @@ model Course {
   level         String?
   /// Estimated effort in hours (display only).
   estimatedHours Int?
+  /// Mandatory-learning policy: sequential lesson unlocking (on by default).
+  requireSequentialLessons Boolean @default(true)
+  /// Watched-percentage threshold (50..100) that completes a VIDEO lesson.
+  lessonCompletionThreshold Int @default(95)
   /// Instructor / responsible user (optional, must belong to the
   /// course's school when set — service-layer enforced).
   instructorId  String?
@@ -431,7 +436,7 @@ model Course {
   instructor User?            @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
   createdBy  User             @relation("CourseCreator", fields: [createdById], references: [id], onDelete: Restrict)
   cover      Attachment?      @relation("CourseCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
-
+  watchStates LessonWatchState[]
   sections    CourseSection[]
   attachments Attachment[]       @relation("CourseFiles")
   enrollments CourseEnrollment[]
@@ -501,9 +506,13 @@ model CourseLesson {
   orderIndex  Int
   /// Draft lessons stay invisible to teachers even in published courses.
   isPublished Boolean  @default(false)
+  /// Media duration in seconds — captured from the instructor's browser
+  /// when the lesson is saved. Powers the server-validated watch
+  /// threshold; null = unknown (threshold falls back to client metadata).
+  durationSeconds Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  watchStates LessonWatchState[]
   section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   attachment  Attachment?   @relation("LessonPrimaryAttachment", fields: [attachmentId], references: [id], onDelete: SetNull)
   attachments Attachment[]  @relation("LessonFiles")
@@ -1739,4 +1748,44 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+/**
+ * Mandatory video playback state for one teacher and one published
+ * lesson — the anti-cheat ledger behind sequential learning.
+ *
+ * Written ONLY by the server heartbeat (reportWatchProgressAction):
+ *   - watchSeconds grows at most with wall-clock time (1x speed is
+ *     enforced server-side by capping each delta at the elapsed real
+ *     seconds between heartbeats + small network grace),
+ *   - maxPositionSeconds can never outrun watchSeconds,
+ *   - completion is decided by the SERVER against the course's
+ *     lessonCompletionThreshold — the client can never POST "done".
+ */
+model LessonWatchState {
+  id          String   @id @default(cuid())
+  /// Denormalized owning course for fast gating queries.
+  courseId    String
+  lessonId    String
+  userId      String
+  /// Wall-clock-validated watched seconds (monotonic, clamped to media length).
+  watchSeconds          Float @default(0)
+  /// Highest legitimately reached position (resume ceiling while watching).
+  maxPositionSeconds    Float @default(0)
+  /// Last reported position — the resume point after a refresh.
+  lastPositionSeconds   Float @default(0)
+  /// Client-reported media length, used ONLY when the lesson has no
+  /// instructor-captured durationSeconds (best-effort fallback).
+  reportedDurationSeconds Float?
+  lastHeartbeatAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user   User         @relation("LessonWatchOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([userId, courseId])
+  @@map("lesson_watch_states")
 }

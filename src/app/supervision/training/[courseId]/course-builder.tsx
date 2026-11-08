@@ -26,6 +26,7 @@ import {
   enrollSupervisorTeachersAction,
   moveSupervisorLessonAction,
   moveSupervisorSectionAction,
+  saveSupervisorCoursePolicyAction,
   saveSupervisorLessonAction,
   saveSupervisorSectionAction,
   setSupervisorCourseStatusAction as setStatusAction,
@@ -88,6 +89,11 @@ interface CourseBuilderProps {
   }>;
   programs: Array<{ id: string; nameAr: string; platformWide: boolean }>;
   categories: string[];
+  /** Mandatory-learning policy (sequential unlocking + watch threshold). */
+  policy: {
+    requireSequentialLessons: boolean;
+    lessonCompletionThreshold: number;
+  };
 }
 
 const LESSON_TYPES = [
@@ -121,6 +127,49 @@ function Feedback({ bad, text }: { bad: boolean; text: string }) {
       {text}
     </p>
   );
+}
+
+/**
+ * Read the real duration of a video URL in the instructor's browser
+ * (metadata only, 8s timeout). The value is stored on the lesson and
+ * becomes the server-side basis of the mandatory watch threshold —
+ * students can never influence it.
+ */
+async function probeVideoDuration(url: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !url) {
+      resolve(null);
+      return;
+    }
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    const timer = window.setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, 8000);
+    function cleanup() {
+      window.clearTimeout(timer);
+      video.onloadedmetadata = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      try {
+        video.load();
+      } catch {
+        // Ignore — element is detached.
+      }
+    }
+    video.onloadedmetadata = () => {
+      const value = video.duration;
+      cleanup();
+      resolve(Number.isFinite(value) && value > 0 ? Math.round(value) : null);
+    };
+    video.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+    video.src = url;
+  });
 }
 
 export function CourseBuilder(props: CourseBuilderProps) {
@@ -159,6 +208,8 @@ export function CourseBuilder(props: CourseBuilderProps) {
       </header>
 
       <CourseMetaEditor {...props} />
+
+      <LearningPolicyEditor courseId={course.id} policy={props.policy} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -775,6 +826,8 @@ interface LessonFormPayload {
   content?: string;
   videoUrl?: string;
   isPublished?: boolean;
+  /** Media length in seconds (instructor-browser metadata). */
+  durationSeconds?: number;
 }
 
 function LessonForm({
@@ -794,8 +847,30 @@ function LessonForm({
   const [content, setContent] = React.useState(lesson?.content ?? "");
   const [videoUrl, setVideoUrl] = React.useState(lesson?.videoUrl ?? "");
   const [error, setError] = React.useState<string | null>(null);
+  const [durationSeconds, setDurationSeconds] = React.useState<number | null>(null);
+  const [probing, setProbing] = React.useState(false);
 
-  function submit() {
+  // Probe the video duration whenever the URL is set — the value is
+  // stored with the lesson and powers the server-side completion check.
+  React.useEffect(() => {
+    let cancelled = false;
+    if (type === "TEXT" || !videoUrl.trim()) {
+      setDurationSeconds(null);
+      setProbing(false);
+      return;
+    }
+    setProbing(true);
+    void probeVideoDuration(videoUrl.trim()).then((value) => {
+      if (cancelled) return;
+      setDurationSeconds(value);
+      setProbing(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [type, videoUrl]);
+
+  async function submit() {
     if (title.trim().length < 2) {
       setError("عنوان الدرس مطلوب (حرفان على الأقل).");
       return;
@@ -818,6 +893,7 @@ function LessonForm({
       content: type === "TEXT" ? content.trim() : undefined,
       videoUrl: type === "TEXT" ? undefined : videoUrl.trim(),
       isPublished: lesson?.isPublished ?? false,
+      durationSeconds: type === "TEXT" ? undefined : (durationSeconds ?? undefined),
     });
   }
 
@@ -883,6 +959,16 @@ function LessonForm({
             attachTo={lesson?.id ? { type: "lesson-media", lessonId: lesson.id } : undefined}
           />
         </div>
+      )}
+
+      {type !== "TEXT" && videoUrl.trim() && (
+        <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+          {probing
+            ? "جارٍ قراءة مدة الفيديو…"
+            : durationSeconds
+              ? `مدة الفيديو: ${Math.floor(durationSeconds / 60)} دقيقة و${durationSeconds % 60} ثانية — تُستخدم لحساب نسبة الإتمام على الخادم.`
+              : "لم تُقرأ مدة الفيديو — سيُعتمد التقدير من مشغّل الطالب (الأفضل إعادة حفظ الفيديو لالتقاط المدة)."}
+        </p>
       )}
 
       {error && (
@@ -1081,6 +1167,113 @@ function AssessmentsPanel({
           إدارة الاختبارات
         </Link>
       </div>
+    </section>
+  );
+}
+
+/* ------------------- Mandatory learning policy --------------------- */
+
+function LearningPolicyEditor({
+  courseId,
+  policy,
+}: {
+  courseId: string;
+  policy: { requireSequentialLessons: boolean; lessonCompletionThreshold: number };
+}) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [sequential, setSequential] = React.useState(policy.requireSequentialLessons);
+  const [threshold, setThreshold] = React.useState(policy.lessonCompletionThreshold);
+  const [pending, setPending] = React.useState(false);
+  const [feedback, setFeedback] = React.useState<{ bad: boolean; text: string } | null>(null);
+
+  async function handleSave() {
+    if (pending) return;
+    setPending(true);
+    setFeedback(null);
+    const result = (await saveSupervisorCoursePolicyAction({
+      courseId,
+      requireSequentialLessons: sequential,
+      lessonCompletionThreshold: threshold,
+    }));
+    setPending(false);
+    if (!result.ok) {
+      setFeedback({
+        bad: true,
+        text: result.message ?? "تعذر حفظ إعدادات التعلم الإلزامي.",
+      });
+      return;
+    }
+    setFeedback({ bad: false, text: "تم حفظ إعدادات التعلم الإلزامي." });
+    router.refresh();
+  }
+
+  return (
+    <section className="rounded-xl border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-start"
+      >
+        <span className="text-sm font-black text-foreground">
+          إعدادات التعلم الإلزامي — التسلسل ونسبة المشاهدة
+        </span>
+        {open ? (
+          <ChevronUp className="size-4 text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />
+        )}
+      </button>
+      {open && (
+        <div className="space-y-3 border-t p-4">
+          <label className="flex items-start gap-2 text-xs leading-relaxed text-foreground">
+            <input
+              type="checkbox"
+              checked={sequential}
+              onChange={(event) => setSequential(event.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-[#1D5BD6]"
+            />
+            <span>
+              <span className="font-bold">فتح الدروس بالترتيب:</span> يُفتح كل
+              درس فقط بعد إكمال ما قبله (التقييمات تبقى مقفلة حتى إكمال كل
+              الدروس). الإيقاف يتيح للمعلمين فتح أي درس بحرية.
+            </span>
+          </label>
+          <label className="block max-w-64">
+            <span className="mb-1 block text-xs font-bold">
+              نسبة المشاهدة المطلوبة لإتمام درس الفيديو (%)
+            </span>
+            <input
+              type="number"
+              min={50}
+              max={100}
+              value={threshold}
+              onChange={(event) => setThreshold(Number(event.target.value))}
+              className={inputClass}
+            />
+            <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+              من 50 إلى 100 — الافتراضي 95%. يُحتسب الإتمام على الخادم من وقت
+              المشاهدة الفعلي، ولا يمكن للطالب تعديله أو تخطيه.
+            </span>
+          </label>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              {pending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Save className="size-4" aria-hidden="true" />
+              )}
+              حفظ الإعدادات
+            </button>
+            {feedback && <Feedback {...feedback} />}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

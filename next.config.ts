@@ -9,6 +9,10 @@ import type { NextConfig } from "next";
  * for React refresh. Everything else is locked to 'self' (no third-party
  * script/style/frame origins are used anywhere in the platform).
  *
+ * R2 media: browser uploads (presigned PUT) and playback/images resolved
+ * through the /api/media proxy redirect both talk to the R2 storage host,
+ * hence it is allowed in connect-src, img-src and media-src only.
+ *
  * frame-ancestors 'none' + X-Frame-Options DENY also protect the
  * certificate print sheet from clickjacking while keeping window.print().
  */
@@ -18,9 +22,10 @@ const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://*.r2.cloudflarestorage.com",
+  "media-src 'self' https://*.r2.cloudflarestorage.com",
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",
