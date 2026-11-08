@@ -14,11 +14,17 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/platform/section-card";
 import { requireUser } from "@/lib/auth/session";
-import { LESSON_TYPE_LABELS } from "@/config/training";
 import { getLessonForViewer } from "@/lib/training/service";
 
 export const metadata = {
   title: "درس تدريبي",
+};
+
+const LESSON_TYPE_LABELS: Record<string, string> = {
+  TEXT: "نص",
+  VIDEO: "فيديو",
+  EXTERNAL_VIDEO: "فيديو خارجي",
+  RESOURCE: "مصدر تعلّم",
 };
 
 const LESSON_ICONS: Record<string, LucideIcon> = {
@@ -66,10 +72,13 @@ function navHref(courseId: string, lessonId: string | null): string | null {
 }
 
 /**
- * Lesson player: uploaded video streams from the authenticated file
- * route (with HTTP Range support), external videos render as
- * allow-listed embeds, text renders safely as plain text, and resources
- * download through the same access-checked route.
+ * Lesson player: uploaded videos are stored in lesson.videoUrl as an
+ * /api/media/… proxy path (NOT in attachmentId). For teachers, VIDEO
+ * lessons redirect to the learning hub — the only surface wired to the
+ * mandatory player and the server heartbeat ledger that credits
+ * completion. External videos render as allow-listed embeds, text
+ * renders safely as plain text, and resources download through the
+ * access-checked files route.
  */
 export default async function LessonPage({
   params,
@@ -87,6 +96,16 @@ export default async function LessonPage({
   }
   const { course, lesson, outline, prevLessonId, nextLessonId, sectionTitle } =
     result.data;
+
+  // Mandatory learning enforcement: teachers never watch uploaded
+  // videos through a bare <video> tag here — that would bypass the
+  // server heartbeat ledger, so the watch would never count toward
+  // completion and the sequential gate would stay closed. The learning
+  // hub renders the governed player instead. Lessons without a saved
+  // video fall through to an explanatory notice below.
+  if (lesson.type === "VIDEO" && user.role === "TEACHER" && lesson.videoUrl) {
+    redirect(`/academy/learn/${course.id}`);
+  }
 
   const prevHref = navHref(course.id, prevLessonId);
   const nextHref = navHref(course.id, nextLessonId);
@@ -107,7 +126,7 @@ export default async function LessonPage({
         <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
             <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-              {LESSON_TYPE_LABELS[lesson.type as keyof typeof LESSON_TYPE_LABELS] ?? lesson.type}
+              {LESSON_TYPE_LABELS[lesson.type] ?? lesson.type}
             </span>
             <span className="text-[11px] font-semibold text-muted-foreground">
               {sectionTitle}
@@ -115,16 +134,26 @@ export default async function LessonPage({
           </div>
 
           <div className="p-4 sm:p-6">
-            {lesson.type === "VIDEO" && lesson.attachmentId && (
-              <video
-                controls
-                preload="metadata"
-                src={`/api/files/${lesson.attachmentId}`}
-                className="w-full rounded-lg bg-black"
-              >
-                متصفحك لا يدعم تشغيل الفيديو.
-              </video>
-            )}
+            {lesson.type === "VIDEO" &&
+              (lesson.videoUrl ? (
+                /* Reaches teachers only when redirecting is impossible
+                   (no video saved); staff preview plays freely. */
+                <video
+                  controls
+                  preload="metadata"
+                  playsInline
+                  src={lesson.videoUrl}
+                  className="w-full rounded-lg bg-black"
+                >
+                  متصفحك لا يدعم تشغيل الفيديو.
+                </video>
+              ) : (
+                <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800">
+                  لا يوجد فيديو محفوظ لهذا الدرس — غالبًا لأن الرفع فشل وقت
+                  إنشائه. أعد رفع الفيديو من صفحة إدارة الدورة ثم أعد فتح هذه
+                  الصفحة.
+                </div>
+              ))}
 
             {lesson.type === "EXTERNAL_VIDEO" && lesson.videoUrl && (
               <>
