@@ -1,5 +1,12 @@
-import type { AdminContext } from "@/lib/auth/dev-admin";
+import type { AdminContext, SupervisorTrainingContext } from "@/lib/auth/dev-admin";
 import type { TrainingErrorCode } from "@/lib/validation/training";
+
+/**
+ * Any context allowed into the training management service layer:
+ * the administrative trio PLUS the educational supervisor (whose
+ * tenant fence is identical — own school only, never platform-wide).
+ */
+export type TrainingManageContext = AdminContext | SupervisorTrainingContext;
 
 /* ------------------------------------------------------------------ */
 /* Training academy — authorization & visibility predicates.            */
@@ -23,8 +30,8 @@ export interface ScopedRecord {
 }
 
 /**
- * Administrative trio allowed to manage programs/courses/content.
- * SCHOOL_MANAGER manages its OWN school's records only — the fence is
+ * Roles allowed to manage programs/courses/content. The educational
+ * supervisor manages training for their OWN school only — the fence is
  * structural in `trainingScopeError` below (platform-wide records stay
  * SUPER_ADMIN-only).
  */
@@ -32,7 +39,8 @@ export function canManageTraining(role: string): boolean {
   return (
     role === "SUPER_ADMIN" ||
     role === "DEVELOPMENT_OFFICE_MANAGER" ||
-    role === "SCHOOL_MANAGER"
+    role === "SCHOOL_MANAGER" ||
+    role === "EDUCATIONAL_SUPERVISOR"
   );
 }
 
@@ -86,13 +94,14 @@ export interface ScopeRejection {
  * school-scoped role — no exceptions.
  */
 export function trainingScopeError(
-  ctx: AdminContext,
+  ctx: TrainingManageContext,
   recordSchoolId: string | null
 ): ScopeRejection | null {
   if (ctx.role === "SUPER_ADMIN") return null;
   if (
     (ctx.role === "DEVELOPMENT_OFFICE_MANAGER" ||
-      ctx.role === "SCHOOL_MANAGER") &&
+      ctx.role === "SCHOOL_MANAGER" ||
+      ctx.role === "EDUCATIONAL_SUPERVISOR") &&
     recordSchoolId !== null &&
     recordSchoolId === ctx.schoolId
   ) {

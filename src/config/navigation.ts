@@ -116,6 +116,42 @@ export const navItems: NavItem[] = [
     plannedFeatures: [],
   },
   {
+    id: "supervisor-dashboard",
+    label: "لوحة المشرف",
+    href: "/supervision/dashboard",
+    description:
+      "مؤشرات حقيقية من قاعدة البيانات: معلموك، دوراتهم، التسجيل والإتمام، الاختبارات، قياس الأثر، والمتابعات المعلّقة.",
+    icon: LayoutDashboard,
+    plannedFeatures: [],
+  },
+  {
+    id: "supervisor-training",
+    label: "إدارة التدريب",
+    href: "/supervision/training",
+    description:
+      "أنشئ دورات مدرستك وابنِ محتواها: أقسام ودروس وفيديوهات (رفع مباشر أو رابط خارجي) ثم انشرها لمعلميك.",
+    icon: MonitorPlay,
+    plannedFeatures: [],
+  },
+  {
+    id: "supervisor-assessments",
+    label: "الأسئلة والاختبارات",
+    href: "/supervision/assessments",
+    description:
+      "أنشئ أسئلة واختبارات مرتبطة بالدورات، وانشرها، وتابع نتائج معلميك ومعدلات النجاح.",
+    icon: ClipboardCheck,
+    plannedFeatures: [],
+  },
+  {
+    id: "supervisor-impact",
+    label: "قياس الأثر",
+    href: "/supervision/impact",
+    description:
+      "أدوات قياس أثر التدريب: أنشئ استبانات ما بعد التدريب لدوراتك وتابع الاستجابات والنتائج والمتوسطات.",
+    icon: TrendingUp,
+    plannedFeatures: [],
+  },
+  {
     id: "assessments",
     label: "الاختبارات والتقييم",
     href: "/assessments",

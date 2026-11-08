@@ -1,5 +1,12 @@
-import type { AdminContext } from "@/lib/auth/dev-admin";
+import type { AdminContext, SupervisorTrainingContext } from "@/lib/auth/dev-admin";
 import type { AssessmentErrorCode, AssessmentResult } from "@/lib/validation/assessment";
+
+/**
+ * Any context allowed into the assessment management service layer:
+ * the administrative trio PLUS the educational supervisor (whose
+ * tenant fence is identical — own school only, never platform-wide).
+ */
+export type AssessmentManageContext = AdminContext | SupervisorTrainingContext;
 
 /* ------------------------------------------------------------------ */
 /* Assessments — authorization & visibility predicates.                 */
@@ -24,16 +31,17 @@ export interface ScopedAssessment {
 }
 
 /**
- * Administrative trio allowed to manage assessments. SCHOOL_MANAGER
- * manages its OWN school's assessments only — the fence is structural
- * in `assessmentScopeError` below (platform-wide records stay
- * SUPER_ADMIN-only).
+ * Roles allowed to manage assessments. The educational supervisor
+ * manages assessments for their OWN school only — the fence is
+ * structural in `assessmentScopeError` below (platform-wide records
+ * stay SUPER_ADMIN-only).
  */
 export function canManageAssessments(role: string): boolean {
   return (
     role === "SUPER_ADMIN" ||
     role === "DEVELOPMENT_OFFICE_MANAGER" ||
-    role === "SCHOOL_MANAGER"
+    role === "SCHOOL_MANAGER" ||
+    role === "EDUCATIONAL_SUPERVISOR"
   );
 }
 
@@ -87,13 +95,14 @@ export type ScopeRejection = {
  * school-scoped role — no exceptions.
  */
 export function assessmentScopeError(
-  ctx: AdminContext,
+  ctx: AssessmentManageContext,
   recordSchoolId: string | null
 ): ScopeRejection | null {
   if (ctx.role === "SUPER_ADMIN") return null;
   if (
     (ctx.role === "DEVELOPMENT_OFFICE_MANAGER" ||
-      ctx.role === "SCHOOL_MANAGER") &&
+      ctx.role === "SCHOOL_MANAGER" ||
+      ctx.role === "EDUCATIONAL_SUPERVISOR") &&
     recordSchoolId !== null &&
     recordSchoolId === ctx.schoolId
   ) {

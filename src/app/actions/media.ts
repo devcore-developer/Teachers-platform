@@ -61,6 +61,9 @@ const MANAGER_ROLES = [
   "SUPER_ADMIN",
   "DEVELOPMENT_OFFICE_MANAGER",
   "SCHOOL_MANAGER",
+  // Educational supervisors build their school's course content
+  // (covers, lesson videos) — same tenant fence, verified below.
+  "EDUCATIONAL_SUPERVISOR",
 ] as const;
 
 function isManager(user: { role: string }): boolean {
