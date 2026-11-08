@@ -30,6 +30,11 @@ import type { NavItem } from "@/lib/types";
  * Batch 3: platform settings for SUPER_ADMIN, school workspace hub for
  * the school-administration pair. The stale "قريباً" badges on
  * التكليفات and الشهادات are gone — both modules are live.
+ *
+ * The supervisor dashboard ("لوحة المشرف") is intentionally NOT a nav
+ * module anymore: it merged into the Home page (/) — the supervisor's
+ * "الرئيسية" — and /supervision/dashboard now redirects there, so the
+ * dashboard lives in exactly one place.
  */
 export const navItems: NavItem[] = [
   {
@@ -113,15 +118,6 @@ export const navItems: NavItem[] = [
     href: "/academy/manage",
     description: "إنشاء الدورات وبناء محتواها ونشرها لجمهورها المصرح له.",
     icon: MonitorPlay,
-    plannedFeatures: [],
-  },
-  {
-    id: "supervisor-dashboard",
-    label: "لوحة المشرف",
-    href: "/supervision/dashboard",
-    description:
-      "مؤشرات حقيقية من قاعدة البيانات: معلموك، دوراتهم، التسجيل والإتمام، الاختبارات، قياس الأثر، والمتابعات المعلّقة.",
-    icon: LayoutDashboard,
     plannedFeatures: [],
   },
   {
@@ -277,4 +273,118 @@ export function activeNavItemId(pathname: string, items: NavItem[]): string | nu
     }
   }
   return bestId;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar grouping — presentation only, shared by the desktop rail     */
+/* and the mobile drawer so the two can never drift apart.              */
+/*                                                                      */
+/* Grouping NEVER adds, removes or re-orders modules: items still       */
+/* arrive role-filtered from the server (navIdsForRole), and any id     */
+/* that is not listed in the active profile falls back to an unlabeled  */
+/* trailing group, so a future module can never disappear from the UI   */
+/* by accident.                                                         */
+/*                                                                      */
+/* Two profiles:                                                        */
+/*   • SUPERVISOR — the approved supervisor information architecture    */
+/*     (الرئيسية / التدريب والتطوير / المتابعة والنتائج / التواصل       */
+/*     والحساب). Selected whenever the role-filtered set contains a     */
+/*     supervisor-only module ("supervisor-training") — deterministic,  */
+/*     data-driven, and invisible to every other role.                  */
+/*   • DEFAULT — the classic grouping, byte-for-byte identical output   */
+/*     to the previous sidebar for all non-supervisor roles.            */
+/* ------------------------------------------------------------------ */
+
+export interface NavGroupDef {
+  label: string;
+  members: string[];
+}
+
+export interface RenderedNavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const DEFAULT_NAV_GROUPS: NavGroupDef[] = [
+  {
+    label: "القائمة الرئيسية",
+    members: [
+      "home",
+      "academy",
+      "schools",
+      "school-branding",
+      "users",
+      "school-users",
+      "supervision",
+      "deputy-overview",
+    ],
+  },
+  {
+    label: "التدريب والتقييم",
+    members: [
+      "programs",
+      "course-management",
+      "assessments",
+      "assignments",
+      "certificates",
+      "reports",
+    ],
+  },
+  {
+    label: "حسابي",
+    members: ["my-profile", "settings"],
+  },
+];
+
+/** Supervisor profile — the approved 4-group information architecture. */
+const SUPERVISOR_NAV_GROUPS: NavGroupDef[] = [
+  {
+    label: "الرئيسية",
+    members: ["home", "supervision"],
+  },
+  {
+    label: "التدريب والتطوير",
+    members: [
+      "academy",
+      "supervisor-training",
+      "supervisor-assessments",
+      "supervisor-impact",
+    ],
+  },
+  {
+    label: "المتابعة والنتائج",
+    members: ["assignments", "certificates", "reports", "growth"],
+  },
+  {
+    label: "التواصل والحساب",
+    members: ["messages", "my-profile", "account-security"],
+  },
+];
+
+/**
+ * Group the role-filtered items following the active profile. Items are
+ * emitted in the profile's member order (so "الرسائل" precedes "ملفي
+ * الشخصي" for the supervisor as designed), unknown ids fall back to an
+ * unlabeled trailing group in config order, and empty groups are
+ * dropped — other roles keep exactly the groups they see today.
+ */
+export function navGroupsForItems(items: NavItem[]): RenderedNavGroup[] {
+  const profile = items.some((item) => item.id === "supervisor-training")
+    ? SUPERVISOR_NAV_GROUPS
+    : DEFAULT_NAV_GROUPS;
+
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const known = new Set(profile.flatMap((group) => group.members));
+
+  const groups: RenderedNavGroup[] = profile.map((group) => ({
+    label: group.label,
+    items: group.members
+      .map((id) => byId.get(id))
+      .filter((item): item is NavItem => item !== undefined),
+  }));
+
+  const leftovers = items.filter((item) => !known.has(item.id));
+  if (leftovers.length > 0) groups.push({ label: "", items: leftovers });
+
+  return groups.filter((group) => group.items.length > 0);
 }

@@ -698,7 +698,7 @@ function LessonsList({ section }: { section: BuilderSection }) {
                       lesson.isPublished
                         ? "bg-success-soft text-success"
                         : "bg-amber-100 text-amber-700"
-                                            }`}
+                    }`}
                   >
                     {lesson.isPublished ? "منشور للمعلمين" : "مسودة"}
                   </button>

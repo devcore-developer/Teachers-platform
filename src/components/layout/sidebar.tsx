@@ -6,7 +6,10 @@ import { Landmark, Palette } from "lucide-react";
 
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { FitText } from "@/components/layout/fit-text";
-import { activeNavItemId } from "@/config/navigation";
+import {
+  activeNavItemId,
+  navGroupsForItems,
+} from "@/config/navigation";
 import { cn } from "@/lib/utils";
 import type { NavItem, PlatformBranding } from "@/lib/types";
 
@@ -21,58 +24,6 @@ interface SidebarProps {
 }
 
 /**
- * Visual grouping of the sidebar — presentation only. It never adds,
- * removes or re-orders modules: items still arrive role-filtered from
- * the server (navIdsForRole) in their config order, and any id that is
- * not listed below falls back to an unlabeled trailing group, so a
- * future module can never disappear from the UI by accident.
- */
-const NAV_GROUPS: Array<{ label: string; members: string[] }> = [
-  {
-    label: "القائمة الرئيسية",
-    members: [
-      "home",
-      "academy",
-      "schools",
-      "school-branding",
-      "users",
-      "school-users",
-      "supervision",
-      "deputy-overview",
-    ],
-  },
-  {
-    label: "التدريب والتقييم",
-    members: [
-      "programs",
-      "course-management",
-      "assessments",
-      "assignments",
-      "certificates",
-      "reports",
-    ],
-  },
-  {
-    label: "حسابي",
-    members: ["my-profile", "settings"],
-  },
-];
-
-/** Group the role-filtered items, preserving config order inside each group. */
-function groupNavItems(
-  items: NavItem[]
-): Array<{ label: string; items: NavItem[] }> {
-  const known = new Set(NAV_GROUPS.flatMap((group) => group.members));
-  const groups = NAV_GROUPS.map((group) => ({
-    label: group.label,
-    items: items.filter((item) => group.members.includes(item.id)),
-  }));
-  const leftovers = items.filter((item) => !known.has(item.id));
-  if (leftovers.length > 0) groups.push({ label: "", items: leftovers });
-  return groups.filter((group) => group.items.length > 0);
-}
-
-/**
  * Desktop application sidebar — premium navy rail on the inline-start
  * side, which in the RTL layout is the right edge of the screen.
  * Hidden on mobile (the mobile navigation Sheet takes over below lg).
@@ -80,6 +31,11 @@ function groupNavItems(
  * Active state uses the longest-href match, so nested routes highlight
  * exactly one item (e.g. /academy/manage/12 highlights "إدارة الدورات"
  * without also highlighting "الأكاديمية التدريبية").
+ *
+ * Grouping comes from the shared navGroupsForItems (same source as the
+ * mobile drawer): supervisors get the approved 4-group information
+ * architecture, every other role keeps the classic grouping. Grouping
+ * is presentation only — it never adds, removes or re-orders modules.
  *
  * Overflow contract (verified in a real browser with 44-character
  * Arabic school names): the rail is a fixed 18rem; the school wordmark
@@ -92,7 +48,7 @@ function groupNavItems(
 export function Sidebar({ branding, items, canManageBranding, className }: SidebarProps) {
   const pathname = usePathname();
   const activeId = activeNavItemId(pathname, items);
-  const groups = groupNavItems(items);
+  const groups = navGroupsForItems(items);
 
   const schoolName = branding.currentSchool?.name ?? null;
 

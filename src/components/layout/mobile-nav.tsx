@@ -13,7 +13,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { activeNavItemId } from "@/config/navigation";
+import {
+  activeNavItemId,
+  navGroupsForItems,
+} from "@/config/navigation";
 import { cn } from "@/lib/utils";
 import type { CurrentUser, NavItem, PlatformBranding } from "@/lib/types";
 
@@ -26,58 +29,11 @@ interface MobileNavProps {
 }
 
 /**
- * Visual grouping — kept in sync with the desktop sidebar (presentation
- * only; never adds, removes or re-orders modules). Unknown ids fall back
- * to an unlabeled trailing group.
- */
-const NAV_GROUPS: Array<{ label: string; members: string[] }> = [
-  {
-    label: "القائمة الرئيسية",
-    members: [
-      "home",
-      "academy",
-      "schools",
-      "school-branding",
-      "users",
-      "supervision",
-      "deputy-overview",
-    ],
-  },
-  {
-    label: "التدريب والتقييم",
-    members: [
-      "programs",
-      "course-management",
-      "assessments",
-      "assignments",
-      "certificates",
-      "reports",
-    ],
-  },
-  {
-    label: "حسابي",
-    members: ["my-profile", "settings"],
-  },
-];
-
-/** Group the role-filtered items, preserving config order inside each group. */
-function groupNavItems(
-  items: NavItem[]
-): Array<{ label: string; items: NavItem[] }> {
-  const known = new Set(NAV_GROUPS.flatMap((group) => group.members));
-  const groups = NAV_GROUPS.map((group) => ({
-    label: group.label,
-    items: items.filter((item) => group.members.includes(item.id)),
-  }));
-  const leftovers = items.filter((item) => !known.has(item.id));
-  if (leftovers.length > 0) groups.push({ label: "", items: leftovers });
-  return groups.filter((group) => group.items.length > 0);
-}
-
-/**
  * Mobile navigation drawer. Slides from the inline-start edge (right
  * side in RTL) and mirrors the desktop sidebar navigation, including
- * its visual grouping.
+ * its visual grouping — both read the SAME shared navGroupsForItems,
+ * so the two can never drift apart: supervisors get the approved
+ * 4-group architecture, every other role keeps the classic grouping.
  *
  * Active state uses the longest-href match — identical behavior to the
  * desktop sidebar. The drawer closes itself when a link is clicked and
@@ -92,7 +48,7 @@ export function MobileNav({
 }: MobileNavProps) {
   const pathname = usePathname();
   const activeId = activeNavItemId(pathname, items);
-  const groups = groupNavItems(items);
+  const groups = navGroupsForItems(items);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

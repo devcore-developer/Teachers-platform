@@ -558,7 +558,7 @@ export async function listSupervisorEnrollments(
   if (!course) return [];
 
   const teacherIds = (await listSupervisorTeachers(ctx)).map((row) => row.id);
-    if (teacherIds.length === 0) return [];
+  if (teacherIds.length === 0) return [];
 
   const [rows, completions] = await Promise.all([
     db.courseEnrollment.findMany({

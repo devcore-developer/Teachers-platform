@@ -558,7 +558,7 @@ function QuestionAddForm({
       {isChoice && (
         <div className="mt-3 space-y-2">
           <span className="block text-xs font-bold">الخيارات *</span>
-                    {options.map((option, index) => (
+          {options.map((option, index) => (
             <div key={index} className="flex items-center gap-2">
               <input
                 type={type === "SINGLE_CHOICE" ? "radio" : "checkbox"}

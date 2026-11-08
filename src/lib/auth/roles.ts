@@ -100,6 +100,9 @@ export function requiresEmailVerification(role: string): boolean {
  *   assignments / certificates — SUPER_ADMIN and EDUCATIONAL_SUPERVISOR
  *   get read-only registers (enforced again at page + service level).
  *   school-users — EDUCATIONAL_DEPUTY read-only directory.
+ *
+ * The supervisor's dashboard is the Home page itself (merged, single
+ * source of truth) — there is no separate supervisor dashboard module.
  */
 const NAV_ROLES: Record<string, Role[]> = {
   home: [...ROLE_KEYS],
@@ -123,9 +126,28 @@ const NAV_ROLES: Record<string, Role[]> = {
   // Phase 5 — program + course management (admin trio)
   programs: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],
   "course-management": ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],
+  // Supervisor training workspace — a dedicated, school-scoped mirror
+  // of the training lifecycle (courses+builder / assessments / impact).
+  // Same service layer, same tenant fences, separate routes so the
+  // admin-trio modules keep their own guards untouched. The former
+  // "supervisor-dashboard" module merged into the Home page (/) — its
+  // widgets render there and /supervision/dashboard redirects to /.
+  "supervisor-training": ["EDUCATIONAL_SUPERVISOR"],
+  "supervisor-assessments": ["EDUCATIONAL_SUPERVISOR"],
+  "supervisor-impact": ["EDUCATIONAL_SUPERVISOR"],
   // Phase 6 — assessments: teachers take them; managers administer;
-  // supervisors/deputies get read-only results inside their scope
-  assessments: [...ROLE_KEYS],
+  // deputies get read-only results inside their scope. Supervisors are
+  // intentionally NOT listed: their dedicated supervisor-assessments
+  // module (create, publish, results, teacher performance) supersedes
+  // the generic read-only view, so the sidebar carries no duplicate
+  // entries. The /assessments route and its guards are untouched.
+  assessments: [
+    "SUPER_ADMIN",
+    "DEVELOPMENT_OFFICE_MANAGER",
+    "SCHOOL_MANAGER",
+    "EDUCATIONAL_DEPUTY",
+    "TEACHER",
+  ],
   // Phase 7 — assignments: managers run them; supervisor sees a
   // read-only register of what targets their assigned teachers;
   // SUPER_ADMIN sees a platform-wide read-only register
