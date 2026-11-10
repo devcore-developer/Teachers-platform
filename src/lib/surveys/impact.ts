@@ -146,7 +146,41 @@ export interface MyImpactStatus {
   available: boolean;
   submitted: boolean;
   submittedAt: Date | null;
+  /** Existing answers keyed by questionId (raw form values) so the
+   *  form pre-fills them — the HTML openImpact edit rule. Identified
+   *  surveys only; anonymous surveys never read back by identity. */
+  previousAnswers: Record<string, string> | null;
   survey: ImpactSurveyView | null;
+}
+
+/** Raw form value for one stored answer (radio value / option text /
+ *  textarea default) — mirrors how the original HTML pre-filled the
+ *  impact form from the teacher's previous response. */
+function formValueForAnswer(
+  question: { type: string },
+  answer: {
+    valueNumber: number | null;
+    valueText: string | null;
+    selectedOptionsJson: string | null;
+  }
+): string | null {
+  if (answer.valueNumber !== null && answer.valueNumber !== undefined) {
+    return SURVEY_TYPE_MAP[question.type] === "YES_NO"
+      ? answer.valueNumber === 1
+        ? "1"
+        : "0"
+      : String(answer.valueNumber);
+  }
+  if (answer.selectedOptionsJson) {
+    try {
+      const parsed = JSON.parse(answer.selectedOptionsJson);
+      if (Array.isArray(parsed) && typeof parsed[0] === "string") return parsed[0];
+    } catch {
+      /* fall through */
+    }
+    return null;
+  }
+  return answer.valueText ?? null;
 }
 
 /** The teacher's impact status for one course (survey + own response). */
@@ -156,7 +190,16 @@ export async function getMyImpactStatus(
 ): Promise<ImpactResult<MyImpactStatus>> {
   const survey = await loadPublishedCourseSurvey(courseId);
   if (!survey || survey.questions.length === 0) {
-    return { ok: true, data: { available: false, submitted: false, submittedAt: null, survey: null } };
+    return {
+      ok: true,
+      data: {
+        available: false,
+        submitted: false,
+        submittedAt: null,
+        previousAnswers: null,
+        survey: null,
+      },
+    };
   }
 
   const [completion, response] = await Promise.all([
@@ -172,10 +215,38 @@ export async function getMyImpactStatus(
             respondentId: viewer.id,
             status: "SUBMITTED",
           },
-          select: { id: true, submittedAt: true },
+          select: {
+            id: true,
+            submittedAt: true,
+            answers: {
+              select: {
+                questionId: true,
+                valueNumber: true,
+                valueText: true,
+                selectedOptionsJson: true,
+              },
+            },
+          },
           orderBy: { submittedAt: "desc" },
         }),
   ]);
+
+  // Pre-fill map for the edit flow (HTML parity): questionId -> raw
+  // form value of the teacher's previously submitted answer.
+  const previousAnswers = response
+    ? Object.fromEntries(
+        response.answers
+          .map((answer) => {
+            const question = survey.questions.find(
+              (item) => item.id === answer.questionId
+            );
+            if (!question) return null;
+            const value = formValueForAnswer(question, answer);
+            return value !== null ? [question.id, value] : null;
+          })
+          .filter((entry): entry is [string, string] => entry !== null)
+      )
+    : null;
 
   const surveyView: ImpactSurveyView = {
     surveyId: survey.id,
@@ -194,6 +265,7 @@ export async function getMyImpactStatus(
       available: completion !== null,
       submitted: response !== null,
       submittedAt: response?.submittedAt ?? null,
+      previousAnswers,
       survey: surveyView,
     },
   };
@@ -295,23 +367,32 @@ export async function submitImpactResponse(
       prepared.push({ questionId: question.id, valueNumber: answer.valueNumber });
     } else if (type === "SINGLE_CHOICE") {
       const options = parseOptionsJson(question.optionsJson) ?? [];
-      if (!answer.selectedOption || !options.includes(answer.selectedOption)) {
+      // A purely numeric option text arrives from the form action as
+      // valueNumber — recover the option string from it (the HTML
+      // <select> accepted any option text, numeric included).
+      const candidate =
+        answer.selectedOption ??
+        (answer.valueNumber !== undefined ? String(answer.valueNumber) : undefined);
+      if (!candidate || !options.includes(candidate)) {
         fieldErrors[question.id] = "اختر أحد الخيارات المتاحة";
         continue;
       }
       prepared.push({
         questionId: question.id,
-        selectedOptionsJson: JSON.stringify([answer.selectedOption]),
+        selectedOptionsJson: JSON.stringify([candidate]),
       });
     } else if (type === "MULTI_CHOICE") {
       const options = parseOptionsJson(question.optionsJson) ?? [];
-      if (!answer.selectedOption || !options.includes(answer.selectedOption)) {
+      const candidate =
+        answer.selectedOption ??
+        (answer.valueNumber !== undefined ? String(answer.valueNumber) : undefined);
+      if (!candidate || !options.includes(candidate)) {
         fieldErrors[question.id] = "اختر أحد الخيارات المتاحة";
         continue;
       }
       prepared.push({
         questionId: question.id,
-        selectedOptionsJson: JSON.stringify([answer.selectedOption]),
+        selectedOptionsJson: JSON.stringify([candidate]),
       });
     } else {
       const text = (answer.valueText ?? "").trim();

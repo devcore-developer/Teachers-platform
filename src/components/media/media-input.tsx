@@ -30,7 +30,9 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmbeddedVideoFrame } from "@/components/training/embedded-video-frame";
 import { cn } from "@/lib/utils";
+import { parseEmbeddableVideoUrl } from "@/lib/media/video-url";
 import {
   confirmMediaUploadAction,
   removeMediaAction,
@@ -308,6 +310,8 @@ export function MediaInput({
   /* ---------------- Render ---------------- */
 
   const showPreview = Boolean(value);
+  /** YouTube/Vimeo links preview through the provider embed, not <video>. */
+  const embeddable = kind === "video" && typeof value === "string" && parseEmbeddableVideoUrl(value) !== null;
   const phaseText =
     phase === "requesting"
       ? "تجهيز الرفع…"
@@ -389,7 +393,7 @@ export function MediaInput({
                 placeholder={
                   kind === "image"
                     ? "https://example.com/image.png"
-                    : "https://example.com/video.mp4"
+                    : "https://example.com/video.mp4 أو رابط يوتيوب"
                 }
                 disabled={disabled || busy}
                 aria-invalid={Boolean(urlError)}
@@ -413,7 +417,8 @@ export function MediaInput({
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              الرابط الخارجي يُحفظ كما هو — لا يُنسخ إلى التخزين السحابي.
+              الروابط الخارجية تُحفظ كما هي — لا تُنسخ إلى التخزين السحابي، وروابط
+              يوتيوب (watch و youtu.be و shorts و embed) تُشغَّل مدمجةً داخل صفحة الدرس.
             </p>
           </div>
         ) : (
@@ -505,7 +510,11 @@ export function MediaInput({
         <div className="mt-3 rounded-xl border bg-muted/30 p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="rounded-full bg-card px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border">
-              {isManagedUrl(value) ? "مخزَّن سحابيًا (R2)" : "رابط خارجي"}
+              {isManagedUrl(value)
+                ? "مخزَّن سحابيًا (R2)"
+                : kind === "video" && embeddable
+                  ? "فيديو مدمج (YouTube/Vimeo)"
+                  : "رابط خارجي"}
             </span>
             <Button
               type="button"
@@ -531,6 +540,19 @@ export function MediaInput({
                   setNotice({ bad: true, text: "تعذر تحميل الصورة من الرابط المحفوظ." })
                 }
               />
+            ) : embeddable ? (
+              /* YouTube/Vimeo — the provider iframe previews the saved
+                 link (a native <video> tag cannot read a watch page). */
+              <>
+                <EmbeddedVideoFrame
+                  src={value}
+                  title="معاينة الفيديو المدمج"
+                  className="aspect-video max-h-60 w-full overflow-hidden rounded-lg border bg-black"
+                />
+                <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                  معاينة مدمجة داخل المنصة — سيُشغَّل الفيديو داخل صفحة الدرس مباشرة دون إعادة توجيه.
+                </p>
+              </>
             ) : (
               <video
                 src={value}
@@ -538,7 +560,11 @@ export function MediaInput({
                 preload="metadata"
                 className="max-h-60 w-full rounded-lg border bg-black"
                 onError={() =>
-                  setNotice({ bad: true, text: "تعذر تحميل الفيديو من الرابط المحفوظ." })
+                  setNotice({
+                    bad: true,
+                    text:
+                      "تعذر تحميل الفيديو من الرابط المحفوظ — تأكد أنه ملف فيديو مباشر (MP4/WEBM) أو رابط يوتيوب صحيح.",
+                  })
                 }
               />
             )}

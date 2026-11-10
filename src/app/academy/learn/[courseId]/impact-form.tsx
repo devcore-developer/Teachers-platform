@@ -29,6 +29,11 @@ interface ImpactQuestion {
   maxScore: number | null;
 }
 
+/** Previously submitted answers keyed by questionId — the HTML
+ *  openImpact pre-fill rule: re-opening the form shows the teacher's
+ *  earlier answers so re-submitting is an EDIT, not a blind replace. */
+const EMPTY_PREVIOUS: Record<string, string> = {};
+
 const initialState: LearningActionState = { ok: false };
 
 const RATING_LABELS: Record<number, string> = {
@@ -36,7 +41,7 @@ const RATING_LABELS: Record<number, string> = {
   2: "ضعيف",
   3: "متوسط",
   4: "جيد",
-  5: "ممتاز",
+  5: "مرتفع",
 };
 
 export function ImpactForm({
@@ -44,11 +49,13 @@ export function ImpactForm({
   surveyTitle,
   instructions,
   questions,
+  previous = EMPTY_PREVIOUS,
 }: {
   courseId: string;
   surveyTitle: string;
   instructions: string | null;
   questions: ImpactQuestion[];
+  previous?: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(
     submitImpactAction,
@@ -94,6 +101,7 @@ export function ImpactForm({
                       name={`impact_${question.id}`}
                       value={value}
                       required={question.required}
+                      defaultChecked={previous[question.id] === String(value)}
                       className="sr-only"
                     />
                     <span className="text-base font-extrabold">{value}</span>
@@ -113,6 +121,7 @@ export function ImpactForm({
                     name={`impact_${question.id}`}
                     value="1"
                     required={question.required}
+                    defaultChecked={previous[question.id] === "1"}
                     className="accent-[#1D5BD6]"
                   />
                   نعم
@@ -123,6 +132,7 @@ export function ImpactForm({
                     name={`impact_${question.id}`}
                     value="0"
                     required={question.required}
+                    defaultChecked={previous[question.id] === "0"}
                     className="accent-[#1D5BD6]"
                   />
                   لا
@@ -143,6 +153,7 @@ export function ImpactForm({
                         name={`impact_${question.id}`}
                         value={option}
                         required={question.required}
+                        defaultChecked={previous[question.id] === option}
                         className="accent-[#1D5BD6]"
                       />
                       {option}
@@ -158,6 +169,7 @@ export function ImpactForm({
                 required={question.required}
                 maxLength={2000}
                 placeholder="اكتب إجابتك هنا…"
+                defaultValue={previous[question.id] ?? ""}
                 className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-sm outline-none focus:border-[#1D5BD6] focus:ring-2 focus:ring-blue-100"
               />
             )}

@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 
 import { MandatoryVideoPlayer } from "@/components/training/mandatory-video-player";
+import { EmbeddedVideoFrame } from "@/components/training/embedded-video-frame";
+import { parseEmbeddableVideoUrl } from "@/lib/media/video-url";
 import {
   markLessonCompleteAction,
   type LearningActionState,
@@ -159,7 +161,11 @@ export function LessonChecklist({
                         </p>
                       )}
 
-                      {/* Uploaded video — mandatory player for teachers. */}
+                      {/* Uploaded video — mandatory player for teachers.
+                          Teachers get the governed player (native R2 files
+                          AND YouTube links embed behind the same server
+                          ledger); staff get a free preview (embeds for
+                          YouTube/Vimeo, native video for files). */}
                       {canPlayVideo && lesson.videoUrl && (
                         <div className="mt-3">
                           {isTeacher ? (
@@ -202,6 +208,13 @@ export function LessonChecklist({
                                 }}
                               />
                             )
+                          ) : parseEmbeddableVideoUrl(lesson.videoUrl) ? (
+                            /* Staff preview — embeddable providers render in-page. */
+                            <EmbeddedVideoFrame
+                              src={lesson.videoUrl}
+                              title={lesson.titleAr}
+                              className="mt-2 aspect-video w-full overflow-hidden rounded-xl border border-slate-200 bg-black"
+                            />
                           ) : (
                             /* Staff preview — free playback, no ledger. */
                             <video
@@ -215,19 +228,29 @@ export function LessonChecklist({
                         </div>
                       )}
 
-                      {/* External video — link out (cannot be measured). */}
+                      {/* External video — embeddable providers (YouTube/
+                          Vimeo) play inside the page; anything else keeps
+                          the plain external link. No ledger here: external
+                          links stay manually-marked as before. */}
                       {lesson.type === "EXTERNAL_VIDEO" && lesson.videoUrl && (
                         <div className="mt-2">
-                          <a
-                            href={lesson.videoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1D5BD6] hover:text-[#174aa8]"
-                          >
-                            <PlayCircle className="size-4" aria-hidden="true" />
-                            فتح الفيديو
-                            <ExternalLink className="size-3" aria-hidden="true" />
-                          </a>
+                          {parseEmbeddableVideoUrl(lesson.videoUrl) ? (
+                            <EmbeddedVideoFrame
+                              src={lesson.videoUrl}
+                              title={lesson.titleAr}
+                            />
+                          ) : (
+                            <a
+                              href={lesson.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1D5BD6] hover:text-[#174aa8]"
+                            >
+                              <PlayCircle className="size-4" aria-hidden="true" />
+                              فتح الفيديو
+                              <ExternalLink className="size-3" aria-hidden="true" />
+                            </a>
+                          )}
                         </div>
                       )}
 

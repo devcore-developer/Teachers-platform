@@ -39,7 +39,13 @@ export const CERTIFICATE_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /** Verification code: 16 chars (~80 bits) — collision-resistant. */
 export const VERIFICATION_CODE_LENGTH = 16;
 
-/** Certificate number: MQ-YYYY-XXXXXX (6 random chars + year guard). */
+/**
+ * Certificate number: MQ-YYYY-XXXXXX (6 random chars + year guard).
+ * The «MQ» serial prefix is a data-level identifier of ALREADY ISSUED
+ * certificates — it is deliberately kept unchanged so existing numbers
+ * and verification lookups stay stable. It is NOT a display name and
+ * never appears on the printed sheet.
+ */
 export const CERT_NUMBER_RANDOM_LENGTH = 6;
 export const CERT_NUMBER_PREFIX = "MQ";
 
@@ -117,7 +123,6 @@ export const ELIGIBILITY_RULE_LABELS: Record<EligibilityRuleKey, string> = {
 /** Issuing-authority labels snapshot (stored on the certificate). */
 export const ISSUER_ROLE_LABELS: Record<string, string> = {
   DEVELOPMENT_OFFICE_MANAGER: "مدير مكتب التطوير",
-  SCHOOL_MANAGER: "مدير المدرسة",
   SUPER_ADMIN: "الإدارة العامة للمنصة",
 };
 
@@ -135,8 +140,20 @@ export const GROWTH_EVENT_TYPE_LABELS: Record<string, string> = {
   CERTIFICATE: "شهادة",
 };
 
-/** Platform name used on the printed certificate. */
-export const PLATFORM_NAME_AR = "منارة قرطبة";
+/**
+ * Platform identity — «منارة» is the PLATFORM (a multi-school product
+ * operated by «مكتب التطوير التربوي»). It is NOT a school name: school
+ * identity (قرطبة، النهضة النموذجية، الأندلس…) always comes dynamically
+ * from the certificate's School row (view.school.nameAr / logoUrl).
+ * Never append a school name to this constant anywhere.
+ */
+export const PLATFORM_NAME_AR = "منارة";
+
+/** Operator line printed under the platform name on the sheet. */
+export const PLATFORM_SUBTITLE_AR = "مكتب التطوير التربوي";
+
+/** Restrained gold accent used by the premium certificate sheet. */
+export const CERTIFICATE_GOLD = "#C9A227";
 
 /** Brand fallback (matches School.brandColor default). */
 export const DEFAULT_BRAND_COLOR = "#1D5BD6";

@@ -88,8 +88,22 @@ export async function markLessonCompleteAction(
       return failure(result.message, result.code ?? "UNKNOWN");
     }
     revalidateLearning(courseId);
+
+    // Journey transition indicator — the exact moment the teacher
+    // finishes the last required lesson, the checklist strip points
+    // at the next stage. The journey card above refreshes through
+    // the revalidation and flips المرحلة الثانية to متاحة الآن.
+    const successMessage = result.data.alreadyCompleted
+      ? undefined
+      : result.data.courseCompleted?.created === true
+        ? "أكملت جميع متطلبات الدورة — راجع بطاقة رحلة التعلّم للمراحل التالية"
+        : result.data.lessonsPercent >= 100
+          ? "أكملت جميع دروس الدورة — راجع بطاقة رحلة التعلّم للمرحلة التالية"
+          : undefined;
+
     return {
       ok: true,
+      message: successMessage,
       data: {
         lessonsPercent: result.data.lessonsPercent,
         alreadyCompleted: result.data.alreadyCompleted,

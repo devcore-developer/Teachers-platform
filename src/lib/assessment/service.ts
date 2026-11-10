@@ -13,6 +13,11 @@ import {
 } from "@/lib/assessment/access";
 import { db } from "@/lib/db";
 import {
+  lessonGateMessage,
+  lessonGateStatus,
+  maybeCompleteCourse,
+} from "@/lib/training/progress";
+import {
   ASSESSMENTS_PAGE_SIZE,
   ATTEMPTS_PREVIEW_LIMIT,
   CHOICE_TYPES,
@@ -1384,10 +1389,19 @@ export async function startAttempt(
         "ENROLLMENT_REQUIRED"
       );
     }
+
+    // Batch 1 — exam gate (the original HTML rule): every published
+    // lesson of the course must be completed before an attempt starts.
+    // Server-side only — the locked chip in the UI is informational.
+    const gate = await lessonGateStatus(viewer, assessment.courseId);
+    if (!gate.unlocked) {
+      return assessmentFail(lessonGateMessage(gate), "ENROLLMENT_REQUIRED");
+    }
   }
 
-  return db.$transaction(async (tx) => {
-    const attempts = await tx.assessmentAttempt.findMany({
+  return db.$transaction(
+    async (tx): Promise<AssessmentResult<StartAttemptOutcome>> => {
+      const attempts = await tx.assessmentAttempt.findMany({
       where: { assessmentId: assessment.id, userId: viewer.id },
       select: { id: true, status: true, deadlineAt: true, startedAt: true },
       orderBy: { startedAt: "desc" },
@@ -1601,6 +1615,7 @@ export async function submitAttempt(
           id: true,
           status: true,
           schoolId: true,
+          courseId: true,
           passingScore: true,
           availableUntil: true,
           attemptLimit: true,
@@ -1613,8 +1628,9 @@ export async function submitAttempt(
     return assessmentFail("لا يمكن تسليم محاولة معلم آخر", "FORBIDDEN");
   }
 
-  return db.$transaction(async (tx) => {
-    const attempt = await tx.assessmentAttempt.findUnique({
+  const transactionResult = await db.$transaction(
+    async (tx): Promise<AssessmentResult<{ attemptId: string; status: AttemptStatus }>> => {
+      const attempt = await tx.assessmentAttempt.findUnique({
       where: { id: input.attemptId },
       include: {
         assessment: {
@@ -1622,6 +1638,7 @@ export async function submitAttempt(
             id: true,
             status: true,
             schoolId: true,
+            courseId: true,
             passingScore: true,
             availableUntil: true,
           },
@@ -1768,6 +1785,25 @@ export async function submitAttempt(
 
     return { ok: true, data: { attemptId: attempt.id, status } };
   });
+
+  // Batch 1 — a PASSED attempt is one of the two completion keys.
+  // Post-commit (never inside the grading transaction): the completion
+  // engine re-checks the lessons + all published assessments and, when
+  // everything is met, creates the CourseCompletion and auto-issues
+  // the certificate (best-effort, signatory-gated).
+  if (
+    transactionResult.ok &&
+    transactionResult.data.status === "PASSED" &&
+    existing.assessment.courseId
+  ) {
+    try {
+      await maybeCompleteCourse(viewer.id, existing.assessment.courseId);
+    } catch (completionError) {
+      console.error("completion-after-submit failed", completionError);
+    }
+  }
+
+  return transactionResult;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1970,7 +2006,9 @@ export async function reviewAttempt(
   const attempt = await db.assessmentAttempt.findUnique({
     where: { id: input.attemptId },
     include: {
-      assessment: { select: { id: true, schoolId: true, passingScore: true } },
+      assessment: {
+        select: { id: true, schoolId: true, courseId: true, passingScore: true },
+      },
     },
   });
   if (!attempt) return assessmentFail("المحاولة غير موجودة", "NOT_FOUND");
@@ -2032,6 +2070,20 @@ export async function reviewAttempt(
       throw new Error("ATTEMPT_REVIEW_RACE");
     }
   });
+
+  // Batch 1 — a reviewed PASSED attempt can be the final completion
+  // key; run the same idempotent completion engine post-commit.
+  if (status === "PASSED" && attempt.assessment.courseId) {
+    try {
+      await maybeCompleteCourse(
+        attempt.userId,
+        attempt.assessment.courseId,
+        ctx.id
+      );
+    } catch (completionError) {
+      console.error("completion-after-review failed", completionError);
+    }
+  }
 
   return { ok: true, data: { id: attempt.id, status, percentage } };
 }

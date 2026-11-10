@@ -20,6 +20,7 @@ import {
 
 import { ImageInput } from "@/components/media/image-input";
 import { VideoInput } from "@/components/media/video-input";
+import { parseYouTubeUrl } from "@/lib/media/video-url";
 import {
   deleteSupervisorLessonAction,
   deleteSupervisorSectionAction,
@@ -852,9 +853,18 @@ function LessonForm({
 
   // Probe the video duration whenever the URL is set — the value is
   // stored with the lesson and powers the server-side completion check.
+  // YouTube links are exempt: a native metadata probe cannot read a
+  // watch page, so we skip it honestly — the governed IFrame player
+  // reads the real duration itself and reports it to the SAME server
+  // ledger (no re-save needed by the trainer).
   React.useEffect(() => {
     let cancelled = false;
     if (type === "TEXT" || !videoUrl.trim()) {
+      setDurationSeconds(null);
+      setProbing(false);
+      return;
+    }
+    if (parseYouTubeUrl(videoUrl.trim())) {
       setDurationSeconds(null);
       setProbing(false);
       return;
@@ -953,8 +963,8 @@ function LessonForm({
             label="فيديو الدرس"
             hint={
               type === "EXTERNAL_VIDEO"
-                ? "ألصق رابطًا خارجيًا يبدأ بـ https://"
-                : "رابط خارجي أو رفع مباشر — MP4/WEBM حتى 512MB"
+                ? "ألصق رابطًا خارجيًا يبدأ بـ https:// — روابط يوتيوب (watch / youtu.be / shorts / embed) تعمل مباشرة"
+                : "رابط يوتيوب (watch / youtu.be / shorts / embed) أو رفع مباشر — MP4/WEBM حتى 512MB"
             }
             attachTo={lesson?.id ? { type: "lesson-media", lessonId: lesson.id } : undefined}
           />
@@ -963,11 +973,13 @@ function LessonForm({
 
       {type !== "TEXT" && videoUrl.trim() && (
         <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
-          {probing
-            ? "جارٍ قراءة مدة الفيديو…"
-            : durationSeconds
-              ? `مدة الفيديو: ${Math.floor(durationSeconds / 60)} دقيقة و${durationSeconds % 60} ثانية — تُستخدم لحساب نسبة الإتمام على الخادم.`
-              : "لم تُقرأ مدة الفيديو — سيُعتمد التقدير من مشغّل الطالب (الأفضل إعادة حفظ الفيديو لالتقاط المدة)."}
+          {parseYouTubeUrl(videoUrl.trim())
+            ? "رابط يوتيوب صحيح — يُشغَّل الفيديو داخل صفحة الدرس مباشرة، وتُقرأ مدته تلقائيًا من المشغّل لحساب نسبة الإتمام على الخادم (لا تحتاج لإعادة الحفظ)."
+            : probing
+              ? "جارٍ قراءة مدة الفيديو…"
+              : durationSeconds
+                ? `مدة الفيديو: ${Math.floor(durationSeconds / 60)} دقيقة و${durationSeconds % 60} ثانية — تُستخدم لحساب نسبة الإتمام على الخادم.`
+                : "لم تُقرأ مدة الفيديو — سيُعتمد التقدير من مشغّل الطالب (الأفضل إعادة حفظ الفيديو لالتقاط المدة)."}
         </p>
       )}
 

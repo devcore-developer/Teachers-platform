@@ -13,8 +13,10 @@ import {
 
 import { PageHeader } from "@/components/layout/page-header";
 import { SectionCard } from "@/components/platform/section-card";
+import { EmbeddedVideoFrame } from "@/components/training/embedded-video-frame";
 import { requireUser } from "@/lib/auth/session";
 import { getLessonForViewer } from "@/lib/training/service";
+import { parseEmbeddableVideoUrl } from "@/lib/media/video-url";
 
 export const metadata = {
   title: "درس تدريبي",
@@ -35,36 +37,14 @@ const LESSON_ICONS: Record<string, LucideIcon> = {
 };
 
 /**
- * Resolve an allow-listed external video URL into a privacy-friendly
- * embed URL. Returns null when the URL cannot be safely embedded —
- * the UI then renders a plain external link instead (no server fetch).
+ * Classify an external video URL. YouTube formats covered: watch?v=,
+ * youtu.be/, /embed/, /shorts/, /live/ and m.youtube.com — plus extra
+ * query parameters such as timestamps (t=/start=). Returns null when
+ * the URL cannot be safely embedded — the UI then renders a plain
+ * external link instead (no server fetch, no R2 routing).
  */
 function embedUrlFor(raw: string): string | null {
-  try {
-    const url = new URL(raw);
-    const host = url.hostname.toLowerCase();
-    if (host === "youtube.com" || host === "www.youtube.com") {
-      const id = url.searchParams.get("v");
-      return id
-        ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}`
-        : null;
-    }
-    if (host === "youtu.be") {
-      const id = url.pathname.slice(1).split("/")[0];
-      return id
-        ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}`
-        : null;
-    }
-    if (host === "vimeo.com" || host === "player.vimeo.com") {
-      const id = url.pathname.split("/").filter(Boolean)[0];
-      return id && /^\d+$/.test(id)
-        ? `https://player.vimeo.com/video/${id}`
-        : null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return parseEmbeddableVideoUrl(raw)?.embedUrl ?? null;
 }
 
 function navHref(courseId: string, lessonId: string | null): string | null {
@@ -136,17 +116,22 @@ export default async function LessonPage({
           <div className="p-4 sm:p-6">
             {lesson.type === "VIDEO" &&
               (lesson.videoUrl ? (
-                /* Reaches teachers only when redirecting is impossible
-                   (no video saved); staff preview plays freely. */
-                <video
-                  controls
-                  preload="metadata"
-                  playsInline
-                  src={lesson.videoUrl}
-                  className="w-full rounded-lg bg-black"
-                >
-                  متصفحك لا يدعم تشغيل الفيديو.
-                </video>
+                /* Reaches staff only (teachers are redirected to the
+                   governed player in the learning hub). YouTube links
+                   preview embedded; direct files use the native player. */
+                embedUrlFor(lesson.videoUrl) ? (
+                  <EmbeddedVideoFrame src={lesson.videoUrl} title={lesson.titleAr} />
+                ) : (
+                  <video
+                    controls
+                    preload="metadata"
+                    playsInline
+                    src={lesson.videoUrl}
+                    className="w-full rounded-lg bg-black"
+                  >
+                    متصفحك لا يدعم تشغيل الفيديو.
+                  </video>
+                )
               ) : (
                 <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800">
                   لا يوجد فيديو محفوظ لهذا الدرس — غالبًا لأن الرفع فشل وقت

@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 
+import { PLATFORM_NAME_AR, PLATFORM_SUBTITLE_AR } from "@/config/certificates";
 import { requireUser } from "@/lib/auth/session";
 import { buildSupervisorAnalytics } from "@/lib/reports/datasets";
 import { PrintTrigger } from "@/app/reports/supervisor/print/print-trigger";
 
 export const metadata = {
-  title: "تقرير متابعة المعلمين — نسخة للطباعة | منارة قرطبة",
+  title: "تقرير متابعة المعلمين — نسخة للطباعة | منارة",
 };
 
 /**
@@ -28,10 +29,10 @@ export default async function SupervisorPrintPage() {
       <PrintTrigger />
 
       <h1 className="text-2xl font-black text-brand-900">
-        منارة قرطبة — تقرير متابعة المعلمين
+        {PLATFORM_NAME_AR} — تقرير متابعة المعلمين
       </h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        المشرف: {user.name} | مكتب التطوير التربوي — مدارس قرطبة الأهلية
+        المشرف: {user.name} | {PLATFORM_SUBTITLE_AR}
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2 text-sm">
@@ -88,7 +89,7 @@ export default async function SupervisorPrintPage() {
       </table>
 
       <p className="mt-6 text-[11px] text-muted-foreground">
-        صدر من منصة منارة قرطبة بتاريخ {new Date().toLocaleDateString("ar-EG")} — بيانات حقيقية من
+        صدر من منصة {PLATFORM_NAME_AR} بتاريخ {new Date().toLocaleDateString("ar-EG")} — بيانات حقيقية من
         قاعدة البيانات.
       </p>
     </div>

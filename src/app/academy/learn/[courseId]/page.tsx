@@ -1,8 +1,7 @@
-import Link from "next/link";
-
 import { requireUser } from "@/lib/auth/session";
 import { getCourseForViewer } from "@/lib/training/service";
 import { getCourseLearningStatus } from "@/lib/training/progress";
+import { computeCourseJourney } from "@/lib/training/journey";
 import { computeSequentialLocks } from "@/lib/training/sequence";
 import { getMyImpactStatus } from "@/lib/surveys/impact";
 import { listCourseComments } from "@/lib/comments/service";
@@ -10,20 +9,23 @@ import { AccessDenied } from "@/app/assignments/ui";
 import { LessonChecklist, type ChecklistLesson } from "./lesson-checklist";
 import { ImpactForm } from "./impact-form";
 import { CourseComments } from "./course-comments";
+import { JourneyStepper } from "./journey-stepper";
 
 /**
- * Batch 1 — صفحة التعلّم (course learning hub).
+ * Batch 1 + Mandatory journey — صفحة التعلّم (course learning hub).
  *
  * The teacher's single page for the whole journey — the Next.js
  * equivalent of the original HTML training player (openTraining +
  * v11 player + test gating + certificate + impact measurement):
+ *   - the four-stage MANDATORY journey stepper (content -> exam ->
+ *     certificate -> impact), computed by the server journey service;
+ *     the exam runs INSIDE the journey — there is no separate exams
+ *     section anywhere else,
  *   - published lessons with per-lesson completion state,
  *   - mandatory sequential unlocking + mandatory video playback
  *     (server-enforced; the UI only mirrors the server decision),
- *   - progress bar + exam gate state (locked until lessons are done),
- *   - completion card with the auto-issued certificate link,
- *   - impact measurement form (after completion),
- *   - course wall comments.
+ *   - progress bar + completion card with the auto-issued certificate,
+ *   - impact measurement form (after completion) + course wall comments.
  */
 export const dynamic = "force-dynamic";
 
@@ -43,12 +45,13 @@ export default async function CourseLearnPage({
   const viewer = { id: user.id, role: user.role, schoolId: user.schoolId };
   const { courseId } = await params;
 
-  const [viewResult, statusResult, impactResult, commentsResult] =
+  const [viewResult, statusResult, impactResult, commentsResult, journeyResult] =
     await Promise.all([
       getCourseForViewer(viewer, courseId),
       getCourseLearningStatus(viewer, courseId),
       getMyImpactStatus(viewer, courseId),
       listCourseComments(viewer, courseId),
+      computeCourseJourney(viewer, courseId),
     ]);
 
   if (!viewResult.ok) {
@@ -58,6 +61,7 @@ export default async function CourseLearnPage({
   const status = statusResult.ok ? statusResult.data! : null;
   const impact = impactResult.ok ? impactResult.data : null;
   const comments = commentsResult.ok ? commentsResult.data : null;
+  const journey = journeyResult.ok ? journeyResult.data : null;
 
   const completion = status?.completion ?? null;
   const isTeacher = user.role === "TEACHER";
@@ -146,12 +150,12 @@ export default async function CourseLearnPage({
                   {completion.hours ? `${completion.hours} ساعات تدريبية` : "أحسنت!"}
                 </p>
                 {completion.certificateId && (
-                  <Link
+                  <a
                     href={`/certificates/${completion.certificateId}`}
                     className="mt-3 inline-block rounded-lg bg-[#1D5BD6] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#174aa8]"
                   >
                     عرض الشهادة
-                  </Link>
+                  </a>
                 )}
               </>
             ) : (
@@ -175,6 +179,9 @@ export default async function CourseLearnPage({
         </div>
       </div>
 
+      {/* Mandatory journey — the four-stage stepper (exam included here) */}
+      {journey && <JourneyStepper journey={journey} />}
+
       {/* Mandatory learning notice */}
       {isTeacher && enforceSequence && !completion && (
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs leading-relaxed text-[#1D5BD6]">
@@ -193,7 +200,7 @@ export default async function CourseLearnPage({
       )}
 
       {/* Lessons */}
-      <div className="mt-6 space-y-5">
+      <div id="lessons" className="mt-6 space-y-5">
         {view.sections.map((section) => (
           <section key={section.id} className="rounded-xl border border-slate-200 bg-white">
             <header className="border-b border-slate-100 px-5 py-3">
@@ -218,57 +225,14 @@ export default async function CourseLearnPage({
         )}
       </div>
 
-      {/* Assessments + exam gate */}
-      {status && status.assessments.length > 0 && (
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-extrabold text-slate-800">تقييمات الدورة</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            يُفتح الاختبار بعد إكمال جميع دروس الدورة — نفس آلية المنصة الأصلية.
-          </p>
-          <ul className="mt-4 space-y-3">
-            {status.assessments.map((assessment) => {
-              const gateLocked = isTeacher && !completion && (status.totalLessons > 0 ? status.completedLessons < status.totalLessons : false);
-              return (
-                <li
-                  key={assessment.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-800">{assessment.titleAr}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      درجة النجاح: {assessment.passingScore}/{assessment.maxScore}
-                      {assessment.attemptLimit !== null &&
-                        ` · المحاولات: ${assessment.attemptsUsed}/${assessment.attemptLimit}`}
-                    </p>
-                  </div>
-                  {assessment.passed ? (
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                      مجتاز {assessment.bestPercentage !== null ? `— ${assessment.bestPercentage}%` : ""}
-                    </span>
-                  ) : gateLocked ? (
-                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
-                      مقفل — أكمل الدروس أولًا
-                    </span>
-                  ) : (
-                    <Link
-                      href="/assessments"
-                      className="rounded-lg bg-[#1D5BD6] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#174aa8]"
-                    >
-                      اذهب إلى الاختبارات
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      {/* Impact measurement */}
+      {/* Impact measurement — journey stage 4 (unlocked after completion) */}
       {impact?.available && impact.survey && (
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+        <section
+          id="impact"
+          className="mt-6 rounded-xl border border-slate-200 bg-white p-5"
+        >
           <h2 className="text-sm font-extrabold text-slate-800">
-            قياس أثر التدريب
+            قياس أثر التدريب — المرحلة الرابعة
           </h2>
           {impact.survey.purposeAr && (
             <p className="mt-1 text-xs text-slate-500">{impact.survey.purposeAr}</p>

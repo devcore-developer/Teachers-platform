@@ -2,7 +2,7 @@
 /* Canonical role keys — stored in the DB `User.role` column and        */
 /* validated with Zod on every write. Arabic labels are UI-only and     */
 /* never persisted.                                                     */
-/*                                                                      */
+/*                                                                     */
 /* Seven canonical roles. SCHOOL_MANAGER and IT_COORDINATOR have been   */
 /* part of the runtime authorization model since Batch 2 (dev-admin.ts  */
 /* contexts, IT service, account creation) — they are now declared      */
@@ -135,18 +135,20 @@ const NAV_ROLES: Record<string, Role[]> = {
   "supervisor-training": ["EDUCATIONAL_SUPERVISOR"],
   "supervisor-assessments": ["EDUCATIONAL_SUPERVISOR"],
   "supervisor-impact": ["EDUCATIONAL_SUPERVISOR"],
-  // Phase 6 — assessments: teachers take them; managers administer;
-  // deputies get read-only results inside their scope. Supervisors are
-  // intentionally NOT listed: their dedicated supervisor-assessments
-  // module (create, publish, results, teacher performance) supersedes
-  // the generic read-only view, so the sidebar carries no duplicate
-  // entries. The /assessments route and its guards are untouched.
+  // Phase 6 — assessments: managers administer; deputies get read-only
+  // results inside their scope. TEACHER is intentionally NOT listed:
+  // exams are NOT a standalone sidebar module for teachers — the final
+  // exam is stage 2 of the mandatory completion journey inside the
+  // training academy (/academy/learn/[courseId]), and the server-side
+  // lesson gate (startAttempt + submitAttempt) enforces the same rule
+  // no matter how the page is reached. The /assessments route stays
+  // reachable by URL for the exam flow itself; its page-level guards
+  // are untouched.
   assessments: [
     "SUPER_ADMIN",
     "DEVELOPMENT_OFFICE_MANAGER",
     "SCHOOL_MANAGER",
     "EDUCATIONAL_DEPUTY",
-    "TEACHER",
   ],
   // Phase 7 — assignments: managers run them; supervisor sees a
   // read-only register of what targets their assigned teachers;
@@ -158,7 +160,9 @@ const NAV_ROLES: Record<string, Role[]> = {
     "EDUCATIONAL_SUPERVISOR",
   ],
   // Phase 8 — certificates: same split as assignments (managers issue;
-  // supervisor + SUPER_ADMIN read-only inside their scope)
+  // supervisor + SUPER_ADMIN read-only inside their scope). Teachers
+  // reach their certificate through the learning journey stage 3
+  // (/academy/learn/[courseId]) — the sidebar keeps no duplicate entry.
   certificates: [
     "SUPER_ADMIN",
     "DEVELOPMENT_OFFICE_MANAGER",
