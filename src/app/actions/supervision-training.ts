@@ -18,14 +18,18 @@ import {
   deleteSupervisorLesson,
   deleteSupervisorQuestion,
   deleteSupervisorSection,
+  deleteSupervisorTrainingAttachment,
   editSupervisorQuestion,
   enrollSupervisorTeachers,
   moveSupervisorLesson,
   moveSupervisorQuestion,
   moveSupervisorSection,
+  publishSupervisorTraining,
   saveSupervisorCoursePolicy,
   saveSupervisorLesson,
   saveSupervisorSection,
+  saveSupervisorTraining,
+  setSupervisorAssessmentPassingPercent,
   setSupervisorAssessmentStatus,
   setSupervisorCourseStatus,
   setSupervisorImpactSurveyStatus,
@@ -137,4 +141,32 @@ export async function createSupervisorImpactSurveyAction(input: unknown) {
 export async function setSupervisorImpactSurveyStatusAction(input: unknown) {
   const ctx = await requireSupervisorContext();
   return setSupervisorImpactSurveyStatus(ctx, input);
+}
+
+/* ------------------------------------------------------------------ */
+/* Unified training page actions — one-page authoring + publishing.     */
+/* ------------------------------------------------------------------ */
+
+export async function saveSupervisorTrainingAction(input: unknown) {
+  const ctx = await requireSupervisorContext();
+  return saveSupervisorTraining(ctx, input);
+}
+
+export async function deleteSupervisorTrainingAttachmentAction(
+  attachmentId: string
+) {
+  const ctx = await requireSupervisorContext();
+  return deleteSupervisorTrainingAttachment(ctx, attachmentId);
+}
+
+export async function setSupervisorAssessmentPassingPercentAction(
+  input: unknown
+) {
+  const ctx = await requireSupervisorContext();
+  return setSupervisorAssessmentPassingPercent(ctx, input);
+}
+
+export async function publishSupervisorTrainingAction(input: unknown) {
+  const ctx = await requireSupervisorContext();
+  return publishSupervisorTraining(ctx, input);
 }

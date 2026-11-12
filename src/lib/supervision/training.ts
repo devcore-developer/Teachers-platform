@@ -123,10 +123,22 @@ export async function listSupervisorTeachers(
 async function courseInScope(
   ctx: SupervisorTrainingContext,
   courseId: string
-): Promise<{ id: string; schoolId: string | null; status: string } | null> {
+): Promise<{
+  id: string;
+  schoolId: string | null;
+  status: string;
+  publishedAt: Date | null;
+  coverAttachmentId: string | null;
+} | null> {
   const course = await db.course.findUnique({
     where: { id: courseId },
-    select: { id: true, schoolId: true, status: true },
+    select: {
+      id: true,
+      schoolId: true,
+      status: true,
+      publishedAt: true,
+      coverAttachmentId: true,
+    },
   });
   if (!course || course.schoolId === null || course.schoolId !== ctx.schoolId) {
     return null;
@@ -1236,4 +1248,755 @@ export async function saveSupervisorCoursePolicy(
     select: { id: true },
   });
   return { ok: true, data: updated };
+}
+
+/* ------------------------------------------------------------------ */
+/* Unified training creation — ONE page for the complete professional   */
+/* training (info + classification + schedule + links + videos +        */
+/* attachments + assessment + impact) and ONE publish action.           */
+/*                                                                      */
+/* Reuses: courseInScope fence, the existing lesson/assessment/impact   */
+/* actions, the R2 media pipeline (request → PUT → confirm) and the     */
+/* survey/assessment models. NOTHING new is introduced as a parallel    */
+/* system: videos stay CourseLesson(VIDEO), attachments stay Attachment */
+/* (kind RESOURCE), the final assessment stays Assessment+questions,    */
+/* impact stays Survey(stage AFTER_TRAINING)+SurveyQuestion.            */
+/* ------------------------------------------------------------------ */
+
+// Canonical option lists live in the shared (client-safe) config module
+// and are re-exported here for server-side consumers.
+export {
+  TRAINING_TYPES,
+  TRAINING_DOMAINS,
+  TRAINING_SUBCATEGORIES,
+  DEFAULT_PASSING_PERCENT,
+  trainingTypeLabel,
+  type TrainingTypeKey,
+} from "@/config/training-domains";
+
+import {
+  DEFAULT_PASSING_PERCENT,
+  TRAINING_DOMAINS,
+  TRAINING_SUBCATEGORIES,
+} from "@/config/training-domains";
+
+const unifiedTrainingSchema = z
+  .object({
+    courseId: z.string().trim().min(1).optional(),
+    titleAr: z.string().trim().min(3).max(150),
+    titleEn: z.string().trim().max(150).optional(),
+    descriptionAr: z.string().trim().min(5).max(4000),
+    descriptionEn: z.string().trim().max(4000).optional(),
+    category: z.string().trim().min(2).max(60),
+    subcategory: z.string().trim().max(60).optional(),
+    trainingType: z
+      .enum(["VIRTUAL_LIVE", "RECORDED", "IN_PERSON", "OTHER"])
+      .optional(),
+    level: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]).optional(),
+    estimatedHours: z.coerce.number().int().min(1).max(200).optional(),
+    programId: z.string().trim().max(64).optional(),
+    /** ISO date (YYYY-MM-DD) or "" to clear. */
+    scheduledAt: z.string().trim().max(40).optional(),
+    meetingUrl: z.string().trim().max(500).optional(),
+    youtubeUrl: z.string().trim().max(500).optional(),
+    supervisorInstructionsAr: z.string().trim().max(4000).optional(),
+  })
+  .superRefine((value, refineCtx) => {
+    if (
+      value.meetingUrl &&
+      value.meetingUrl.length > 0 &&
+      !value.meetingUrl.startsWith("https://")
+    ) {
+      refineCtx.addIssue({
+        code: "custom",
+        path: ["meetingUrl"],
+        message: "رابط الاجتماع يجب أن يبدأ بـ https:// (Zoom أو Google Meet)",
+      });
+    }
+    if (value.youtubeUrl && value.youtubeUrl.length > 0) {
+      let youtubeValid = false;
+      try {
+        const parsed = new URL(value.youtubeUrl);
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+        youtubeValid =
+          parsed.protocol === "https:" &&
+          (host === "youtube.com" ||
+            host === "m.youtube.com" ||
+            host === "youtu.be");
+      } catch {
+        youtubeValid = false;
+      }
+      if (!youtubeValid) {
+        refineCtx.addIssue({
+          code: "custom",
+          path: ["youtubeUrl"],
+          message: "أدخل رابط يوتيوب صحيحًا يبدأ بـ https:// (youtube.com أو youtu.be)",
+        });
+      }
+    }
+    if (value.scheduledAt && value.scheduledAt.length > 0) {
+      const parsed = new Date(value.scheduledAt);
+      if (Number.isNaN(parsed.getTime())) {
+        refineCtx.addIssue({
+          code: "custom",
+          path: ["scheduledAt"],
+          message: "تاريخ التدريب غير صالح",
+        });
+      }
+    }
+  });
+
+/** Program relation check shared by the unified create/update paths. */
+async function assertProgramInScope(
+  schoolId: string,
+  programId: string | undefined
+): Promise<SupervisorFailure | null> {
+  if (!programId) return null;
+  const program = await db.trainingProgram.findUnique({
+    where: { id: programId },
+    select: { schoolId: true },
+  });
+  if (!program || (program.schoolId !== null && program.schoolId !== schoolId)) {
+    return {
+      ok: false,
+      message: "البرنامج التدريبي المحدد غير متاح لمدرستك",
+      code: "VALIDATION_ERROR",
+      fieldErrors: { programId: "البرنامج غير متاح لمدرستك" },
+    };
+  }
+  return null;
+}
+
+function parseScheduledAt(raw: string | undefined): Date | null | "invalid" {
+  if (!raw || raw.length === 0) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "invalid" : parsed;
+}
+
+/**
+ * Save the unified training form — CREATE (new draft, school + trainer
+ * hard-bound to the session) or UPDATE (tenant-fenced). Persists the
+ * extended unified fields that the legacy createCourse/updateCourse
+ * schemas do not carry; base-field validation mirrors the legacy rules.
+ */
+export async function saveSupervisorTraining(
+  ctx: SupervisorTrainingContext,
+  raw: unknown
+): Promise<SupervisorResult<{ id: string; created: boolean }>> {
+  const parsed = unifiedTrainingSchema.safeParse(raw);
+  if (!parsed.success) return zodFail(parsed.error);
+  const input = parsed.data;
+
+  // Domain fence: the fixed Arabic domains — except a legacy course
+  // keeping its own existing (free-key) category unchanged.
+  if (!(TRAINING_DOMAINS as readonly string[]).includes(input.category)) {
+    if (!input.courseId) {
+      return {
+        ok: false,
+        message: "تحقق من الحقول المدخلة ثم أعد المحاولة",
+        code: "VALIDATION_ERROR",
+        fieldErrors: { category: "اختر المجال الرئيسي من القائمة" },
+      };
+    }
+    const existing = await db.course.findUnique({
+      where: { id: input.courseId },
+      select: { category: true },
+    });
+    if (!existing || existing.category !== input.category) {
+      return {
+        ok: false,
+        message: "تحقق من الحقول المدخلة ثم أعد المحاولة",
+        code: "VALIDATION_ERROR",
+        fieldErrors: { category: "اختر المجال الرئيسي من القائمة" },
+      };
+    }
+  }
+
+  if (input.subcategory && !(TRAINING_SUBCATEGORIES as readonly string[]).includes(input.subcategory)) {
+    return {
+      ok: false,
+      message: "تحقق من الحقول المدخلة ثم أعد المحاولة",
+      code: "VALIDATION_ERROR",
+      fieldErrors: { subcategory: "اختر التصنيف الفرعي من القائمة" },
+    };
+  }
+
+  const scheduledAt = parseScheduledAt(input.scheduledAt);
+  if (scheduledAt === "invalid") {
+    return {
+      ok: false,
+      message: "تحقق من الحقول المدخلة ثم أعد المحاولة",
+      code: "VALIDATION_ERROR",
+      fieldErrors: { scheduledAt: "تاريخ التدريب غير صالح" },
+    };
+  }
+
+  const data = {
+    titleAr: input.titleAr,
+    titleEn: input.titleEn ?? null,
+    descriptionAr: input.descriptionAr,
+    descriptionEn: input.descriptionEn ?? null,
+    category: input.category,
+    subcategory: input.subcategory || null,
+    trainingType: input.trainingType ?? null,
+    level: input.level ?? null,
+    estimatedHours: input.estimatedHours ?? null,
+    scheduledAt,
+    meetingUrl: input.meetingUrl || null,
+    youtubeUrl: input.youtubeUrl || null,
+    supervisorInstructionsAr: input.supervisorInstructionsAr || null,
+  };
+
+  if (!input.courseId) {
+    const programError = await assertProgramInScope(ctx.schoolId, input.programId);
+    if (programError) return programError;
+    const created = await db.course.create({
+      data: {
+        ...data,
+        // Tenant + trainer hard-bound to the SESSION — never the client.
+        schoolId: ctx.schoolId,
+        createdById: ctx.id,
+        instructorId: ctx.id,
+        programId: input.programId || null,
+        status: "DRAFT",
+      },
+      select: { id: true },
+    });
+    return { ok: true, data: { id: created.id, created: true } };
+  }
+
+  const course = await courseInScope(ctx, input.courseId);
+  if (!course) return fail("التدريب غير موجود أو خارج نطاق مدرستك", "FORBIDDEN");
+
+  const programError = await assertProgramInScope(ctx.schoolId, input.programId);
+  if (programError) return programError;
+
+  const updated = await db.course.update({
+    where: { id: course.id },
+    data: { ...data, programId: input.programId || null },
+    select: { id: true },
+  });
+  return { ok: true, data: { id: updated.id, created: false } };
+}
+
+/* --------------------------- Attachments --------------------------- */
+
+/**
+ * Remove a course attachment (Attachment kind RESOURCE bound to the
+ * course). Tenant-fenced; the R2 object is released best-effort.
+ */
+export async function deleteSupervisorTrainingAttachment(
+  ctx: SupervisorTrainingContext,
+  attachmentId: string
+): Promise<SupervisorResult<{ id: string }>> {
+  const attachment = await db.attachment.findUnique({
+    where: { id: attachmentId },
+    select: { id: true, courseId: true, provider: true, storageKey: true },
+  });
+  if (!attachment || !attachment.courseId) {
+    return fail("المرفق غير موجود", "NOT_FOUND");
+  }
+  const course = await courseInScope(ctx, attachment.courseId);
+  if (!course) return fail("خارج نطاق مدرستك — العملية مرفوضة", "FORBIDDEN");
+
+  await db.attachment.delete({ where: { id: attachment.id } });
+
+  if (attachment.provider === "R2") {
+    try {
+      const { publicUrlFor } = await import("@/lib/media/r2");
+      const { releaseMediaIfUnreferenced } = await import("@/lib/media/references");
+      await releaseMediaIfUnreferenced(publicUrlFor(attachment.storageKey));
+    } catch {
+      // Orphan cleanup is retried by maintenance; never block the delete.
+    }
+  }
+  return { ok: true, data: { id: attachmentId } };
+}
+
+/* ------------------------- Passing percent ------------------------- */
+
+const passingPercentSchema = z.object({
+  assessmentId: z.string().trim().min(1),
+  passingPercent: z.coerce.number().int().min(20).max(100),
+});
+
+/**
+ * Persist the supervisor-chosen pass PERCENTAGE of the final assessment
+ * and recompute the stored passing points immediately, so the live
+ * threshold stays consistent between question edits.
+ */
+export async function setSupervisorAssessmentPassingPercent(
+  ctx: SupervisorTrainingContext,
+  raw: unknown
+): Promise<SupervisorResult<{ id: string; passingPercent: number; passingScore: number }>> {
+  const parsed = passingPercentSchema.safeParse(raw);
+  if (!parsed.success) return zodFail(parsed.error);
+
+  const assessment = await db.assessment.findUnique({
+    where: { id: parsed.data.assessmentId },
+    select: { id: true, schoolId: true, status: true, maxScore: true },
+  });
+  if (!assessment || assessment.schoolId !== ctx.schoolId) {
+    return fail("الاختبار غير موجود أو خارج نطاق مدرستك", "FORBIDDEN");
+  }
+  if (assessment.status === "ARCHIVED") {
+    return fail("الاختبار مؤرشف — لا يمكن تعديله", "FORBIDDEN");
+  }
+
+  const pct = parsed.data.passingPercent;
+  const maxScore = Math.max(assessment.maxScore, 0);
+  const passingScore =
+    maxScore > 0
+      ? Math.min(maxScore, Math.max(1, Math.ceil((maxScore * pct) / 100)))
+      : Math.max(1, Math.ceil(pct / 100));
+
+  const updated = await db.assessment.update({
+    where: { id: assessment.id },
+    data: { passingPercent: pct, passingScore },
+    select: { passingScore: true },
+  });
+  return {
+    ok: true,
+    data: {
+      id: assessment.id,
+      passingPercent: pct,
+      passingScore: updated.passingScore,
+    },
+  };
+}
+
+/* --------------------------- Publishing ---------------------------- */
+
+const publishTrainingSchema = z.object({
+  courseId: z.string().trim().min(1),
+  /** Pass percentage applied to the final assessment on publish
+   * (defaults to the stored value, then 60%). */
+  passingPercent: z.coerce.number().int().min(20).max(100).optional(),
+});
+
+export interface PublishTrainingSummary {
+  courseId: string;
+  lessonsPublished: number;
+  assessmentPublished: boolean;
+  surveyPublished: boolean;
+}
+
+/**
+ * Publish the complete training — the ONE server-validated entry point
+ * behind the «نشر التدريب» button:
+ *   1. tenant + content guards (≥1 section and ≥1 lesson),
+ *   2. all lessons become visible to teachers,
+ *   3. the course-bound final assessment is published with the pass
+ *      threshold recomputed from the chosen percentage,
+ *   4. the course-bound impact tool is published,
+ *   5. the course itself flips to PUBLISHED (publishedAt set once),
+ * all inside ONE transaction so teachers never see a half-configured
+ * training and no partial publish can linger.
+ */
+export async function publishSupervisorTraining(
+  ctx: SupervisorTrainingContext,
+  raw: unknown
+): Promise<SupervisorResult<PublishTrainingSummary>> {
+  const parsed = publishTrainingSchema.safeParse(raw);
+  if (!parsed.success) return zodFail(parsed.error);
+
+  const course = await courseInScope(ctx, parsed.data.courseId);
+  if (!course) return fail("التدريب غير موجود أو خارج نطاق مدرستك", "FORBIDDEN");
+
+  const [sectionCount, lessons] = await Promise.all([
+    db.courseSection.count({ where: { courseId: course.id } }),
+    db.courseLesson.findMany({
+      where: { section: { courseId: course.id } },
+      select: { id: true, isPublished: true },
+    }),
+  ]);
+  if (sectionCount < 1 || lessons.length < 1) {
+    return fail(
+      "لا يمكن النشر — أضف فيديو تدريب واحدًا على الأقل (أو درسًا) قبل النشر",
+      "PUBLISH_BLOCKED"
+    );
+  }
+
+  // The course-bound final assessment (if configured) must be complete.
+  const assessment = await db.assessment.findFirst({
+    where: { courseId: course.id, schoolId: ctx.schoolId, status: { not: "ARCHIVED" } },
+    select: { id: true, maxScore: true, passingPercent: true, status: true, _count: { select: { questions: true } } },
+  });
+  if (assessment && assessment._count.questions < 1) {
+    return fail(
+      "الاختبار النهائي مضبوط لكنه بلا أسئلة — أضف سؤالًا واحدًا على الأقل قبل النشر",
+      "PUBLISH_BLOCKED"
+    );
+  }
+
+  // The course-bound impact tool (if configured) must be complete.
+  const survey = await db.survey.findFirst({
+    where: { courseId: course.id, schoolId: ctx.schoolId, status: { not: "ARCHIVED" } },
+    select: { id: true, status: true, _count: { select: { questions: true } } },
+  });
+  if (survey && survey._count.questions < 1) {
+    return fail(
+      "أداة قياس الأثر مضبوطة لكنها بلا أسئلة — أضف سؤالًا واحدًا على الأقل قبل النشر",
+      "PUBLISH_BLOCKED"
+    );
+  }
+
+  const pct =
+    parsed.data.passingPercent ?? assessment?.passingPercent ?? DEFAULT_PASSING_PERCENT;
+  const assessmentMax = Math.max(assessment?.maxScore ?? 0, 0);
+  const passingScore =
+    assessmentMax > 0
+      ? Math.min(assessmentMax, Math.max(1, Math.ceil((assessmentMax * pct) / 100)))
+      : 1;
+
+  await db.$transaction(async (tx) => {
+    await tx.courseLesson.updateMany({
+      where: { section: { courseId: course.id }, isPublished: false },
+      data: { isPublished: true },
+    });
+
+    if (assessment) {
+      await tx.assessment.update({
+        where: { id: assessment.id },
+        data: {
+          status: "PUBLISHED",
+          passingScore,
+          passingPercent: pct,
+        },
+      });
+    }
+
+    if (survey && survey.status !== "PUBLISHED") {
+      await tx.survey.update({
+        where: { id: survey.id },
+        data: { status: "PUBLISHED", publishedAt: new Date() },
+      });
+    }
+
+    await tx.course.update({
+      where: { id: course.id },
+      data: {
+        status: "PUBLISHED",
+        // Set on the first successful publish; kept on re-publish.
+        publishedAt: course.publishedAt ?? new Date(),
+      },
+    });
+  });
+
+  return {
+    ok: true,
+    data: {
+      courseId: course.id,
+      lessonsPublished: lessons.length,
+      assessmentPublished: Boolean(assessment),
+      surveyPublished: Boolean(survey),
+    },
+  };
+}
+
+/* ------------------------ Unified workspace ------------------------ */
+
+export interface TrainingWorkspaceQuestion {
+  id: string;
+  type: string;
+  textAr: string;
+  points: number;
+  isRequired: boolean;
+  orderIndex: number;
+  options: Array<{ id: string; textAr: string }>;
+  /** Supervisor-only answer-key projection for editing (never sent to
+   * teachers — the taking path strips keys server-side). */
+  correctOptionIds: string[];
+  correctBool: boolean | null;
+  modelAnswer: string | null;
+  explanation: string | null;
+}
+
+export interface TrainingWorkspace {
+  course: {
+    id: string;
+    titleAr: string;
+    titleEn: string | null;
+    descriptionAr: string;
+    descriptionEn: string | null;
+    category: string;
+    subcategory: string | null;
+    trainingType: string | null;
+    level: string | null;
+    estimatedHours: number | null;
+    programId: string | null;
+    status: string;
+    scheduledAt: string | null;
+    meetingUrl: string | null;
+    youtubeUrl: string | null;
+    supervisorInstructionsAr: string | null;
+    instructorName: string;
+    schoolName: string;
+  };
+  coverUrl: string | null;
+  sections: Array<{
+    id: string;
+    titleAr: string;
+    description: string | null;
+    orderIndex: number;
+    lessons: Array<{
+      id: string;
+      titleAr: string;
+      description: string | null;
+      type: string;
+      content: string | null;
+      videoUrl: string | null;
+      attachmentName: string | null;
+      durationSeconds: number | null;
+      isPublished: boolean;
+      orderIndex: number;
+    }>;
+  }>;
+  attachments: Array<{
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    url: string;
+  }>;
+  teachers: Array<{ id: string; name: string }>;
+  enrollments: Array<{ userId: string; name: string; completedAt: string | null }>;
+  programs: Array<{ id: string; nameAr: string; platformWide: boolean }>;
+  assessment: {
+    id: string;
+    titleAr: string;
+    instructionsAr: string;
+    status: string;
+    passingScore: number;
+    maxScore: number;
+    passingPercent: number | null;
+    attemptLimit: number | null;
+    timeLimitMinutes: number | null;
+    questions: TrainingWorkspaceQuestion[];
+  } | null;
+  survey: {
+    id: string;
+    titleAr: string;
+    purposeAr: string | null;
+    status: string;
+    questionsCount: number;
+  } | null;
+}
+
+function parseQuestionOptions(raw: string | null): Array<{ id: string; textAr: string }> {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is { id: string; textAr: string } =>
+        Boolean(item) &&
+        typeof item === "object" &&
+        typeof (item as { id?: unknown }).id === "string" &&
+        typeof (item as { textAr?: unknown }).textAr === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function parseQuestionAnswerKey(
+  raw: string | null
+): { optionIds: string[]; bool: boolean | null; modelAnswer: string | null } {
+  if (!raw) return { optionIds: [], bool: null, modelAnswer: null };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return { optionIds: [], bool: null, modelAnswer: null };
+    }
+    const record = parsed as Record<string, unknown>;
+    const optionIds: string[] = [];
+    if (typeof record.optionId === "string") optionIds.push(record.optionId);
+    if (Array.isArray(record.optionIds)) {
+      for (const value of record.optionIds) {
+        if (typeof value === "string") optionIds.push(value);
+      }
+    }
+    return {
+      optionIds,
+      bool: typeof record.value === "boolean" ? record.value : null,
+      modelAnswer: typeof record.modelAnswer === "string" ? record.modelAnswer : null,
+    };
+  } catch {
+    return { optionIds: [], bool: null, modelAnswer: null };
+  }
+}
+
+/**
+ * Everything the unified editor renders, loaded in one place with the
+ * same tenant fence as every other supervisor read (courseInScope).
+ */
+export async function getSupervisorTrainingWorkspace(
+  ctx: SupervisorTrainingContext,
+  courseId: string
+): Promise<SupervisorResult<TrainingWorkspace>> {
+  const course = await courseInScope(ctx, courseId);
+  if (!course) return fail("التدريب غير موجود أو خارج نطاق مدرستك", "FORBIDDEN");
+
+  const [row, teachers, enrollments, programs, coverAttachment] = await Promise.all([
+    db.course.findUnique({
+      where: { id: courseId },
+      include: {
+        instructor: { select: { name: true } },
+        school: { select: { nameAr: true } },
+        sections: {
+          orderBy: { orderIndex: "asc" },
+          include: {
+            lessons: {
+              orderBy: { orderIndex: "asc" },
+              include: { attachment: { select: { originalName: true } } },
+            },
+          },
+        },
+        attachments: {
+          where: { kind: "RESOURCE", lessonId: null },
+          orderBy: { createdAt: "asc" },
+        },
+        assessments: {
+          where: { status: { not: "ARCHIVED" } },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          include: {
+            questions: { orderBy: { orderIndex: "asc" } },
+          },
+        },
+        surveys: {
+          where: { status: { not: "ARCHIVED" } },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: {
+            id: true,
+            titleAr: true,
+            purposeAr: true,
+            status: true,
+            _count: { select: { questions: true } },
+          },
+        },
+      },
+    }),
+    listSupervisorTeachers(ctx),
+    listSupervisorEnrollments(ctx, courseId),
+    listSupervisorProgramOptions(ctx),
+    course.coverAttachmentId
+      ? db.attachment.findUnique({
+          where: { id: course.coverAttachmentId },
+          select: { storageKey: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  if (!row) return fail("التدريب غير موجود أو خارج نطاق مدرستك", "FORBIDDEN");
+
+  const { publicUrlFor } = await import("@/lib/media/r2");
+
+  const assessmentRow = row.assessments[0] ?? null;
+  const surveyRow = row.surveys[0] ?? null;
+
+  return {
+    ok: true,
+    data: {
+      course: {
+        id: row.id,
+        titleAr: row.titleAr,
+        titleEn: row.titleEn,
+        descriptionAr: row.descriptionAr,
+        descriptionEn: row.descriptionEn,
+        category: row.category,
+        subcategory: row.subcategory,
+        trainingType: row.trainingType,
+        level: row.level,
+        estimatedHours: row.estimatedHours,
+        programId: row.programId,
+        status: row.status,
+        scheduledAt: row.scheduledAt ? row.scheduledAt.toISOString() : null,
+        meetingUrl: row.meetingUrl,
+        youtubeUrl: row.youtubeUrl,
+        supervisorInstructionsAr: row.supervisorInstructionsAr,
+        instructorName: row.instructor?.name ?? ctx.name,
+        schoolName: row.school?.nameAr ?? "مدرستك",
+      },
+      coverUrl: coverAttachment ? publicUrlFor(coverAttachment.storageKey) : null,
+      sections: row.sections.map((section) => ({
+        id: section.id,
+        titleAr: section.titleAr,
+        description: section.description,
+        orderIndex: section.orderIndex,
+        lessons: section.lessons.map((lesson) => ({
+          id: lesson.id,
+          titleAr: lesson.titleAr,
+          description: lesson.description,
+          type: lesson.type,
+          content: lesson.content,
+          videoUrl: lesson.videoUrl,
+          attachmentName: lesson.attachment?.originalName ?? null,
+          durationSeconds: lesson.durationSeconds,
+          isPublished: lesson.isPublished,
+          orderIndex: lesson.orderIndex,
+        })),
+      })),
+      attachments: row.attachments.map((attachment) => ({
+        id: attachment.id,
+        originalName: attachment.originalName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        url: publicUrlFor(attachment.storageKey),
+      })),
+      teachers: teachers.map((teacher) => ({ id: teacher.id, name: teacher.name })),
+      enrollments: enrollments.map((enrollment) => ({
+        userId: enrollment.userId,
+        name: enrollment.name,
+        completedAt: enrollment.completedAt
+          ? enrollment.completedAt.toISOString()
+          : null,
+      })),
+      programs: programs.map((program) => ({
+        id: program.id,
+        nameAr: program.nameAr,
+        platformWide: program.platformWide,
+      })),
+      assessment: assessmentRow
+        ? {
+            id: assessmentRow.id,
+            titleAr: assessmentRow.titleAr,
+            instructionsAr: assessmentRow.instructionsAr,
+            status: assessmentRow.status,
+            passingScore: assessmentRow.passingScore,
+            maxScore: assessmentRow.maxScore,
+            passingPercent: assessmentRow.passingPercent,
+            attemptLimit: assessmentRow.attemptLimit,
+            timeLimitMinutes: assessmentRow.timeLimitMinutes,
+            questions: assessmentRow.questions.map((question) => {
+              const key = parseQuestionAnswerKey(question.answerKeyJson);
+              return {
+                id: question.id,
+                type: question.type,
+                textAr: question.textAr,
+                points: question.points,
+                isRequired: question.isRequired,
+                orderIndex: question.orderIndex,
+                options: parseQuestionOptions(question.optionsJson),
+                correctOptionIds: key.optionIds,
+                correctBool: key.bool,
+                modelAnswer: key.modelAnswer,
+                explanation: question.explanation,
+              };
+            }),
+          }
+        : null,
+      survey: surveyRow
+        ? {
+            id: surveyRow.id,
+            titleAr: surveyRow.titleAr,
+            purposeAr: surveyRow.purposeAr,
+            status: surveyRow.status,
+            questionsCount: surveyRow._count.questions,
+          }
+        : null,
+    },
+  };
 }

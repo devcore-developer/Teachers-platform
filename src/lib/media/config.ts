@@ -11,7 +11,7 @@
 /* see it: the client learns only the FINAL public URL of a file.       */
 /* ------------------------------------------------------------------ */
 
-export type MediaKind = "image" | "video";
+export type MediaKind = "image" | "video" | "document";
 
 function positiveNumber(env: string | undefined, fallback: number): number {
   const parsed = Number(env);
@@ -26,6 +26,9 @@ export const MEDIA_LIMITS = {
   video: positiveNumber(process.env.MEDIA_MAX_VIDEO_BYTES, 512 * 1024 * 1024),
   /** School branding logos (matches lib/branding/validation LOGO_MAX_BYTES). */
   logo: 2 * 1024 * 1024,
+  /** Training attachments: PDF / Word / Excel / PowerPoint / audio /
+   * text documents uploaded from the supervisor's device. */
+  document: positiveNumber(process.env.MEDIA_MAX_DOCUMENT_BYTES, 25 * 1024 * 1024),
 } as const;
 
 export const IMAGE_MIME_TYPES = [
@@ -41,12 +44,34 @@ export const VIDEO_MIME_TYPES = [
   "video/quicktime",
 ] as const;
 
+/** Training attachments — documents and audio. Images ride the "image"
+ * kind (existing MIME list), everything else office-document/audio. */
+export const DOCUMENT_MIME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/ogg",
+  "text/plain",
+] as const;
+
 export function allowedMimeTypesFor(kind: MediaKind): readonly string[] {
-  return kind === "image" ? IMAGE_MIME_TYPES : VIDEO_MIME_TYPES;
+  if (kind === "image") return IMAGE_MIME_TYPES;
+  if (kind === "document") return DOCUMENT_MIME_TYPES;
+  return VIDEO_MIME_TYPES;
 }
 
 export function maxBytesFor(kind: MediaKind): number {
-  return kind === "image" ? MEDIA_LIMITS.image : MEDIA_LIMITS.video;
+  if (kind === "image") return MEDIA_LIMITS.image;
+  if (kind === "document") return MEDIA_LIMITS.document;
+  return MEDIA_LIMITS.video;
 }
 
 export function isAllowedMimeType(kind: MediaKind, mimeType: string): boolean {

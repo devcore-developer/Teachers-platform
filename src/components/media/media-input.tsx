@@ -40,11 +40,13 @@ import {
   type AttachTarget,
 } from "@/app/actions/media";
 
-export type MediaKind = "image" | "video";
+export type MediaKind = "image" | "video" | "document";
 
 const ACCEPT_FOR_KIND: Record<MediaKind, string> = {
   image: "image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif",
   video: "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov",
+  document:
+    "application/pdf,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,audio/mpeg,audio/mp4,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/png,image/jpeg,image/webp",
 };
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -56,12 +58,25 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   mp4: "video/mp4",
   webm: "video/webm",
   mov: "video/quicktime",
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  txt: "text/plain",
 };
 
 /** Client-side ceilings (the server re-validates authoritatively). */
 const DEFAULT_MAX_BYTES: Record<MediaKind, number> = {
   image: 5 * 1024 * 1024,
   video: 512 * 1024 * 1024,
+  document: 25 * 1024 * 1024,
 };
 
 function formatBytes(bytes: number): string {
@@ -133,7 +148,8 @@ export function MediaInput({
   const inputId = React.useId();
   const busy = phase !== "idle";
   const effectiveMax = maxBytes ?? DEFAULT_MAX_BYTES[kind];
-  const kindLabel = kind === "image" ? "صورة" : "فيديو";
+  const kindLabel =
+    kind === "image" ? "صورة" : kind === "document" ? "مرفق" : "فيديو";
 
   // Keep the draft in sync when the value changes from the outside.
   React.useEffect(() => {
@@ -185,14 +201,21 @@ export function MediaInput({
     const validMime =
       kind === "image"
         ? mime.startsWith("image/")
-        : mime.startsWith("video/");
+        : kind === "video"
+          ? mime.startsWith("video/")
+          : mime.startsWith("application/") ||
+            mime.startsWith("audio/") ||
+            mime.startsWith("text/") ||
+            mime.startsWith("image/");
     if (!validMime) {
       setNotice({
         bad: true,
         text:
           kind === "image"
             ? "صيغة الصورة غير مدعومة — المسموح: PNG أو JPG أو WEBP أو GIF."
-            : "صيغة الفيديو غير مدعومة — المسموح: MP4 أو WEBM أو MOV.",
+            : kind === "document"
+              ? "صيغة المرفق غير مدعومة — المسموح: PDF أو Word أو Excel أو PowerPoint أو صوت أو صورة أو نص."
+              : "صيغة الفيديو غير مدعومة — المسموح: MP4 أو WEBM أو MOV.",
       });
       onFileSelected?.(null);
       return;
@@ -237,12 +260,17 @@ export function MediaInput({
   async function handleUpload() {
     if (!file || busy) return;
     const mimeType = mimeForFile(file);
+    // Images ride the dedicated "image" pipeline even from the document
+    // field — the server allow-lists are kind-specific, so request and
+    // confirmation must both carry the matching kind.
+    const serverKind: MediaKind =
+      kind === "document" && mimeType.startsWith("image/") ? "image" : kind;
     setNotice(null);
     setProgress(0);
     try {
       setPhase("requesting");
       const request = await requestMediaUploadAction({
-        kind,
+        kind: serverKind,
         fileName: file.name,
         mimeType,
         sizeBytes: file.size,
@@ -262,7 +290,7 @@ export function MediaInput({
         publicUrl: request.publicUrl,
         originalName: file.name,
         mimeType,
-        kind,
+        kind: serverKind,
         attachTo,
       });
       if (!confirmed.ok) {
@@ -393,7 +421,9 @@ export function MediaInput({
                 placeholder={
                   kind === "image"
                     ? "https://example.com/image.png"
-                    : "https://example.com/video.mp4 أو رابط يوتيوب"
+                    : kind === "document"
+                      ? "https://example.com/file.pdf"
+                      : "https://example.com/video.mp4 أو رابط يوتيوب"
                 }
                 disabled={disabled || busy}
                 aria-invalid={Boolean(urlError)}
@@ -529,7 +559,16 @@ export function MediaInput({
             </Button>
           </div>
           <div className="mt-2">
-            {kind === "image" ? (
+            {kind === "document" ? (
+              <p className="rounded-lg border border-dashed bg-background px-3 py-2 text-xs font-semibold text-muted-foreground">
+                <span className="block truncate font-mono text-[11px]" dir="ltr">
+                  {value}
+                </span>
+                <span className="mt-0.5 block text-[10px] font-normal">
+                  سيظهر هذا المرفق للمعلمين كملف قابل للتنزيل في صفحة التدريب.
+                </span>
+              </p>
+            ) : kind === "image" ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={value}

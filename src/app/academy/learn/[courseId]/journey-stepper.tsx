@@ -499,14 +499,25 @@ function ExamCard({ journey, exam }: { journey: JourneyView; exam: JourneyExamRo
 
       {exam.activeAttempt && <ExamRunner courseId={journey.courseId} exam={exam} />}
 
-      {!exam.passed && !exam.activeAttempt && exam.startBlockReason && (
+      {!exam.passed && !exam.activeAttempt && exam.pendingReview && (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-[#1D5BD6]">
+          <ClipboardList className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>
+            سُلّمت إجاباتك — الأسئلة المقالية بانتظار تقييم المشرف. تظهر النتيجة
+            النهائية ودرجتك هنا بعد التصحيح، وتُفتح مرحلة الشهادة تلقائيًا عند
+            الاجتياز.
+          </span>
+        </div>
+      )}
+
+      {!exam.passed && !exam.activeAttempt && !exam.pendingReview && exam.startBlockReason && (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
           <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>{exam.startBlockReason}</span>
         </div>
       )}
 
-      {!exam.passed && !exam.activeAttempt && exam.canStart && (
+      {!exam.passed && !exam.activeAttempt && !exam.pendingReview && exam.canStart && (
         <>
           {exam.attemptsUsed > 0 && (
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">

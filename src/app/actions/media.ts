@@ -75,7 +75,7 @@ function isManager(user: { role: string }): boolean {
 /* ------------------------------------------------------------------ */
 
 const requestSchema = z.object({
-  kind: z.enum(["image", "video"]),
+  kind: z.enum(["image", "video", "document"]),
   fileName: z.string().trim().min(1).max(200),
   mimeType: z.string().trim().min(3).max(120),
   sizeBytes: z.number().int().positive(),
@@ -101,7 +101,9 @@ export async function requestMediaUploadAction(
       message:
         kind === "image"
           ? "صيغ الصور المدعومة: PNG أو JPG أو WEBP أو GIF."
-          : "صيغ الفيديو المدعومة: MP4 أو WEBM أو MOV.",
+          : kind === "document"
+            ? "صيغ المرفقات المدعومة: PDF أو Word أو Excel أو PowerPoint أو صوت (MP3/WAV/M4A) أو نص."
+            : "صيغ الفيديو المدعومة: MP4 أو WEBM أو MOV.",
     };
   }
   if (sizeBytes > maxBytesFor(kind)) {
@@ -167,14 +169,15 @@ export async function requestMediaUploadAction(
 export type AttachTarget =
   | { type: "course-cover"; courseId: string }
   | { type: "program-cover"; programId: string }
-  | { type: "lesson-media"; lessonId: string };
+  | { type: "lesson-media"; lessonId: string }
+  | { type: "course-attachment"; courseId: string };
 
 export interface ConfirmMediaUploadInput {
   key: string;
   publicUrl: string;
   originalName: string;
   mimeType: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "document";
   /** When set, the object is registered as the owner's primary media. */
   attachTo?: AttachTarget;
 }
@@ -188,12 +191,13 @@ const confirmSchema = z.object({
   publicUrl: z.string().trim().min(1).max(2048),
   originalName: z.string().trim().min(1).max(200),
   mimeType: z.string().trim().min(3).max(120),
-  kind: z.enum(["image", "video"]),
+  kind: z.enum(["image", "video", "document"]),
   attachTo: z
     .union([
       z.object({ type: z.literal("course-cover"), courseId: z.string().trim().min(1).max(64) }),
       z.object({ type: z.literal("program-cover"), programId: z.string().trim().min(1).max(64) }),
       z.object({ type: z.literal("lesson-media"), lessonId: z.string().trim().min(1).max(64) }),
+      z.object({ type: z.literal("course-attachment"), courseId: z.string().trim().min(1).max(64) }),
     ])
     .optional(),
 });
@@ -325,6 +329,30 @@ export async function confirmMediaUploadAction(
         data: { coverAttachmentId: attachment.id },
       });
       await releaseAttachmentObject(oldUrl);
+      return { ok: true, url: publicUrl, attachmentId: attachment.id };
+    }
+
+    if (attachTo.type === "course-attachment") {
+      const course = await db.course.findUnique({
+        where: { id: attachTo.courseId },
+        select: { schoolId: true },
+      });
+      if (!course) return { ok: false, message: "الدورة غير موجودة." };
+      if (user.role !== "SUPER_ADMIN" && course.schoolId !== user.schoolId) {
+        return { ok: false, message: "لا تملك صلاحية إضافة مرفقات لهذه الدورة." };
+      }
+      const attachment = await db.attachment.create({
+        data: {
+          originalName,
+          storageKey: key,
+          mimeType,
+          sizeBytes: info.sizeBytes,
+          kind: "RESOURCE",
+          courseId: attachTo.courseId,
+          uploadedById: user.id,
+          provider: "R2",
+        },
+      });
       return { ok: true, url: publicUrl, attachmentId: attachment.id };
     }
 

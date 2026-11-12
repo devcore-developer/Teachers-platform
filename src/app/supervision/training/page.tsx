@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FolderPlus, MonitorPlay } from "lucide-react";
+import { FolderPlus, MonitorPlay, Plus } from "lucide-react";
 
 import {
   EmptyHint,
@@ -8,29 +8,23 @@ import {
   statusLabel,
   statusTone,
 } from "@/app/supervision/supervisor-ui";
-import { SupervisorCourseForm } from "@/app/supervision/training/course-form";
 import {
-  listSupervisorCategoryOptions,
   listSupervisorCourses,
-  listSupervisorProgramOptions,
   requireSupervisorContext,
 } from "@/lib/supervision/training";
 
-export const metadata = { title: "إدارة التدريب — دورات مدرستك" };
+export const metadata = { title: "إدارة التدريب — تدريبات مدرستك" };
 
 /**
- * Supervisor course directory + creation. Same service layer the admin
- * trio uses — the tenant fence (own school only) is structural.
+ * Supervisor training directory. Creation happens through the ONE
+ * unified page (/supervision/training/new); every row opens the SAME
+ * unified page for editing — draft or published. The tenant fence
+ * (own school only) is structural in the service layer.
  */
 export default async function SupervisorTrainingPage() {
   const ctx = await requireSupervisorContext();
 
-  const [courses, programs, categories] = await Promise.all([
-    listSupervisorCourses(ctx, { page: 1 }),
-    listSupervisorProgramOptions(ctx),
-    listSupervisorCategoryOptions(ctx),
-  ]);
-
+  const courses = await listSupervisorCourses(ctx, { page: 1 });
   const rows = courses.ok ? courses.data.rows : [];
 
   return (
@@ -39,32 +33,30 @@ export default async function SupervisorTrainingPage() {
         <div>
           <h1 className="text-xl font-black text-foreground">إدارة التدريب</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            دورات مدرستك — أنشئ دورة، ابنِ أقسامها ودروسها وفيديوهاتها، ثم انشرها
-            لمعلميك. المحتوى المشترك على مستوى المنصة يظل من صلاحيات مدير المنصة.
+            تدريبات مدرستك — أنشئ تدريبًا كاملًا من صفحة واحدة (المعلومات
+            والفيديوهات والمرفقات والاختبار وقياس الأثر) ثم انشره لمعلميك.
           </p>
         </div>
+        <Link
+          href="/supervision/training/new"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-700"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          إنشاء تدريب جديد
+        </Link>
       </header>
-
-      <SupervisorCourseForm
-        categories={categories}
-        programs={programs.map((program) => ({
-          id: program.id,
-          nameAr: program.nameAr,
-          platformWide: program.platformWide,
-        }))}
-      />
 
       <section className="rounded-xl border bg-card">
         <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
           <h2 className="text-sm font-black text-foreground">
-            دورات مدرستك ({rows.length})
+            تدريبات مدرستك ({rows.length})
           </h2>
         </div>
         <div className="p-4">
           {rows.length === 0 ? (
             <EmptyHint
-              title="لا توجد دورات بعد"
-              description="أنشئ أول دورة من النموذج أعلاه — ستبدأ مسودة حتى نشرها."
+              title="لا توجد تدريبات بعد"
+              description="أنشئ أول تدريب من زر «إنشاء تدريب جديد» — يبدأ مسودة حتى نشره."
             />
           ) : (
             <ul className="grid gap-3 md:grid-cols-2">
@@ -102,7 +94,7 @@ export default async function SupervisorTrainingPage() {
                     className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-brand-700"
                   >
                     <MonitorPlay className="size-3.5" aria-hidden="true" />
-                    بناء المحتوى
+                    فتح الصفحة الموحدة
                   </Link>
                 </li>
               ))}
@@ -113,8 +105,8 @@ export default async function SupervisorTrainingPage() {
 
       <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <FolderPlus className="size-3.5 shrink-0" aria-hidden="true" />
-        النشر يتطلب قسمًا ودرسًا واحدًا على الأقل — ويمكنك إسناد الدورة المنشورة
-        لمعلميك من داخل شاشة البناء.
+        النشر يتطلب عنصر محتوى واحدًا على الأقل — والاختبار وأداة قياس الأثر
+        يُضبطان من داخل الصفحة الموحدة نفسها.
       </p>
     </div>
   );

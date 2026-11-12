@@ -3,6 +3,7 @@ import {
   Bell,
   BookOpen,
   ClipboardCheck,
+  FolderPlus,
   GraduationCap,
   MapPin,
   MonitorPlay,
@@ -77,8 +78,15 @@ export async function SupervisorDashboardSection() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/supervision/training"
+            href="/supervision/training/new"
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-700"
+          >
+            <FolderPlus className="size-4" aria-hidden="true" />
+            إنشاء تدريب جديد
+          </Link>
+          <Link
+            href="/supervision/training"
+            className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3.5 py-2 text-xs font-bold text-muted-foreground transition-colors hover:bg-accent"
           >
             <MonitorPlay className="size-4" aria-hidden="true" />
             إدارة الدورات

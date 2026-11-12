@@ -416,6 +416,24 @@ model Course {
   level         String?
   /// Estimated effort in hours (display only).
   estimatedHours Int?
+  /// Unified creation page — canonical delivery type:
+  /// VIRTUAL_LIVE | RECORDED | IN_PERSON | OTHER.
+  /// Null = legacy course created before the unified page (no badge).
+  trainingType  String?
+  /// Unified creation page — subcategory label (Arabic, validated
+  /// against the fixed list in src/lib/supervision/training.ts).
+  /// Null = not configured.
+  subcategory   String?
+  /// Unified creation page — scheduled training date (null = unscheduled).
+  scheduledAt   DateTime?
+  /// Zoom / Google Meet link for live trainings (https, server-validated).
+  meetingUrl    String?
+  /// YouTube link accompanying the training (https YouTube host,
+  /// server-validated). Displayed to enrolled teachers on the hub.
+  youtubeUrl    String?
+  /// Supervisor's message / instructions to teachers — rendered on the
+  /// learning hub above the lessons (null = none).
+  supervisorInstructionsAr String?
   /// Mandatory-learning policy: sequential lesson unlocking (on by default).
   requireSequentialLessons Boolean @default(true)
   /// Watched-percentage threshold (50..100) that completes a VIDEO lesson.
@@ -436,6 +454,7 @@ model Course {
   instructor User?            @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
   createdBy  User             @relation("CourseCreator", fields: [createdById], references: [id], onDelete: Restrict)
   cover      Attachment?      @relation("CourseCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
+
   watchStates LessonWatchState[]
   sections    CourseSection[]
   attachments Attachment[]       @relation("CourseFiles")
@@ -512,6 +531,7 @@ model CourseLesson {
   durationSeconds Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
   watchStates LessonWatchState[]
   section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   attachment  Attachment?   @relation("LessonPrimaryAttachment", fields: [attachmentId], references: [id], onDelete: SetNull)
@@ -572,6 +592,7 @@ model Attachment {
   @@index([programId])
   @@map("attachments")
 }
+
 /**
  * A teacher's enrollment in one course. Unique (courseId, userId)
  * prevents duplicates. Completion tracking and lesson analytics are
@@ -628,6 +649,11 @@ model Assessment {
   status         String   @default("DRAFT")
   /// Points required to pass (validated <= total question points).
   passingScore   Int
+  /// Unified creation page — the supervisor-chosen PASS PERCENTAGE
+  /// (20..100, default 60). When set, publishing recomputes passingScore
+  /// from it (ceil(maxScore × pct / 100)) so the threshold follows the
+  /// question set. Null = legacy points-based configuration (untouched).
+  passingPercent Int?
   /// Time limit in minutes (null = untimed). Server-enforced deadline.
   timeLimitMinutes Int?
   /// Maximum attempts per teacher (null = unlimited).

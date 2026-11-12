@@ -5,11 +5,27 @@ import { computeCourseJourney } from "@/lib/training/journey";
 import { computeSequentialLocks } from "@/lib/training/sequence";
 import { getMyImpactStatus } from "@/lib/surveys/impact";
 import { listCourseComments } from "@/lib/comments/service";
+import { trainingTypeLabel } from "@/config/training-domains";
 import { AccessDenied } from "@/app/assignments/ui";
 import { LessonChecklist, type ChecklistLesson } from "./lesson-checklist";
 import { ImpactForm } from "./impact-form";
 import { CourseComments } from "./course-comments";
 import { JourneyStepper } from "./journey-stepper";
+
+function formatArabicDate(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("ar-EG", { dateStyle: "long" }).format(
+      new Date(iso)
+    );
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
 
 /**
  * Batch 1 + Mandatory journey — صفحة التعلّم (course learning hub).
@@ -138,6 +154,19 @@ export default async function CourseLearnPage({
               {view.course.instructorName && <span>المدرب: {view.course.instructorName}</span>}
               {view.course.schoolName && <span>المدرسة: {view.course.schoolName}</span>}
             </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-[#1D5BD6]">
+                نوع التدريب: {trainingTypeLabel(view.course.trainingType)}
+              </span>
+              {view.course.subcategory && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold">
+                  التصنيف الفرعي: {view.course.subcategory}
+                </span>
+              )}
+              {view.course.scheduledAt && (
+                <span>تاريخ التدريب: {formatArabicDate(view.course.scheduledAt)}</span>
+              )}
+            </div>
           </div>
 
           {/* Progress ring / completion badge */}
@@ -178,6 +207,86 @@ export default async function CourseLearnPage({
           </div>
         </div>
       </div>
+
+      {/* Supervisor's message + live links + attachments (stage 1 content) */}
+      {(view.course.supervisorInstructionsAr ||
+        view.course.meetingUrl ||
+        view.course.youtubeUrl ||
+        view.attachments.length > 0) && (
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {view.course.supervisorInstructionsAr && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 md:col-span-2">
+              <p className="text-xs font-extrabold text-[#1D5BD6]">
+                رسالة المشرف وتعليماته
+              </p>
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                {view.course.supervisorInstructionsAr}
+              </p>
+            </div>
+          )}
+
+          {(view.course.meetingUrl || view.course.youtubeUrl) && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-extrabold text-slate-800">روابط التدريب</p>
+              <div className="mt-2 space-y-2 text-xs">
+                {view.course.meetingUrl && (
+                  <a
+                    href={view.course.meetingUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center gap-1.5 font-bold text-[#1D5BD6] hover:underline"
+                    dir="ltr"
+                  >
+                    {view.course.meetingUrl}
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold">
+                      رابط الاجتماع (افتحه في موعد التدريب)
+                    </span>
+                  </a>
+                )}
+                {view.course.youtubeUrl && (
+                  <a
+                    href={view.course.youtubeUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center gap-1.5 font-bold text-[#1D5BD6] hover:underline"
+                    dir="ltr"
+                  >
+                    {view.course.youtubeUrl}
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold">
+                      رابط يوتيوب
+                    </span>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {view.attachments.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-extrabold text-slate-800">
+                مرفقات التدريب ({view.attachments.length})
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {view.attachments.map((attachment) => (
+                  <li key={attachment.id}>
+                    <a
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-[#1D5BD6] transition hover:bg-blue-50"
+                    >
+                      <span className="min-w-0 truncate">{attachment.originalName}</span>
+                      <span className="shrink-0 text-[10px] font-semibold text-slate-400">
+                        {formatBytes(attachment.sizeBytes)}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Mandatory journey — the four-stage stepper (exam included here) */}
       {journey && <JourneyStepper journey={journey} />}

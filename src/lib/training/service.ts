@@ -8,6 +8,7 @@ import {
   trainingScopeError,
 } from "@/lib/training/access";
 import { db } from "@/lib/db";
+import { publicUrlFor } from "@/lib/media/r2";
 import {
   COURSES_PAGE_SIZE,
   CONTENT_STATUSES,
@@ -84,16 +85,30 @@ export interface CourseLearningView {
     descriptionAr: string;
     descriptionEn: string | null;
     category: string;
+    subcategory: string | null;
+    trainingType: string | null;
     level: string | null;
     estimatedHours: number | null;
     status: string;
     coverAttachmentId: string | null;
+    scheduledAt: string | null;
+    meetingUrl: string | null;
+    youtubeUrl: string | null;
+    supervisorInstructionsAr: string | null;
     programName: string | null;
     instructorName: string | null;
     schoolName: string | null;
   };
   sections: ViewerSection[];
   publishedLessonsCount: number;
+  /** Course-level downloadable attachments (kind RESOURCE, not lesson-bound). */
+  attachments: Array<{
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    url: string;
+  }>;
   enrollment: { id: string; enrolledAt: Date } | null;
 }
 
@@ -872,6 +887,10 @@ export async function getCourseForViewer(
         where: { userId: viewer.id },
         select: { id: true, enrolledAt: true },
       },
+      attachments: {
+        where: { kind: "RESOURCE", lessonId: null },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!course) return fail("الدورة غير موجودة", "NOT_FOUND");
@@ -923,16 +942,29 @@ export async function getCourseForViewer(
         descriptionAr: course.descriptionAr,
         descriptionEn: course.descriptionEn,
         category: course.category,
+        subcategory: course.subcategory,
+        trainingType: course.trainingType,
         level: course.level,
         estimatedHours: course.estimatedHours,
         status: course.status,
         coverAttachmentId: course.coverAttachmentId,
+        scheduledAt: course.scheduledAt ? course.scheduledAt.toISOString() : null,
+        meetingUrl: course.meetingUrl,
+        youtubeUrl: course.youtubeUrl,
+        supervisorInstructionsAr: course.supervisorInstructionsAr,
         programName: course.program?.nameAr ?? null,
         instructorName: course.instructor?.name ?? null,
         schoolName: course.school?.nameAr ?? null,
       },
       sections,
       publishedLessonsCount,
+      attachments: course.attachments.map((attachment) => ({
+        id: attachment.id,
+        originalName: attachment.originalName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        url: publicUrlFor(attachment.storageKey),
+      })),
       enrollment: course.enrollments[0]
         ? {
             id: course.enrollments[0].id,

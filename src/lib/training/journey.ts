@@ -73,6 +73,9 @@ export interface JourneyExamRow {
   remainingAttempts: number | null;
   passed: boolean;
   bestPercentage: number | null;
+  /** True when a submitted attempt awaits MANUAL essay review — the
+   * final score/certificate stay locked until the supervisor grades. */
+  pendingReview: boolean;
   availability: "available" | "scheduled" | "closed";
   availableFrom: string | null;
   availableUntil: string | null;
@@ -293,12 +296,19 @@ export async function computeCourseJourney(
           attempt.status === "IN_PROGRESS" &&
           (attempt.deadlineAt === null || attempt.deadlineAt.getTime() > now)
       ) ?? null;
+    // Essay answers submitted but NOT yet graded by the supervisor —
+    // stage 3 stays explicitly "pending evaluation" until reviewed.
+    const pendingReview =
+      !passed && own.some((attempt) => attempt.status === "NEEDS_REVIEW");
 
     let startBlockReason: string | null = null;
     let canStart = false;
     if (passed || live) {
       // Passed = stage done for this exam; live = resume instead of start.
       startBlockReason = null;
+    } else if (pendingReview) {
+      startBlockReason =
+        "إجاباتك بانتظار تصحيح المشرف — ستظهر نتيجتك النهائية بعد مراجعة الأسئلة المقالية.";
     } else if (availability === "scheduled") {
       startBlockReason = `لم يبدأ توافر هذا الاختبار بعد — يفتح في ${
         row.availableFrom
@@ -362,6 +372,7 @@ export async function computeCourseJourney(
       remainingAttempts,
       passed,
       bestPercentage,
+      pendingReview,
       availability,
       availableFrom: row.availableFrom ? row.availableFrom.toISOString() : null,
       availableUntil: row.availableUntil ? row.availableUntil.toISOString() : null,
@@ -377,6 +388,7 @@ export async function computeCourseJourney(
   const examsPercent =
     examsTotal === 0 ? 100 : Math.round((examsPassedCount / examsTotal) * 100);
   const anyLiveAttempt = exams.some((exam) => exam.activeAttempt !== null);
+  const anyPendingReview = exams.some((exam) => exam.pendingReview);
 
   const examStage: JourneyStage = (() => {
     if (!lessonsUnlocked) {
@@ -410,6 +422,17 @@ export async function computeCourseJourney(
         percent: examsPercent,
         detailAr:
           "لديك محاولة اختبار جارية — أكملها وسلّم إجاباتك قبل انتهاء الوقت.",
+        lockReason: null,
+      };
+    }
+    if (anyPendingReview) {
+      return {
+        key: "exam",
+        titleAr: "المرحلة الثانية: الاختبار النهائي",
+        state: "in_progress",
+        percent: examsPercent,
+        detailAr:
+          "سُلمت إجاباتك وتنتظر تصحيح المشرف للأسئلة المقالية — ستُعلن نتيجتك النهائية بعد المراجعة، وتُفتح الشهادة تلقائيًا عند الاجتياز.",
         lockReason: null,
       };
     }
