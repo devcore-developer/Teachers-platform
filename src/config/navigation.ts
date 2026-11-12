@@ -49,7 +49,8 @@ export const navItems: NavItem[] = [
     id: "academy",
     label: "الأكاديمية التدريبية",
     href: "/academy",
-    description: "الدورات التدريبية المنشورة والمتاحة لك — تصفّح، سجّل، وابدأ التعلّم.",
+    description:
+      "الدورات التدريبية المنشورة والمتاحة لك — تصفّح، سجّل، وابدأ التعلّم؛ ولمشرفي التدريب: مساحة تدريباتك الكاملة وإدارتها من مكان واحد.",
     icon: BookOpen,
     plannedFeatures: [],
   },
@@ -125,26 +126,8 @@ export const navItems: NavItem[] = [
     label: "إدارة التدريب",
     href: "/supervision/training",
     description:
-      "أنشئ دورات مدرستك وابنِ محتواها: أقسام ودروس وفيديوهات (رفع مباشر أو رابط خارجي) ثم انشرها لمعلميك.",
+      "أنشئ تدريبًا كاملًا من صفحة واحدة — المعلومات والفيديوهات والمرفقات والاختبار وقياس الأثر — وعدّل تدريباتك الحالية في أي وقت.",
     icon: MonitorPlay,
-    plannedFeatures: [],
-  },
-  {
-    id: "supervisor-assessments",
-    label: "الأسئلة والاختبارات",
-    href: "/supervision/assessments",
-    description:
-      "أنشئ أسئلة واختبارات مرتبطة بالدورات، وانشرها، وتابع نتائج معلميك ومعدلات النجاح.",
-    icon: ClipboardCheck,
-    plannedFeatures: [],
-  },
-  {
-    id: "supervisor-impact",
-    label: "قياس الأثر",
-    href: "/supervision/impact",
-    description:
-      "أدوات قياس أثر التدريب: أنشئ استبانات ما بعد التدريب لدوراتك وتابع الاستجابات والنتائج والمتوسطات.",
-    icon: TrendingUp,
     plannedFeatures: [],
   },
   {
@@ -344,12 +327,7 @@ const SUPERVISOR_NAV_GROUPS: NavGroupDef[] = [
   },
   {
     label: "التدريب والتطوير",
-    members: [
-      "academy",
-      "supervisor-training",
-      "supervisor-assessments",
-      "supervisor-impact",
-    ],
+    members: ["academy", "supervisor-training"],
   },
   {
     label: "المتابعة والنتائج",

@@ -11,6 +11,7 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { CatalogFilters } from "@/components/training/catalog-filters";
 import { EmptyState } from "@/components/platform/empty-state";
+import { AcademySupervisorTrainings } from "@/app/academy/supervisor-trainings";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { listPublishedCourses } from "@/lib/training/service";
@@ -69,6 +70,7 @@ export default async function AcademyPage({
 
   const isManager =
     user.role === "SUPER_ADMIN" || user.role === "DEVELOPMENT_OFFICE_MANAGER";
+  const isSupervisor = user.role === "EDUCATIONAL_SUPERVISOR";
 
   function pageHref(page: number): string {
     const sp = new URLSearchParams(
@@ -93,11 +95,23 @@ export default async function AcademyPage({
               <MonitorPlay className="size-4" aria-hidden="true" />
               إدارة الدورات
             </Link>
+          ) : isSupervisor ? (
+            <Link
+              href="/supervision/training/new"
+              className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3.5 py-2 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-50"
+            >
+              <MonitorPlay className="size-4" aria-hidden="true" />
+              إنشاء تدريب جديد
+            </Link>
           ) : undefined
         }
       />
 
       <div className="space-y-6">
+        {/* Supervisor central workspace — every training they created,
+            each opening its own full management page. */}
+        <AcademySupervisorTrainings />
+
         <CatalogFilters
           action="/academy"
           q={flat.q}

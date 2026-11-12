@@ -3,6 +3,7 @@ import { ArrowRight, TriangleAlert } from "lucide-react";
 
 import { UnifiedTrainingEditor } from "@/app/supervision/training/unified/unified-editor";
 import {
+  getSupervisorTrainingProgress,
   getSupervisorTrainingWorkspace,
   requireSupervisorContext,
 } from "@/lib/supervision/training";
@@ -10,10 +11,12 @@ import {
 export const metadata = { title: "بناء ونشر التدريب — الصفحة الموحدة" };
 
 /**
- * Unified training editor — draft AND published trainings are opened
- * here for editing (no separate builder page). Everything the editor
- * renders comes from getSupervisorTrainingWorkspace (tenant-fenced);
- * every mutation re-verifies scope server-side.
+ * Unified training workspace — the ONE management page per training
+ * (draft AND published). Everything the editor renders comes from
+ * getSupervisorTrainingWorkspace (tenant-fenced); the progress read
+ * model adds teacher participation, exam results, essay-review needs,
+ * certificates and impact responses — all from the existing models.
+ * Every mutation re-verifies scope server-side.
  */
 export default async function SupervisorTrainingEditorPage({
   params,
@@ -43,5 +46,14 @@ export default async function SupervisorTrainingEditorPage({
     );
   }
 
-  return <UnifiedTrainingEditor workspace={workspace.data} />;
+  // Read-only participation/results aggregation — a failure here must
+  // never block editing, so the editor simply renders without it.
+  const progress = await getSupervisorTrainingProgress(ctx, courseId);
+
+  return (
+    <UnifiedTrainingEditor
+      workspace={workspace.data}
+      progress={progress.ok ? progress.data : null}
+    />
+  );
 }

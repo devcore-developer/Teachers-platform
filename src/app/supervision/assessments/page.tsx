@@ -46,6 +46,29 @@ export default async function SupervisorAssessmentsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Navigation moved into each training's workspace — this legacy
+          route stays reachable by URL with its guards untouched. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-600/30 bg-brand-600/[0.04] px-4 py-3 text-[11px] leading-relaxed text-foreground">
+        <span className="font-bold">ملاحظة:</span>
+        <span>
+          إدارة الأسئلة والاختبارات أصبحت داخل مساحة كل تدريب نفسها — افتح
+          التدريب من
+        </span>
+        <Link
+          href="/academy"
+          className="font-bold text-brand-600 hover:underline"
+        >
+          الأكاديمية التدريبية
+        </Link>
+        <span>أو من</span>
+        <Link
+          href="/supervision/training"
+          className="font-bold text-brand-600 hover:underline"
+        >
+          إدارة التدريب
+        </Link>
+        <span>— وهذه الصفحة تبقى متاحة للرجوع السريع.</span>
+      </div>
       <header>
         <h1 className="text-xl font-black text-foreground">الأسئلة والاختبارات</h1>
         <p className="mt-1 text-xs text-muted-foreground">

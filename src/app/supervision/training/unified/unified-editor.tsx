@@ -30,17 +30,24 @@ import {
   TRAINING_SUBCATEGORIES,
   TRAINING_TYPES,
 } from "@/config/training-domains";
-import type { TrainingWorkspace } from "@/lib/supervision/training";
+import type {
+  SupervisorTrainingProgress,
+  TrainingWorkspace,
+} from "@/lib/supervision/training";
 
 import { TrainingAssessmentSection } from "./unified-assessment";
 import { TrainingImpactSection } from "./unified-impact";
+import { TrainingProgressSection } from "./unified-progress";
 import { TrainingVideosSection } from "./unified-content";
 
 /* ------------------------------------------------------------------ */
 /* Unified training editor — ONE page for creating/editing a complete   */
 /* professional training and publishing it.                             */
 /*                                                                      */
-/* Sections (top → bottom):                                             */
+/* NO SEQUENTIAL GATES: the page always renders on top of a persisted   */
+/* DRAFT course (auto-created the moment the creation page opens), so   */
+/* every section below is editable IMMEDIATELY and independently:       */
+/*                                                                      */
 /*   1. معلومات التدريب (العنوان، النوع، المجال، التصنيف، الوصف…)        */
 /*   2. المدرب والمدرسة (مشتقة من الجلسة — للعرض فقط)                    */
 /*   3. الجدول والروابط (التاريخ، المدة، رابط الاجتماع، يوتيوب)          */
@@ -49,7 +56,12 @@ import { TrainingVideosSection } from "./unified-content";
 /*   6. الاختبار النهائي (بناة الأسئلة المدمج + نسبة النجاح)             */
 /*   7. قياس أثر التدريب (+ إضافة أداة قياس)                             */
 /*   8. إسناد المعلمين                                                   */
-/*   9. شريط النشر (نشر التدريب) في أسفل الصفحة                          */
+/*   9. متابعة المعلمين والنتائج (التقدم + الاختبار + التصحيح + الشهادات) */
+/*  10. شريط النشر (نشر التدريب) في أسفل الصفحة                          */
+/*                                                                      */
+/* Each section saves ITSELF through its own action and never touches    */
+/* another section's fields — saving one never overwrites unsaved        */
+/* edits elsewhere.                                                      */
 /*                                                                      */
 /* Every mutation re-verified server-side (requireSupervisorContext +   */
 /* tenant fence); the form never sends a schoolId.                      */
@@ -138,16 +150,6 @@ export function SectionCard({
   );
 }
 
-/** Locked placeholder shown in CREATE mode until the meta form is saved. */
-function LockedSection({ title, hint }: { title: string; hint: string }) {
-  return (
-    <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center">
-      <p className="text-sm font-black text-muted-foreground">{title}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
-    </div>
-  );
-}
-
 function statusMeta(status: string): { label: string; className: string } {
   if (status === "PUBLISHED") {
     return { label: "منشور لمعلمي المدرسة", className: "text-success" };
@@ -162,19 +164,22 @@ function statusMeta(status: string): { label: string; className: string } {
 
 export function UnifiedTrainingEditor({
   workspace,
+  progress,
 }: {
-  /** null = create mode (no course saved yet). */
-  workspace: TrainingWorkspace | null;
+  /** Always backed by a persisted DRAFT course — no locked state. */
+  workspace: TrainingWorkspace;
+  /** Per-teacher participation/results read model (loaded server-side). */
+  progress?: SupervisorTrainingProgress | null;
 }) {
   const router = useRouter();
-  const courseId = workspace?.course.id ?? null;
-  const status = workspace?.course.status ?? "DRAFT";
+  const courseId = workspace.course.id;
+  const status = workspace.course.status;
 
   const [metaPending, setMetaPending] = React.useState(false);
   const [metaFeedback, setMetaFeedback] = React.useState<{ bad: boolean; text: string } | null>(null);
   const [metaErrors, setMetaErrors] = React.useState<Record<string, string>>({});
 
-  const course = workspace?.course ?? null;
+  const course = workspace.course;
 
   async function handleMetaSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -187,7 +192,7 @@ export function UnifiedTrainingEditor({
 
     const scheduledRaw = String(data.get("scheduledAt") ?? "").trim();
     const result = (await saveSupervisorTrainingAction({
-      courseId: courseId ?? undefined,
+      courseId,
       titleAr: String(data.get("titleAr") ?? ""),
       titleEn: String(data.get("titleEn") ?? "") || undefined,
       descriptionAr: String(data.get("descriptionAr") ?? ""),
@@ -214,14 +219,8 @@ export function UnifiedTrainingEditor({
       return;
     }
 
-    const savedId = result.data?.id;
-    if (!courseId && savedId) {
-      // First save of a new training — move to its unified editor URL
-      // (same page, now fully enabled) without losing the scroll flow.
-      router.replace(`/supervision/training/${savedId}`);
-      router.refresh();
-      return;
-    }
+    // The course already exists (draft-first) — this is a pure update of
+    // the meta section only; no other section is touched by this action.
     setMetaFeedback({
       bad: false,
       text: result.data?.created
@@ -231,8 +230,12 @@ export function UnifiedTrainingEditor({
     router.refresh();
   }
 
-  const trainingType = course?.trainingType ?? "";
+  const trainingType = course.trainingType ?? "";
   const isLiveType = trainingType === "" || trainingType === "VIRTUAL_LIVE";
+  // Must match SUPERVISOR_DRAFT_TITLE in lib/supervision/training.ts
+  // (kept as a literal here — server modules cannot cross the RSC
+  // boundary into this client component).
+  const isPlaceholderTitle = course.titleAr === "تدريب بدون عنوان";
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5">
@@ -247,11 +250,12 @@ export function UnifiedTrainingEditor({
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-xl font-black text-foreground">
-              {course ? course.titleAr : "إنشاء تدريب احترافي جديد"}
+              {isPlaceholderTitle ? "إنشاء تدريب احترافي جديد" : course.titleAr}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              صفحة واحدة تكفي: أكمل الأقسام بالترتيب ثم اضغط «نشر التدريب» في
-              أسفل الصفحة — كل الحفظ يتم على الخادم داخل مدرستك.
+              كل الأقسام متاحة فورًا وفي أي ترتيب — لكل قسم زر حفظ خاص به،
+              وحفظ قسم لا يمس تعديلات قسم آخر. عند الجاهزية اضغط «نشر
+              التدريب» في أسفل الصفحة.
             </p>
           </div>
           <span className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-bold ${statusMeta(status).className}`}>
@@ -501,66 +505,34 @@ export function UnifiedTrainingEditor({
               ) : (
                 <Save className="size-4" aria-hidden="true" />
               )}
-              {courseId ? "حفظ بيانات التدريب" : "حفظ وبدء بناء التدريب"}
+              حفظ بيانات التدريب
             </button>
             {metaFeedback && <Feedback {...metaFeedback} />}
           </div>
         </form>
       </SectionCard>
 
-      {/* 4 — training videos */}
-      {courseId ? (
-        <TrainingVideosSection courseId={courseId} workspace={workspace!} />
-      ) : (
-        <LockedSection
-          title="فيديوهات التدريب"
-          hint="احفظ بيانات التدريب أولًا (زر أعلاه) ثم ارفع الفيديوهات هنا."
-        />
-      )}
+      {/* 4 — training videos (available immediately — draft-first) */}
+      <TrainingVideosSection courseId={courseId} workspace={workspace} />
 
-      {/* 5 — training attachments */}
-      {courseId ? (
-        <TrainingAttachmentsSection courseId={courseId} workspace={workspace!} />
-      ) : (
-        <LockedSection
-          title="مرفقات التدريب"
-          hint="احفظ بيانات التدريب أولًا ثم أضف ملفات PDF والWord والصوت والصور."
-        />
-      )}
+      {/* 5 — training attachments (available immediately) */}
+      <TrainingAttachmentsSection courseId={courseId} workspace={workspace} />
 
-      {/* 6 — final assessment */}
-      {courseId ? (
-        <TrainingAssessmentSection courseId={courseId} workspace={workspace!} />
-      ) : (
-        <LockedSection
-          title="الاختبار النهائي"
-          hint="احفظ بيانات التدريب أولًا ثم ابنِ أسئلة الاختبار وحدد نسبة النجاح."
-        />
-      )}
+      {/* 6 — final assessment (available immediately) */}
+      <TrainingAssessmentSection courseId={courseId} workspace={workspace} />
 
-      {/* 7 — impact measurement */}
-      {courseId ? (
-        <TrainingImpactSection courseId={courseId} workspace={workspace!} />
-      ) : (
-        <LockedSection
-          title="قياس أثر التدريب"
-          hint="احفظ بيانات التدريب أولًا ثم أضف أداة قياس الأثر."
-        />
-      )}
+      {/* 7 — impact measurement (available immediately) */}
+      <TrainingImpactSection courseId={courseId} workspace={workspace} />
 
       {/* 8 — teacher assignment */}
-      {courseId && workspace ? (
-        <TrainingEnrollmentSection workspace={workspace} />
-      ) : null}
+      <TrainingEnrollmentSection workspace={workspace} />
 
-      {/* 9 — publish bar */}
-      {courseId && workspace ? (
-        <PublishBar courseId={courseId} status={status} lessonsCount={countLessons(workspace)} />
-      ) : (
-        <p className="rounded-xl border border-dashed bg-muted/20 px-4 py-5 text-center text-xs font-bold text-muted-foreground">
-          بعد حفظ البيانات وإكمال الأقسام سيظهر هنا زر «نشر التدريب».
-        </p>
-      )}
+      {/* 9 — teacher participation, exam results, essay grading,
+           certificates and impact responses — all in one place. */}
+      <TrainingProgressSection courseId={courseId} workspace={workspace} progress={progress ?? null} />
+
+      {/* 10 — publish bar */}
+      <PublishBar courseId={courseId} status={status} lessonsCount={countLessons(workspace)} />
 
       {isLiveType && course?.meetingUrl === null && status === "PUBLISHED" && (
         <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] leading-relaxed text-amber-800">

@@ -2000,3 +2000,381 @@ export async function getSupervisorTrainingWorkspace(
     },
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Draft-first creation + Academy workspace + progress read models.     */
+/*                                                                      */
+/* Refactor contract:                                                   */
+/*   • NO sequential save gates — a DRAFT course exists the moment the  */
+/*     creation page opens, so every section (videos, attachments,      */
+/*     exam, impact, publish) is editable immediately.                  */
+/*   • The Academy lists the supervisor's OWN trainings (createdById)   */
+/*     — read-only aggregation, no new write models.                    */
+/*   • Each training workspace carries teacher participation, exam      */
+/*     results, essay-review needs, certificates and impact responses   */
+/*     — all read from the EXISTING models, nothing duplicated.         */
+/* ------------------------------------------------------------------ */
+
+/** Placeholder title of an auto-created untouched draft course. */
+export const SUPERVISOR_DRAFT_TITLE = "تدريب بدون عنوان";
+const SUPERVISOR_DRAFT_DESCRIPTION =
+  "مسودة تدريب جديدة — أكمل بيانات التدريب ثم اضغط «حفظ بيانات التدريب» قبل النشر.";
+
+export interface SupervisorDraftHandle {
+  id: string;
+  created: boolean;
+}
+
+/**
+ * GET-OR-CREATE the supervisor's scratch DRAFT course backing the
+ * one-page creation flow.
+ *
+ * Reuse rule: the LATEST untouched draft (placeholder title, no
+ * sections, no attachments, no assessment, no impact tool) is reused so
+ * repeatedly opening the creation page never spams empty rows. A draft
+ * that already carries content is left alone and a fresh one is created
+ * — nothing the supervisor uploaded is ever silently discarded.
+ *
+ * Tenant + author are hard-bound to the SESSION (never the client), the
+ * same as saveSupervisorTraining's create path.
+ */
+export async function ensureSupervisorTrainingDraft(
+  ctx: SupervisorTrainingContext
+): Promise<SupervisorResult<SupervisorDraftHandle>> {
+  const existing = await db.course.findFirst({
+    where: {
+      schoolId: ctx.schoolId,
+      createdById: ctx.id,
+      status: "DRAFT",
+      titleAr: SUPERVISOR_DRAFT_TITLE,
+      sections: { none: {} },
+      attachments: { none: {} },
+      assessments: { none: { status: { not: "ARCHIVED" } } },
+      surveys: { none: { status: { not: "ARCHIVED" } } },
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+  if (existing) {
+    return { ok: true, data: { id: existing.id, created: false } };
+  }
+
+  const created = await db.course.create({
+    data: {
+      // Tenant + trainer hard-bound to the SESSION — never the client.
+      schoolId: ctx.schoolId,
+      createdById: ctx.id,
+      instructorId: ctx.id,
+      status: "DRAFT",
+      titleAr: SUPERVISOR_DRAFT_TITLE,
+      descriptionAr: SUPERVISOR_DRAFT_DESCRIPTION,
+      category: TRAINING_DOMAINS[0],
+      trainingType: "VIRTUAL_LIVE",
+    },
+    select: { id: true },
+  });
+  return { ok: true, data: { id: created.id, created: true } };
+}
+
+/* ---------------------- Academy: my trainings ---------------------- */
+
+export interface SupervisorAcademyTrainingRow {
+  id: string;
+  titleAr: string;
+  status: string;
+  category: string;
+  estimatedHours: number | null;
+  sectionsCount: number;
+  lessonsCount: number;
+  enrollmentsCount: number;
+  hasAssessment: boolean;
+  hasSurvey: boolean;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+/**
+ * The trainings the CURRENT supervisor created (createdById), any
+ * status — the Academy workspace list. School-fenced; archived rows
+ * included with their own pill so nothing the supervisor built ever
+ * disappears from their view.
+ */
+export async function listSupervisorAcademyTrainings(
+  ctx: SupervisorTrainingContext
+): Promise<SupervisorAcademyTrainingRow[]> {
+  const rows = await db.course.findMany({
+    where: { schoolId: ctx.schoolId, createdById: ctx.id },
+    orderBy: { updatedAt: "desc" },
+    take: 60,
+    select: {
+      id: true,
+      titleAr: true,
+      status: true,
+      category: true,
+      estimatedHours: true,
+      updatedAt: true,
+      publishedAt: true,
+      _count: { select: { sections: true, enrollments: true } },
+    },
+  });
+  if (rows.length === 0) return [];
+  const ids = rows.map((row) => row.id);
+
+  const [sections, assessments, surveys] = await Promise.all([
+    db.courseSection.findMany({
+      where: { courseId: { in: ids } },
+      select: { courseId: true, _count: { select: { lessons: true } } },
+    }),
+    db.assessment.findMany({
+      where: { courseId: { in: ids }, status: { not: "ARCHIVED" } },
+      select: { courseId: true },
+    }),
+    db.survey.findMany({
+      where: { courseId: { in: ids }, status: { not: "ARCHIVED" } },
+      select: { courseId: true },
+    }),
+  ]);
+
+  const lessonsByCourse = new Map<string, number>();
+  for (const section of sections) {
+    lessonsByCourse.set(
+      section.courseId,
+      (lessonsByCourse.get(section.courseId) ?? 0) + section._count.lessons
+    );
+  }
+  const assessmentCourses = new Set(assessments.map((row) => row.courseId));
+  const surveyCourses = new Set(surveys.map((row) => row.courseId));
+
+  return rows.map((row) => ({
+    id: row.id,
+    titleAr: row.titleAr,
+    status: row.status,
+    category: row.category,
+    estimatedHours: row.estimatedHours,
+    sectionsCount: row._count.sections,
+    lessonsCount: lessonsByCourse.get(row.id) ?? 0,
+    enrollmentsCount: row._count.enrollments,
+    hasAssessment: assessmentCourses.has(row.id),
+    hasSurvey: surveyCourses.has(row.id),
+    updatedAt: row.updatedAt.toISOString(),
+    publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+  }));
+}
+
+/* ------------------- Training workspace: progress ------------------- */
+
+export interface SupervisorTrainingProgressRow {
+  userId: string;
+  name: string;
+  enrolledAt: string;
+  completedAt: string | null;
+  lessonsDone: number;
+  /** null = the training has no (non-archived) final exam. */
+  exam: {
+    attemptsCount: number;
+    needsReviewCount: number;
+    bestPercentage: number | null;
+    bestPassed: boolean | null;
+  } | null;
+  certificate: {
+    id: string;
+    certificateNumber: string;
+    status: string;
+  } | null;
+  /** Identifiable impact response only — anonymous surveys cannot be
+   * matched per teacher (aggregate count + results page instead). */
+  impactSubmittedAt: string | null;
+}
+
+export interface SupervisorTrainingProgress {
+  assessmentId: string | null;
+  assessmentTitleAr: string | null;
+  surveyId: string | null;
+  surveyTitleAr: string | null;
+  surveyAnonymous: boolean;
+  surveyResponsesCount: number;
+  lessonsTotal: number;
+  rows: SupervisorTrainingProgressRow[];
+}
+
+/**
+ * Per-teacher participation & results for ONE training — the read model
+ * behind the unified workspace's progress section. Reads ONLY existing
+ * models: CourseEnrollment, CourseLessonProgress, AssessmentAttempt,
+ * Certificate, SurveyResponse. Every query is school/course fenced.
+ */
+export async function getSupervisorTrainingProgress(
+  ctx: SupervisorTrainingContext,
+  courseId: string
+): Promise<SupervisorResult<SupervisorTrainingProgress>> {
+  const course = await courseInScope(ctx, courseId);
+  if (!course) {
+    return fail("التدريب غير موجود أو خارج نطاق مدرستك", "FORBIDDEN");
+  }
+
+  const [enrollments, lessonsTotal, assessment, survey] = await Promise.all([
+    listSupervisorEnrollments(ctx, courseId),
+    db.courseLesson.count({ where: { section: { courseId } } }),
+    db.assessment.findFirst({
+      where: { courseId, schoolId: ctx.schoolId, status: { not: "ARCHIVED" } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, titleAr: true },
+    }),
+    db.survey.findFirst({
+      where: { courseId, schoolId: ctx.schoolId, status: { not: "ARCHIVED" } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, titleAr: true, anonymous: true },
+    }),
+  ]);
+
+  const base: SupervisorTrainingProgress = {
+    assessmentId: assessment?.id ?? null,
+    assessmentTitleAr: assessment?.titleAr ?? null,
+    surveyId: survey?.id ?? null,
+    surveyTitleAr: survey?.titleAr ?? null,
+    surveyAnonymous: survey?.anonymous ?? false,
+    surveyResponsesCount: 0,
+    lessonsTotal,
+    rows: [],
+  };
+
+  const userIds = enrollments.map((row) => row.userId);
+  if (userIds.length === 0) return { ok: true, data: base };
+
+  const [lessonProgress, attempts, certificates, surveyResponses] =
+    await Promise.all([
+      db.courseLessonProgress.findMany({
+        where: { courseId, userId: { in: userIds } },
+        select: { userId: true, lessonId: true },
+      }),
+      assessment
+        ? db.assessmentAttempt.findMany({
+            where: {
+              assessmentId: assessment.id,
+              userId: { in: userIds },
+              status: { in: ["NEEDS_REVIEW", "PASSED", "FAILED"] },
+            },
+            select: {
+              userId: true,
+              status: true,
+              percentage: true,
+              passed: true,
+            },
+          })
+        : Promise.resolve(
+            [] as Array<{
+              userId: string;
+              status: string;
+              percentage: number | null;
+              passed: boolean | null;
+            }>
+          ),
+      db.certificate.findMany({
+        where: { courseId, teacherId: { in: userIds } },
+        orderBy: { issuedAt: "desc" },
+        select: {
+          id: true,
+          certificateNumber: true,
+          status: true,
+          teacherId: true,
+        },
+      }),
+      survey
+        ? db.surveyResponse.findMany({
+            where: {
+              surveyId: survey.id,
+              status: "SUBMITTED",
+              ...(survey.anonymous
+                ? {}
+                : { respondentId: { in: userIds } }),
+            },
+            select: { respondentId: true, submittedAt: true },
+          })
+        : Promise.resolve(
+            [] as Array<{ respondentId: string | null; submittedAt: Date | null }>
+          ),
+    ]);
+
+  const lessonsDoneByUser = new Map<string, number>();
+  for (const row of lessonProgress) {
+    lessonsDoneByUser.set(row.userId, (lessonsDoneByUser.get(row.userId) ?? 0) + 1);
+  }
+
+  const examByUser = new Map<
+    string,
+    { attemptsCount: number; needsReviewCount: number; bestPercentage: number | null; bestPassed: boolean | null }
+  >();
+  for (const attempt of attempts) {
+    const current = examByUser.get(attempt.userId) ?? {
+      attemptsCount: 0,
+      needsReviewCount: 0,
+      bestPercentage: null,
+      bestPassed: null,
+    };
+    current.attemptsCount += 1;
+    if (attempt.status === "NEEDS_REVIEW") current.needsReviewCount += 1;
+    if (
+      (attempt.status === "PASSED" || attempt.status === "FAILED") &&
+      typeof attempt.percentage === "number"
+    ) {
+      if (
+        current.bestPercentage === null ||
+        attempt.percentage > current.bestPercentage
+      ) {
+        current.bestPercentage = attempt.percentage;
+        current.bestPassed = attempt.status === "PASSED";
+      }
+    }
+    examByUser.set(attempt.userId, current);
+  }
+
+  const certificateByUser = new Map(
+    certificates.map((row) => [row.teacherId, row])
+  );
+
+  const impactByUser = new Map<string, string>();
+  let impactCount = 0;
+  for (const response of surveyResponses) {
+    impactCount += 1;
+    if (response.respondentId && response.submittedAt) {
+      impactByUser.set(response.respondentId, response.submittedAt.toISOString());
+    }
+  }
+
+  return {
+    ok: true,
+    data: {
+      ...base,
+      surveyResponsesCount: impactCount,
+      rows: enrollments.map((enrollment) => {
+        const exam = examByUser.get(enrollment.userId) ?? null;
+        const certificate = certificateByUser.get(enrollment.userId) ?? null;
+        return {
+          userId: enrollment.userId,
+          name: enrollment.name,
+          enrolledAt: enrollment.enrolledAt.toISOString(),
+          completedAt: enrollment.completedAt
+            ? enrollment.completedAt.toISOString()
+            : null,
+          lessonsDone: lessonsDoneByUser.get(enrollment.userId) ?? 0,
+          exam: exam
+            ? {
+                attemptsCount: exam.attemptsCount,
+                needsReviewCount: exam.needsReviewCount,
+                bestPercentage: exam.bestPercentage,
+                bestPassed: exam.bestPassed,
+              }
+            : null,
+          certificate: certificate
+            ? {
+                id: certificate.id,
+                certificateNumber: certificate.certificateNumber,
+                status: certificate.status,
+              }
+            : null,
+          impactSubmittedAt: impactByUser.get(enrollment.userId) ?? null,
+        };
+      }),
+    },
+  };
+}

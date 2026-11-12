@@ -127,14 +127,14 @@ const NAV_ROLES: Record<string, Role[]> = {
   programs: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],
   "course-management": ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],
   // Supervisor training workspace — a dedicated, school-scoped mirror
-  // of the training lifecycle (courses+builder / assessments / impact).
-  // Same service layer, same tenant fences, separate routes so the
-  // admin-trio modules keep their own guards untouched. The former
-  // "supervisor-dashboard" module merged into the Home page (/) — its
-  // widgets render there and /supervision/dashboard redirects to /.
+  // of the training lifecycle. The former standalone "supervisor-assessments"
+  // and "supervisor-impact" sidebar modules were REMOVED from navigation
+  // (not from the product): exams, questions and impact measurement are
+  // authored and managed INSIDE each training's own workspace
+  // (/supervision/training/[courseId]) and inside the Academy. The old
+  // routes stay reachable by URL with their guards intact.
+  // The former "supervisor-dashboard" module merged into the Home page (/).
   "supervisor-training": ["EDUCATIONAL_SUPERVISOR"],
-  "supervisor-assessments": ["EDUCATIONAL_SUPERVISOR"],
-  "supervisor-impact": ["EDUCATIONAL_SUPERVISOR"],
   // Phase 6 — assessments: managers administer; deputies get read-only
   // results inside their scope. TEACHER is intentionally NOT listed:
   // exams are NOT a standalone sidebar module for teachers — the final
