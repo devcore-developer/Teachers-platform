@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { FileInput } from "@/components/media/file-input";
+import { DeleteTrainingButton } from "@/app/supervision/training/unified/delete-training-dialog";
 import {
   deleteSupervisorTrainingAttachmentAction,
   enrollSupervisorTeachersAction,
@@ -257,9 +258,19 @@ export function UnifiedTrainingEditor({
               التدريب» في أسفل الصفحة.
             </p>
           </div>
-          <span className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-bold ${statusMeta(status).className}`}>
-            {statusMeta(status).label}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={`rounded-full border px-3 py-1 text-[11px] font-bold ${statusMeta(status).className}`}>
+              {statusMeta(status).label}
+            </span>
+            {/* Destructive delete — separate from the edit page itself;
+                opens the DELETE-word confirmation dialog first. */}
+            <DeleteTrainingButton
+              courseId={courseId}
+              courseTitle={isPlaceholderTitle ? "تدريب بدون عنوان" : course.titleAr}
+              lessonsCount={countLessons(workspace)}
+              size="page"
+            />
+          </div>
         </div>
       </header>
 

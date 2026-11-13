@@ -8,6 +8,7 @@ import {
   statusLabel,
   statusTone,
 } from "@/app/supervision/supervisor-ui";
+import { DeleteTrainingButton } from "@/app/supervision/training/unified/delete-training-dialog";
 import {
   listSupervisorCourses,
   requireSupervisorContext,
@@ -89,13 +90,23 @@ export default async function SupervisorTrainingPage() {
                       </span>
                     )}
                   </div>
-                  <Link
-                    href={`/supervision/training/${course.id}`}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-brand-700"
-                  >
-                    <MonitorPlay className="size-3.5" aria-hidden="true" />
-                    فتح الصفحة الموحدة
-                  </Link>
+                  {/* Edit (blue, brand) and Delete (red, destructive) sit
+                      side by side — clicking Delete NEVER deletes directly,
+                      it opens the secure confirmation dialog first. */}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/supervision/training/${course.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-brand-700"
+                    >
+                      <MonitorPlay className="size-3.5" aria-hidden="true" />
+                      فتح الصفحة الموحدة
+                    </Link>
+                    <DeleteTrainingButton
+                      courseId={course.id}
+                      courseTitle={course.titleAr}
+                      lessonsCount={course.lessonsCount}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

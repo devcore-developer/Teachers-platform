@@ -10,6 +10,7 @@
 /* ------------------------------------------------------------------ */
 
 import { requireSupervisorContext } from "@/lib/supervision/training";
+import { deleteSupervisorTraining } from "@/lib/supervision/training-delete";
 import {
   addSupervisorQuestion,
   createSupervisorAssessment,
@@ -169,4 +170,15 @@ export async function setSupervisorAssessmentPassingPercentAction(
 export async function publishSupervisorTrainingAction(input: unknown) {
   const ctx = await requireSupervisorContext();
   return publishSupervisorTraining(ctx, input);
+}
+
+/**
+ * PERMANENT training deletion — the session's supervisor context is
+ * resolved here and the service re-verifies school ownership inside
+ * one transaction (the confirmation word "DELETE" is a client-side
+ * safeguard only; the server never relies on it).
+ */
+export async function deleteSupervisorTrainingAction(courseId: string) {
+  const ctx = await requireSupervisorContext();
+  return deleteSupervisorTraining(ctx, courseId);
 }
