@@ -14,7 +14,10 @@
 /*     until the input matches exactly (any other value is rejected),   */
 /*   • while the request runs the dialog is locked (no Escape/backdrop  */
 /*     close, buttons disabled) with a spinner, then it reports success */
-/*     or error feedback before navigating back to the list.            */
+/*     or error feedback before navigating back to the list —           */
+/*     redirectTo decides WHICH list (Training Management by default,   */
+/*     /academy when the trigger lives on a Training Academy card, so   */
+/*     the SAME dialog serves BOTH listings identically).               */
 /* Accessible: role=dialog + aria-modal + labelled/described-by ids,    */
 /* focus moves to the confirmation input on open and returns to the     */
 /* trigger on close, live validation feedback, Escape cancels when idle.*/
@@ -51,12 +54,17 @@ export function DeleteTrainingButton({
   courseTitle,
   lessonsCount = 0,
   size = "card",
+  redirectTo = "/supervision/training",
 }: {
   courseId: string;
   courseTitle: string;
   lessonsCount?: number;
   /** "card" = small row button in the list, "page" = larger editor header button. */
   size?: "card" | "page";
+  /** Where to return after the deletion commits — Training Management
+   *  by default; "/academy" keeps supervisors on the Academy listing
+   *  their card lives in. Same action, same dialog, same service. */
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
@@ -116,7 +124,7 @@ export function DeleteTrainingButton({
   }, [open]);
 
   function backToList() {
-    router.push("/supervision/training");
+    router.push(redirectTo);
     router.refresh();
   }
 

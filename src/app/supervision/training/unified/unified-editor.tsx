@@ -60,9 +60,9 @@ import { TrainingVideosSection } from "./unified-content";
 /*   9. متابعة المعلمين والنتائج (التقدم + الاختبار + التصحيح + الشهادات) */
 /*  10. شريط النشر (نشر التدريب) في أسفل الصفحة                          */
 /*                                                                      */
-/* Each section saves ITSELF through its own action and never touches   */
-/* another section's fields — saving one never overwrites unsaved       */
-/* edits elsewhere.                                                     */
+/* Each section saves ITSELF through its own action and never touches    */
+/* another section's fields — saving one never overwrites unsaved        */
+/* edits elsewhere.                                                      */
 /*                                                                      */
 /* Every mutation re-verified server-side (requireSupervisorContext +   */
 /* tenant fence); the form never sends a schoolId.                      */
@@ -118,16 +118,25 @@ export function SectionCard({
   title,
   description,
   optional,
+  anchorId,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   optional?: boolean;
+  /** Optional DOM id so OTHER pages can deep-link straight into this
+   *  section (Academy cards link #training-info to jump directly to
+   *  the editable info form). scroll-mt keeps the anchored heading
+   *  clear of the sticky viewport top on arrival. */
+  anchorId?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border bg-card">
+    <section
+      id={anchorId}
+      className="scroll-mt-24 rounded-xl border bg-card"
+    >
       <div className="flex items-start gap-3 border-b px-4 py-3">
         <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-600">
           {icon}
@@ -276,6 +285,7 @@ export function UnifiedTrainingEditor({
 
       {/* 1+2+3 — training info, trainer/school, schedule & links */}
       <SectionCard
+        anchorId="training-info"
         icon={<Save className="size-4" aria-hidden="true" />}
         title="معلومات التدريب"
         description="البيانات الأساسية والتصنيف والجدول والروابط ورسالتك للمعلمين — تُحفظ معًا."

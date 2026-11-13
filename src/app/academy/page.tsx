@@ -29,6 +29,16 @@ export const metadata = {
  * Phase 5 — teacher-facing academy catalog. Only PUBLISHED courses
  * visible to the viewer's school (or platform-wide) are listed; drafts
  * and archived courses never reach this page. Filters are URL-driven.
+ *
+ * EDUCATIONAL_SUPERVISOR is the ONE exception — and deliberately so:
+ * the supervisor's academy renders a SINGLE unified listing (their own
+ * trainings, any status, with search/filters and full card actions in
+ * AcademySupervisorTrainings). The published catalog used to render
+ * BELOW that section as well, re-showing the supervisor's own
+ * published trainings as a second set of cards — the duplicate
+ * listing. The fix is structural, not cosmetic: for supervisors the
+ * catalog queries are skipped entirely and the catalog JSX is never
+ * rendered — no CSS hiding, no duplicated data path.
  */
 export default async function AcademyPage({
   searchParams,
@@ -47,30 +57,41 @@ export default async function AcademyPage({
   );
   const mine = flat.mine === "1";
 
-  const result = await listPublishedCourses(viewer, {
-    q: flat.q,
-    category: flat.category,
-    programId: flat.programId,
-    mine,
-    page: Number.parseInt(flat.page || "1", 10) || 1,
-  });
-
-  // Program filter options — published programs in the viewer's scope.
-  const programs = await db.trainingProgram.findMany({
-    where:
-      user.role === "SUPER_ADMIN"
-        ? { status: "PUBLISHED" }
-        : {
-            status: "PUBLISHED",
-            OR: [{ schoolId: null }, ...(user.schoolId ? [{ schoolId: user.schoolId }] : [])],
-          },
-    select: { id: true, nameAr: true, schoolId: true },
-    orderBy: { nameAr: "asc" },
-  });
-
   const isManager =
     user.role === "SUPER_ADMIN" || user.role === "DEVELOPMENT_OFFICE_MANAGER";
   const isSupervisor = user.role === "EDUCATIONAL_SUPERVISOR";
+
+  /* Catalog data — fetched ONLY for non-supervisor roles. The
+   * supervisor never sees the catalog, so its queries are skipped
+   * entirely (no unnecessary data duplication). */
+  const result = isSupervisor
+    ? null
+    : await listPublishedCourses(viewer, {
+        q: flat.q,
+        category: flat.category,
+        programId: flat.programId,
+        mine,
+        page: Number.parseInt(flat.page || "1", 10) || 1,
+      });
+
+  // Program filter options — published programs in the viewer's scope.
+  const programs: { id: string; nameAr: string; schoolId: string | null }[] =
+    isSupervisor
+      ? []
+      : await db.trainingProgram.findMany({
+          where:
+            user.role === "SUPER_ADMIN"
+              ? { status: "PUBLISHED" }
+              : {
+                  status: "PUBLISHED",
+                  OR: [
+                    { schoolId: null },
+                    ...(user.schoolId ? [{ schoolId: user.schoolId }] : []),
+                  ],
+                },
+          select: { id: true, nameAr: true, schoolId: true },
+          orderBy: { nameAr: "asc" },
+        });
 
   function pageHref(page: number): string {
     const sp = new URLSearchParams(
@@ -108,144 +129,154 @@ export default async function AcademyPage({
       />
 
       <div className="space-y-6">
-        {/* Supervisor central workspace — every training they created,
-            each opening its own full management page. */}
-        <AcademySupervisorTrainings />
+        {/* 1) The supervisor's ONE unified training listing — their own
+            trainings (any status), with search/filters and full card
+            actions (Open/Manage, Edit, Delete). Rendered for the
+            supervisor only; returns null for every other role. */}
+        <AcademySupervisorTrainings q={flat.q} category={flat.category} />
 
-        <CatalogFilters
-          action="/academy"
-          q={flat.q}
-          category={flat.category}
-          programId={flat.programId}
-          programs={programs.map((program) => ({
-            id: program.id,
-            nameAr: program.nameAr,
-            platformWide: program.schoolId === null,
-          }))}
-          showMine
-          mine={mine}
-        />
-
-        {result.ok ? (
-          result.data.rows.length === 0 ? (
-            <EmptyState
-              icon={BookOpen}
-              title={
-                mine
-                  ? "لم تسجّل في أي دورة بعد"
-                  : "لا توجد دورات متاحة مطابقة"
-              }
-              description={
-                mine
-                  ? "تصفّح الكتالوج وسجّل في ما يناسبك — ستظهر دوراتك هنا."
-                  : "جرّب تعديل الفلاتر أو كلمات البحث — أو عوداً لاحقاً فسيتم نشر دورات جديدة."
-              }
+        {/* 2) The public catalog — untouched for every OTHER role
+            (teachers, managers, admins). NEVER rendered for the
+            supervisor: it re-showed their own published trainings as
+            the duplicated second listing. */}
+        {result && (
+          <>
+            <CatalogFilters
+              action="/academy"
+              q={flat.q}
+              category={flat.category}
+              programId={flat.programId}
+              programs={programs.map((program) => ({
+                id: program.id,
+                nameAr: program.nameAr,
+                platformWide: program.schoolId === null,
+              }))}
+              showMine
+              mine={mine}
             />
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {result.data.rows.map((course) => {
-                  const level = courseLevelLabel(course.level);
-                  return (
-                    <Link
-                      key={course.id}
-                      href={`/academy/courses/${course.id}`}
-                      className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs transition-shadow hover:shadow-md"
-                    >
-                      <div className="relative h-36 w-full overflow-hidden bg-brand-50">
-                        {course.coverAttachmentId ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={`/api/files/${course.coverAttachmentId}`}
-                            alt=""
-                            className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
-                          />
-                        ) : (
-                          <div
-                            className="flex h-full items-center justify-center text-brand-300"
-                            aria-hidden="true"
-                          >
-                            <BookOpen className="size-10" strokeWidth={1.5} />
-                          </div>
-                        )}
-                        {course.enrolled && (
-                          <span className="absolute end-2 top-2 rounded-full bg-success-soft px-2.5 py-0.5 text-[11px] font-bold text-success">
-                            مسجّل
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-2 p-4">
-                        <h3 className="text-sm font-bold text-foreground transition-colors group-hover:text-brand-700">
-                          {course.titleAr}
-                        </h3>
-                        {course.programName && (
-                          <p className="text-[11px] font-semibold text-muted-foreground">
-                            {course.programName}
-                          </p>
-                        )}
-                        <div className="mt-auto flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                          <span className="rounded-md bg-muted px-2 py-0.5">
-                            {trainingCategoryLabel(course.category)}
-                          </span>
-                          {level && (
-                            <span className="rounded-md bg-muted px-2 py-0.5">
-                              {level}
-                            </span>
-                          )}
-                          {course.estimatedHours !== null && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
-                              <Clock className="size-3" aria-hidden="true" />
-                              {course.estimatedHours} ساعة
-                            </span>
-                          )}
-                          <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
-                            <Layers className="size-3" aria-hidden="true" />
-                            {course.sectionsCount} قسم · {course.lessonsCount} درس
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
 
-              {result.data.pageCount > 1 && (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    الإجمالي: {result.data.total} دورة — صفحة {result.data.page} من{" "}
-                    {result.data.pageCount}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    {result.data.page > 1 ? (
-                      <Link
-                        href={pageHref(result.data.page - 1)}
-                        className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors hover:bg-accent"
-                      >
-                        <ChevronRight className="size-3.5" aria-hidden="true" />
-                        السابقة
-                      </Link>
-                    ) : null}
-                    {result.data.page < result.data.pageCount ? (
-                      <Link
-                        href={pageHref(result.data.page + 1)}
-                        className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors hover:bg-accent"
-                      >
-                        التالية
-                        <ChevronLeft className="size-3.5" aria-hidden="true" />
-                      </Link>
-                    ) : null}
+            {result.ok ? (
+              result.data.rows.length === 0 ? (
+                <EmptyState
+                  icon={BookOpen}
+                  title={
+                    mine
+                      ? "لم تسجّل في أي دورة بعد"
+                      : "لا توجد دورات متاحة مطابقة"
+                  }
+                  description={
+                    mine
+                      ? "تصفّح الكتالوج وسجّل في ما يناسبك — ستظهر دوراتك هنا."
+                      : "جرّب تعديل الفلاتر أو كلمات البحث — أو عوداً لاحقاً فسيتم نشر دورات جديدة."
+                  }
+                />
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {result.data.rows.map((course) => {
+                      const level = courseLevelLabel(course.level);
+                      return (
+                        <Link
+                          key={course.id}
+                          href={`/academy/courses/${course.id}`}
+                          className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs transition-shadow hover:shadow-md"
+                        >
+                          <div className="relative h-36 w-full overflow-hidden bg-brand-50">
+                            {course.coverAttachmentId ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={`/api/files/${course.coverAttachmentId}`}
+                                alt=""
+                                className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
+                              />
+                            ) : (
+                              <div
+                                className="flex h-full items-center justify-center text-brand-300"
+                                aria-hidden="true"
+                              >
+                                <BookOpen className="size-10" strokeWidth={1.5} />
+                              </div>
+                            )}
+                            {course.enrolled && (
+                              <span className="absolute end-2 top-2 rounded-full bg-success-soft px-2.5 py-0.5 text-[11px] font-bold text-success">
+                                مسجّل
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-2 p-4">
+                            <h3 className="text-sm font-bold text-foreground transition-colors group-hover:text-brand-700">
+                              {course.titleAr}
+                            </h3>
+                            {course.programName && (
+                              <p className="text-[11px] font-semibold text-muted-foreground">
+                                {course.programName}
+                              </p>
+                            )}
+                            <div className="mt-auto flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                              <span className="rounded-md bg-muted px-2 py-0.5">
+                                {trainingCategoryLabel(course.category)}
+                              </span>
+                              {level && (
+                                <span className="rounded-md bg-muted px-2 py-0.5">
+                                  {level}
+                                </span>
+                              )}
+                              {course.estimatedHours !== null && (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
+                                  <Clock className="size-3" aria-hidden="true" />
+                                  {course.estimatedHours} ساعة
+                                </span>
+                              )}
+                              <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
+                                <Layers className="size-3" aria-hidden="true" />
+                                {course.sectionsCount} قسم · {course.lessonsCount} درس
+                              </span>
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
-            </>
-          )
-        ) : (
-          <div
-            role="alert"
-            className="rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center text-sm font-semibold text-destructive"
-          >
-            {result.message}
-          </div>
+
+                  {result.data.pageCount > 1 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        الإجمالي: {result.data.total} دورة — صفحة {result.data.page} من{" "}
+                        {result.data.pageCount}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {result.data.page > 1 ? (
+                          <Link
+                            href={pageHref(result.data.page - 1)}
+                            className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors hover:bg-accent"
+                          >
+                            <ChevronRight className="size-3.5" aria-hidden="true" />
+                            السابقة
+                          </Link>
+                        ) : null}
+                        {result.data.page < result.data.pageCount ? (
+                          <Link
+                            href={pageHref(result.data.page + 1)}
+                            className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors hover:bg-accent"
+                          >
+                            التالية
+                            <ChevronLeft className="size-3.5" aria-hidden="true" />
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )
+            ) : (
+              <div
+                role="alert"
+                className="rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center text-sm font-semibold text-destructive"
+              >
+                {result.message}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
