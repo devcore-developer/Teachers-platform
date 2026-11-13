@@ -48,11 +48,10 @@ export interface CourseFormInitial {
   schoolId: string | null;
 }
 
-interface CourseFormProps {
+export interface CourseFormProps {
   mode: "create" | "edit";
   courseId?: string;
   initial?: CourseFormInitial;
-  programOptions: { id: string; nameAr: string; platformWide: boolean }[];
   schools: { id: string; nameAr: string }[];
   instructors: { id: string; name: string; schoolId: string | null }[];
   showScope: boolean;
@@ -78,7 +77,6 @@ export function CourseForm({
   mode,
   courseId,
   initial,
-  programOptions,
   schools,
   instructors,
   showScope,
@@ -124,7 +122,7 @@ export function CourseForm({
   return (
     <SectionCard
       title={mode === "create" ? "دورة تدريبية جديدة" : "بيانات الدورة"}
-      description="الحقول العربية إلزامية — الإنجليزية والبرنامج والمستوى والمدة والمدرّب اختيارية. تُحفظ الدورة كمسودة ويمكنك بناء محتواها بعد الإنشاء."
+      description="الحقول العربية إلزامية — الإنجليزية والمستوى والمدة والمدرّب اختيارية. تُحفظ الدورة كمسودة ويمكنك بناء محتواها بعد الإنشاء."
     >
       <form action={formAction} className="space-y-4" noValidate>
         {state?.message && (
@@ -142,6 +140,16 @@ export function CourseForm({
           type="hidden"
           name="schoolId"
           value={effectiveScope === "platform" ? "" : schoolId}
+        />
+        {/* Program linkage was removed from the creation UI. The hidden
+            field re-submits the EXISTING value in edit mode so saving
+            never detaches a legacy course from its program; create mode
+            sends the "none" sentinel which the server maps to null
+            (standalone course). */}
+        <input
+          type="hidden"
+          name="programId"
+          value={initial?.programId ?? "none"}
         />
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -204,7 +212,7 @@ export function CourseForm({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-1.5">
             <Label htmlFor="course-category">التصنيف *</Label>
             <Select name="category" defaultValue={initial?.category ?? undefined}>
@@ -224,27 +232,6 @@ export function CourseForm({
                 {state.fieldErrors.category}
               </p>
             )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="course-program">البرنامج التدريبي</Label>
-            <Select
-              name="programId"
-              defaultValue={initial?.programId ?? "none"}
-            >
-              <SelectTrigger id="course-program" className="w-full">
-                <SelectValue placeholder="بدون برنامج" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">بدون برنامج</SelectItem>
-                {programOptions.map((program) => (
-                  <SelectItem key={program.id} value={program.id}>
-                    {program.nameAr}
-                    {program.platformWide ? " — مشترك" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-1.5">

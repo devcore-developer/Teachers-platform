@@ -19,7 +19,6 @@ import {
 import {
   getCourseForManage,
   getInstructorOptions,
-  listProgramOptionsForManage,
 } from "@/lib/training/service";
 
 export const metadata = {
@@ -48,7 +47,6 @@ export default async function CourseManageDetailPage({
   }
   const course = result.data;
 
-  const programOptions = await listProgramOptionsForManage(ctx);
   const instructors = course.schoolId
     ? (await getInstructorOptions(ctx, course.schoolId)).map((instructor) => ({
         ...instructor,
@@ -153,7 +151,6 @@ export default async function CourseManageDetailPage({
             instructorId: course.instructorId,
             schoolId: course.schoolId,
           }}
-          programOptions={programOptions}
           schools={[]}
           instructors={instructors}
           showScope={false}

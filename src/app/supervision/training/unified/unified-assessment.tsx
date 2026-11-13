@@ -42,6 +42,17 @@ interface ActionResult {
   data?: { id?: string };
 }
 
+/**
+ * Server validation failures carry per-field Arabic messages (e.g.
+ * «حدّد الإجابة الصحيحة»، «أضف خيارين على الأقل»). Surfacing them verbatim
+ * replaces the old generic-only "تحقق من الحقول المدخلة" experience.
+ */
+function describeFailure(result: ActionResult, fallback: string): string {
+  const details = Object.values(result.fieldErrors ?? {}).filter(Boolean);
+  const base = result.message ?? fallback;
+  return details.length > 0 ? `${base} — ${details.join(" · ")}` : base;
+}
+
 const inputClass =
   "h-9 w-full rounded-lg border bg-card px-3 text-sm outline-none transition-colors focus:border-brand-600";
 
@@ -115,7 +126,7 @@ function AssessmentCreateForm({
     })) as ActionResult;
     setPending(false);
     if (!result.ok) {
-      setFeedback({ bad: true, text: result.message ?? "تعذر إنشاء الاختبار." });
+      setFeedback({ bad: true, text: describeFailure(result, "تعذر إنشاء الاختبار.") });
       return;
     }
     setFeedback({ bad: false, text: "تم إنشاء الاختبار — أضف أسئلته الآن." });
@@ -229,7 +240,7 @@ function AssessmentEditor({
     const result = await action();
     setPending(false);
     if (!result.ok) {
-      setFeedback({ bad: true, text: result.message ?? "تعذرت العملية." });
+      setFeedback({ bad: true, text: describeFailure(result, "تعذرت العملية.") });
       return false;
     }
     setFeedback(successText ? { bad: false, text: successText } : null);

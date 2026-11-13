@@ -59,9 +59,9 @@ import { TrainingVideosSection } from "./unified-content";
 /*   9. متابعة المعلمين والنتائج (التقدم + الاختبار + التصحيح + الشهادات) */
 /*  10. شريط النشر (نشر التدريب) في أسفل الصفحة                          */
 /*                                                                      */
-/* Each section saves ITSELF through its own action and never touches    */
-/* another section's fields — saving one never overwrites unsaved        */
-/* edits elsewhere.                                                      */
+/* Each section saves ITSELF through its own action and never touches   */
+/* another section's fields — saving one never overwrites unsaved       */
+/* edits elsewhere.                                                     */
 /*                                                                      */
 /* Every mutation re-verified server-side (requireSupervisorContext +   */
 /* tenant fence); the form never sends a schoolId.                      */
@@ -204,7 +204,6 @@ export function UnifiedTrainingEditor({
       estimatedHours: data.get("estimatedHours")
         ? Number(data.get("estimatedHours"))
         : undefined,
-      programId: String(data.get("programId") ?? "") || undefined,
       scheduledAt: scheduledRaw || undefined,
       meetingUrl: String(data.get("meetingUrl") ?? "").trim() || undefined,
       youtubeUrl: String(data.get("youtubeUrl") ?? "").trim() || undefined,
@@ -392,22 +391,6 @@ export function UnifiedTrainingEditor({
                 className={inputClass}
               />
               <FieldError message={metaErrors.scheduledAt} />
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                البرنامج التدريبي (اختياري)
-              </span>
-              <select name="programId" defaultValue={course?.programId ?? ""} className={inputClass}>
-                <option value="">— بدون برنامج —</option>
-                {(workspace?.programs ?? []).map((program) => (
-                  <option key={program.id} value={program.id}>
-                    {program.nameAr}
-                    {program.platformWide ? " (مشترك)" : ""}
-                  </option>
-                ))}
-              </select>
-              <FieldError message={metaErrors.programId} />
             </label>
 
             <label className="block">

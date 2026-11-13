@@ -5,7 +5,6 @@ import { CourseForm } from "@/components/training/course-form";
 import { PageHeader } from "@/components/layout/page-header";
 import {
   getInstructorOptions,
-  listProgramOptionsForManage,
 } from "@/lib/training/service";
 
 export const metadata = {
@@ -20,7 +19,6 @@ export const metadata = {
 export default async function NewCoursePage() {
   const ctx = await requireAdminContext();
 
-  const programOptions = await listProgramOptionsForManage(ctx);
   const schools =
     ctx.role === "SUPER_ADMIN" ? await listSchools() : [];
 
@@ -52,7 +50,6 @@ export default async function NewCoursePage() {
       />
       <CourseForm
         mode="create"
-        programOptions={programOptions}
         schools={schools.map((school) => ({ id: school.id, nameAr: school.nameAr }))}
         instructors={instructors}
         showScope={ctx.role === "SUPER_ADMIN"}
