@@ -15,6 +15,7 @@ import {
   createSupervisorImpactSurveyAction,
   setSupervisorImpactSurveyStatusAction,
 } from "@/app/actions/supervision-training";
+import { confirmDialog, alertDialog } from "@/components/platform/confirm-dialog";
 
 /* ------------------------------------------------------------------ */
 /* Impact authoring UI — survey creation with a dynamic question        */
@@ -305,12 +306,26 @@ export function ImpactSurveyActions({
   const [pending, setPending] = React.useState(false);
 
   async function run(action: "PUBLISH" | "CLOSE" | "ARCHIVE", confirmText: string) {
-    if (!window.confirm(confirmText)) return;
+    const approved = await confirmDialog({
+      title:
+        action === "PUBLISH"
+          ? "نشر أداة قياس الأثر"
+          : action === "CLOSE"
+            ? "إغلاق أداة قياس الأثر"
+            : "أرشفة أداة قياس الأثر",
+      description: confirmText,
+      tone: "brand",
+    });
+    if (!approved) return;
     setPending(true);
     const result = await setSupervisorImpactSurveyStatusAction({ surveyId, action });
     setPending(false);
     if (!result.ok) {
-      window.alert(result.message);
+      await alertDialog({
+        title: "تعذّر تحديث حالة الأداة",
+        description: result.message ?? "حدث خطأ غير متوقع — حاول مرة أخرى.",
+        tone: "danger",
+      });
       return;
     }
     router.refresh();

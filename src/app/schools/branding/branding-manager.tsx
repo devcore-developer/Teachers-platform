@@ -13,6 +13,8 @@ import {
   removeSchoolLogoAction,
   resetSchoolBrandingAction,
   uploadSchoolLogoAction,
+  requestSchoolLogoUploadAction,
+  commitSchoolLogoUploadAction,
   type BrandingActionState,
 } from "@/app/actions/school-branding";
 import {
@@ -138,6 +140,8 @@ export function BrandingManager({
   const [uploadState, setUploadState] = React.useState<BrandingActionState | null>(null);
   const [resetState, setResetState] = React.useState<BrandingActionState | null>(null);
   const [removeState, setRemoveState] = React.useState<BrandingActionState | null>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
 
   const fieldErrors: Record<string, string> = saveState?.fieldErrors ?? {};
   const activeLogo = logoPreview ?? logoUrl;
@@ -200,24 +204,87 @@ export function BrandingManager({
     void analyzeLogoFile(file);
   }
 
+  /** Direct browser → R2 PUT with real progress events (same pattern
+   * as the media input). */
+  function putWithProgress(
+    uploadUrl: string,
+    contentType: string,
+    target: File
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Type", contentType);
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) setProgress(event.loaded / event.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(`R2_REJECTED_${xhr.status}`));
+      };
+      xhr.onerror = () => reject(new Error("NETWORK"));
+      xhr.onabort = () => reject(new Error("ABORTED"));
+      xhr.send(target);
+    });
+  }
+
+  function markLogoUploaded(newLogoUrl: string | null) {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoPreview(null);
+    setLogoUrl(newLogoUrl);
+    router.refresh();
+  }
+
   async function handleLogoUpload() {
-    if (!logoPreview) return;
+    if (!logoPreview || uploading) return;
     const input = document.getElementById("branding-logo-input") as HTMLInputElement | null;
     const file = input?.files?.[0];
     if (!file) {
       setUploadState({ ok: false, message: "اختر ملف الشعار أولًا." });
       return;
     }
-    const formData = new FormData();
-    formData.set("schoolId", schoolId);
-    formData.set("logo", file);
-    const state = await uploadSchoolLogoAction(null, formData);
-    setUploadState(state);
-    if (state.ok) {
-      if (logoPreview) URL.revokeObjectURL(logoPreview);
-      setLogoPreview(null);
-      setLogoUrl(state.logoUrl ?? null);
-      router.refresh();
+    setUploadState(null);
+    setProgress(0);
+    setUploading(true);
+    try {
+      const request = await requestSchoolLogoUploadAction(schoolId, file.type, file.size);
+      if (!request.ok) {
+        setUploadState({ ok: false, message: request.message });
+        return;
+      }
+
+      if (request.mode === "local") {
+        // R2 not configured (local dev) — legacy local-disk path.
+        const formData = new FormData();
+        formData.set("schoolId", schoolId);
+        formData.set("logo", file);
+        const state = await uploadSchoolLogoAction(null, formData);
+        setUploadState(state);
+        if (state.ok) markLogoUploaded(state.logoUrl ?? null);
+        return;
+      }
+
+      await putWithProgress(request.uploadUrl, file.type, file);
+      const state = await commitSchoolLogoUploadAction({
+        schoolIdHint: schoolId,
+        key: request.key,
+        mimeType: file.type,
+      });
+      setUploadState(state);
+      if (state.ok) markLogoUploaded(state.logoUrl ?? null);
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : "";
+      setUploadState({
+        ok: false,
+        message: raw.startsWith("R2_REJECTED_")
+          ? "رفض التخزين السحابي الملف — تحقق من الصيغة والحجم ثم أعد المحاولة."
+          : raw === "NETWORK" || raw === "ABORTED"
+            ? "تعذّر الوصول للتخزين السحابي من المتصفح — تحقق من سياسة CORS على bucket في Cloudflare (أضف نطاق الموقع مع الطريقة PUT)."
+            : "انقطع الاتصال أثناء رفع الشعار — حاول مرة أخرى.",
+      });
+    } finally {
+      setUploading(false);
+      setProgress(0);
     }
   }
 
@@ -406,9 +473,11 @@ export function BrandingManager({
                   type="button"
                   size="sm"
                   onClick={() => void handleLogoUpload()}
-                  disabled={!logoPreview}
+                  disabled={!logoPreview || uploading}
                 >
-                  حفظ الشعار
+                  {uploading
+                    ? `جارٍ الرفع… ${Math.round(progress * 100)}%`
+                    : "حفظ الشعار"}
                 </Button>
                 {logoUrl && (
                   <Button

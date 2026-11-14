@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "@/components/platform/confirm-dialog";
 
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -236,7 +237,7 @@ export function TrainingVideosSection({
                     destructive
                     disabled={pending}
                     onClick={async () => {
-                      if (!window.confirm("حذف هذا الفيديو نهائيًا — متابعة؟")) return;
+                      if (!(await confirmDialog({ title: "حذف الفيديو؟", description: "سيتم حذف هذا الفيديو نهائيًا من الدرس.", tone: "danger" }))) return;
                       await act(() => deleteSupervisorLessonAction(video.id));
                     }}
                   >

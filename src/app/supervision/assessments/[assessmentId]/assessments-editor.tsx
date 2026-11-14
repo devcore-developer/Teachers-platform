@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "@/components/platform/confirm-dialog";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -102,7 +103,17 @@ export function AssessmentsEditor({
   }
 
   async function changeStatus(next: string, confirmText: string) {
-    if (!window.confirm(confirmText)) return;
+    const approved = await confirmDialog({
+      title:
+        next === "PUBLISHED"
+          ? "نشر الاختبار"
+          : next === "CLOSED"
+            ? "إغلاق الاختبار"
+            : "تأكيد العملية",
+      description: confirmText,
+      tone: "brand",
+    });
+    if (!approved) return;
     await run(
       () => setSupervisorAssessmentStatusAction({ assessmentId: assessment.id, status: next }),
       "تم تحديث حالة الاختبار."
@@ -246,7 +257,7 @@ export function AssessmentsEditor({
                     title="حذف السؤال"
                     disabled={busy}
                     onClick={async () => {
-                      if (!window.confirm("حذف هذا السؤال نهائيًا — متابعة؟")) return;
+                      if (!(await confirmDialog({ title: "حذف السؤال؟", description: "سيتم حذف هذا السؤال نهائيًا من الاختبار.", tone: "danger" }))) return;
                       await run(() =>
                         deleteSupervisorQuestionAction({
                           assessmentId: assessment.id,

@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "@/components/platform/confirm-dialog";
 
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -362,7 +363,7 @@ function AssessmentEditor({
                     destructive
                     disabled={pending}
                     onClick={async () => {
-                      if (!window.confirm("حذف هذا السؤال نهائيًا — متابعة؟")) return;
+                      if (!(await confirmDialog({ title: "حذف السؤال؟", description: "سيتم حذف هذا السؤال نهائيًا من الاختبار.", tone: "danger" }))) return;
                       await act(() =>
                         deleteSupervisorQuestionAction({ questionId: question.id })
                       );

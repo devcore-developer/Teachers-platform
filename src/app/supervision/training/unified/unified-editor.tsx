@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "@/components/platform/confirm-dialog";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -569,7 +570,7 @@ function TrainingAttachmentsSection({
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function removeAttachment(attachmentId: string) {
-    if (!window.confirm("حذف هذا المرفق نهائيًا — متابعة؟")) return;
+    if (!(await confirmDialog({ title: "حذف المرفق؟", description: "سيتم حذف هذا المرفق نهائيًا.", tone: "danger" }))) return;
     setPendingId(attachmentId);
     const result = await deleteSupervisorTrainingAttachmentAction(attachmentId);
     setPendingId(null);
@@ -774,7 +775,12 @@ function PublishBar({
     confirmText: string | null,
     successText: string
   ) {
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (
+      confirmText &&
+      !(await confirmDialog({ description: confirmText, tone: "brand" }))
+    ) {
+      return;
+    }
     setPending(true);
     setFeedback(null);
     const result = await action();

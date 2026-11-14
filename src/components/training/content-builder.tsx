@@ -50,6 +50,7 @@ import { SectionCard } from "@/components/platform/section-card";
 import { StatusBadge } from "@/components/platform/status-badge";
 import { LESSON_TYPES, LESSON_TYPE_LABELS } from "@/config/training";
 import type { CourseManageDetail } from "@/lib/training/service";
+import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
 /* Course content builder — sections & lessons with real server-side    */
@@ -215,6 +216,150 @@ function LessonMove({
         )}
       </button>
     </form>
+  );
+}
+
+/* --------------------------- Delete confirm ------------------------ */
+
+/**
+ * A trash-icon trigger that opens a styled, centered confirmation
+ * modal instead of the browser's native confirm() bar. The hidden
+ * sibling form carries the server action; confirming submits it.
+ */
+function ConfirmDeleteForm({
+  action,
+  hidden,
+  title,
+  description,
+  submitAriaLabel,
+  buttonClassName,
+  iconClassName,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  hidden: Record<string, string>;
+  title: string;
+  description: string;
+  submitAriaLabel: string;
+  buttonClassName: string;
+  iconClassName: string;
+}) {
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const [open, setOpen] = React.useState(false);
+  const [shown, setShown] = React.useState(false);
+
+  /* Transition-in + body scroll lock while the modal is open. */
+  React.useEffect(() => {
+    if (!open) {
+      setShown(false);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setShown(true));
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  /* Escape cancels. */
+  React.useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={submitAriaLabel}
+        onClick={() => setOpen(true)}
+        className={buttonClassName}
+      >
+        <Trash2 className={iconClassName} aria-hidden="true" />
+      </button>
+
+      {/* The real server-action form — submitted on confirm. */}
+      <form ref={formRef} action={action} className="hidden">
+        {Object.entries(hidden).map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
+      </form>
+
+      {open && (
+        <div
+          className={cn(
+            "fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200",
+            shown ? "opacity-100" : "opacity-0"
+          )}
+        >
+          {/* Backdrop — click to cancel. */}
+          <div
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px]"
+            aria-hidden="true"
+            onMouseDown={() => setOpen(false)}
+          />
+
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-title"
+            className={cn(
+              "relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 transition-all duration-200",
+              shown
+                ? "translate-y-0 scale-100 opacity-100"
+                : "translate-y-3 scale-95 opacity-0"
+            )}
+          >
+            {/* Headline */}
+            <div className="flex flex-col items-center px-6 pb-4 pt-8 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-600/25 ring-4 ring-red-100">
+                <Trash2 className="size-7" aria-hidden="true" />
+              </div>
+              <h2
+                id="delete-confirm-title"
+                className="mt-4 text-lg font-extrabold text-slate-900"
+              >
+                {title}
+              </h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                {description}
+              </p>
+            </div>
+
+            <p className="mx-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[11px] font-semibold text-amber-800">
+              هذا الإجراء نهائي ولا يمكن التراجع عنه.
+            </p>
+
+            {/* Actions */}
+            <div className="mt-5 grid grid-cols-2 gap-3 px-6 pb-6">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  formRef.current?.requestSubmit();
+                }}
+                className="rounded-xl bg-destructive px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-destructive/90"
+              >
+                حذف نهائي
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -534,28 +679,15 @@ export function ContentBuilder({
                   >
                     <Pencil className="size-4" aria-hidden="true" />
                   </button>
-                  <form
+                  <ConfirmDeleteForm
                     action={deleteSectionAction}
-                    onSubmit={(event) => {
-                      if (
-                        !window.confirm(
-                          `حذف القسم «${section.titleAr}» وكل دروسه وملفاته؟`
-                        )
-                      ) {
-                        event.preventDefault();
-                      }
-                    }}
-                  >
-                    <input type="hidden" name="courseId" value={courseId} />
-                    <input type="hidden" name="sectionId" value={section.id} />
-                    <button
-                      type="submit"
-                      aria-label="حذف القسم"
-                      className="inline-flex size-8 items-center justify-center rounded-lg border text-destructive transition-colors hover:bg-destructive/10"
-                    >
-                      <Trash2 className="size-4" aria-hidden="true" />
-                    </button>
-                  </form>
+                    hidden={{ courseId, sectionId: section.id }}
+                    title="حذف القسم؟"
+                    description={`سيتم حذف القسم «${section.titleAr}» وكل دروسه وملفاته نهائيًا.`}
+                    submitAriaLabel="حذف القسم"
+                    buttonClassName="inline-flex size-8 items-center justify-center rounded-lg border text-destructive transition-colors hover:bg-destructive/10"
+                    iconClassName="size-4"
+                  />
                 </div>
               </div>
 
@@ -591,7 +723,7 @@ export function ContentBuilder({
                           <p className="text-[11px] text-muted-foreground">
                             {LESSON_TYPE_LABELS[lesson.type as keyof typeof LESSON_TYPE_LABELS] ?? lesson.type}
                             {lesson.attachmentName
-                              ? ` — ${lesson.attachmentName}`
+                              ? ` • ${lesson.attachmentName}`
                               : ""}
                           </p>
                         </div>
@@ -629,28 +761,15 @@ export function ContentBuilder({
                         >
                           <Pencil className="size-3.5" aria-hidden="true" />
                         </button>
-                        <form
+                        <ConfirmDeleteForm
                           action={deleteLessonAction}
-                          onSubmit={(event) => {
-                            if (
-                              !window.confirm(
-                                `حذف الدرس «${lesson.titleAr}» وملفاته؟`
-                              )
-                            ) {
-                              event.preventDefault();
-                            }
-                          }}
-                        >
-                          <input type="hidden" name="courseId" value={courseId} />
-                          <input type="hidden" name="lessonId" value={lesson.id} />
-                          <button
-                            type="submit"
-                            aria-label="حذف الدرس"
-                            className="inline-flex size-7 items-center justify-center rounded-lg border text-destructive transition-colors hover:bg-destructive/10"
-                          >
-                            <Trash2 className="size-3.5" aria-hidden="true" />
-                          </button>
-                        </form>
+                          hidden={{ courseId, lessonId: lesson.id }}
+                          title="حذف الدرس؟"
+                          description={`سيتم حذف الدرس «${lesson.titleAr}» وملفاته نهائيًا.`}
+                          submitAriaLabel="حذف الدرس"
+                          buttonClassName="inline-flex size-7 items-center justify-center rounded-lg border text-destructive transition-colors hover:bg-destructive/10"
+                          iconClassName="size-3.5"
+                        />
                       </div>
                     </div>
                   );

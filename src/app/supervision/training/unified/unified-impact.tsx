@@ -9,7 +9,7 @@ import {
   createSupervisorImpactSurveyAction,
   setSupervisorImpactSurveyStatusAction,
 } from "@/app/actions/supervision-training";
-import type { TrainingWorkspace } from "@/lib/supervision/training";
+import { confirmDialog, alertDialog } from "@/components/platform/confirm-dialog";import type { TrainingWorkspace } from "@/lib/supervision/training";
 
 import { Feedback, SectionCard } from "./unified-editor";
 
@@ -83,7 +83,17 @@ function ImpactSummary({
   const [pending, setPending] = React.useState(false);
 
   async function run(action: "PUBLISH" | "CLOSE" | "ARCHIVE", confirmText: string) {
-    if (!window.confirm(confirmText)) return;
+    const approved = await confirmDialog({
+      title:
+        action === "PUBLISH"
+          ? "نشر أداة قياس الأثر"
+          : action === "CLOSE"
+            ? "إغلاق أداة قياس الأثر"
+            : "أرشفة أداة قياس الأثر",
+      description: confirmText,
+      tone: "brand",
+    });
+    if (!approved) return;
     setPending(true);
     const result = await setSupervisorImpactSurveyStatusAction({
       surveyId: survey.id,
@@ -91,7 +101,11 @@ function ImpactSummary({
     });
     setPending(false);
     if (!result.ok) {
-      window.alert(result.message);
+      await alertDialog({
+        title: "تعذّر تحديث حالة الأداة",
+        description: result.message ?? "حدث خطأ غير متوقع — حاول مرة أخرى.",
+        tone: "danger",
+      });
       return;
     }
     router.refresh();
