@@ -77,13 +77,14 @@ export default async function LessonPage({
   const { course, lesson, outline, prevLessonId, nextLessonId, sectionTitle } =
     result.data;
 
-  // Mandatory learning enforcement: teachers never watch uploaded
-  // videos through a bare <video> tag here — that would bypass the
-  // server heartbeat ledger, so the watch would never count toward
-  // completion and the sequential gate would stay closed. The learning
-  // hub renders the governed player instead. Lessons without a saved
-  // video fall through to an explanatory notice below.
-  if (lesson.type === "VIDEO" && user.role === "TEACHER" && lesson.videoUrl) {
+  // Mandatory learning enforcement: for TEACHERS this legacy route is
+  // never a watch surface — ALL lesson types redirect to the learning
+  // hub, the single governed surface wired to the server heartbeat
+  // ledger and the sequential gate. Before this change EXTERNAL_VIDEO
+  // lessons (YouTube links) played here through a free embed with the
+  // provider's native seek bar and speed menu, and the prev/next
+  // navigation ignored the sequence — that was the playback regression.
+  if (user.role === "TEACHER") {
     redirect(`/academy/learn/${course.id}`);
   }
 

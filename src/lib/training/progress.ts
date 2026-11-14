@@ -12,6 +12,7 @@ import {
   notifyCourseCompleted,
   notifyCourseLessonCompleted,
 } from "@/lib/notifications/center";
+import { isYouTubeUrl } from "@/lib/media/video-url";
 
 /* ------------------------------------------------------------------ */
 /* Batch 1 — learning progress & course completion.                    */
@@ -373,6 +374,7 @@ export async function markLessonComplete(
     select: {
       id: true,
       type: true,
+      videoUrl: true,
       isPublished: true,
       section: {
         select: {
@@ -402,12 +404,24 @@ export async function markLessonComplete(
     return progressFail("هذا الدرس غير منشور بعد", "LESSON_NOT_PUBLISHED");
   }
 
-  // Mandatory playback: uploaded-video lessons complete ONLY through the
-  // server-validated watch threshold — a manual toggle can never mark
-  // them (the heartbeat path passes source:"watch" and skips this).
-  if (lesson.type === "VIDEO" && options?.source !== "watch") {
+  // Mandatory playback: lessons backed by a WATCHABLE video complete
+  // ONLY through the server-validated watch threshold — the heartbeat
+  // path passes source:"watch" and skips this. Covers type VIDEO with a
+  // stored URL (uploaded R2 files and YouTube links) and EXTERNAL_VIDEO
+  // YouTube links; Vimeo or plain external links stay manually
+  // verifiable, and a VIDEO row without any URL keeps its manual toggle
+  // (nothing watchable to measure). This closes the EXTERNAL_VIDEO hole
+  // where a direct action call could mark a video lesson complete
+  // without watching it — the UI hides the button for exactly this set.
+  const governableVideo =
+    lesson.type === "VIDEO"
+      ? lesson.videoUrl !== null
+      : lesson.type === "EXTERNAL_VIDEO" &&
+        lesson.videoUrl !== null &&
+        isYouTubeUrl(lesson.videoUrl);
+  if (governableVideo && options?.source !== "watch") {
     return progressFail(
-      "تُنجز دروس الفيديو تلقائيًا بعد مشاهدة النسبة المطلوبة من الفيديو",
+      "تُنجز دروس الفيديو تلقائيًا بعد مشاهدة النسبة المطلوبة على الخادم",
       "VIDEO_WATCH_REQUIRED"
     );
   }

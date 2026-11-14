@@ -161,7 +161,11 @@ export default async function CourseDetailPage({
               <div className="space-y-3">
                 {firstLessonId ? (
                   <Link
-                    href={`/academy/courses/${course.id}/lessons/${firstLessonId}`}
+                    href={
+                      isTeacher
+                        ? `/academy/learn/${course.id}`
+                        : `/academy/courses/${course.id}/lessons/${firstLessonId}`
+                    }
                     className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-700"
                   >
                     <PlayCircle className="size-4" aria-hidden="true" />

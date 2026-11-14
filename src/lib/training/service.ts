@@ -61,6 +61,8 @@ export interface ViewerLesson {
   id: string;
   titleAr: string;
   type: string;
+  /** Instructor-captured media length — drives the watch threshold. */
+  durationSeconds: number | null;
   description: string | null;
   content: string | null;
   videoUrl: string | null;
@@ -918,6 +920,7 @@ export async function getCourseForViewer(
       id: lesson.id,
       titleAr: lesson.titleAr,
       type: lesson.type,
+      durationSeconds: lesson.durationSeconds,
       description: lesson.description,
       content: lesson.content,
       videoUrl: lesson.videoUrl,

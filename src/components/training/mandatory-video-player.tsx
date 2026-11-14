@@ -106,11 +106,15 @@ function useWatchHeartbeat(
   courseId: string,
   lessonId: string,
   durationSeconds: number | null,
-  onSnapshot: (data: {
-    watchSeconds?: number;
-    completed?: boolean;
-    justCompleted?: boolean;
-  }) => void
+    onSnapshot: (data: {
+      watchSeconds?: number;
+      completed?: boolean;
+      justCompleted?: boolean;
+    }) => void,
+    /** Live media duration probe (metadata) — lets the server learn the
+     * real length when the instructor never captured durationSeconds, so
+     * the completion threshold can actually fire. */
+    getLiveDuration?: () => number | null
 ) {
   const router = useRouter();
   const onSnapshotRef = React.useRef(onSnapshot);
@@ -128,7 +132,7 @@ function useWatchHeartbeat(
           lessonId,
           positionSeconds,
           durationSeconds:
-            durationSeconds ?? null,
+            durationSeconds ?? (getLiveDuration ? getLiveDuration() : null),
           ended,
         });
         if (result.ok && result.data) {
@@ -305,6 +309,13 @@ function NativeGovernedPlayer({
       }
       if (data.completed) setCompleted(true);
       if (data.justCompleted) setJustCompleted(true);
+    },
+    () => {
+      const video = videoRef.current;
+      if (!video) return null;
+      return Number.isFinite(video.duration) && video.duration > 0
+        ? video.duration
+        : null;
     }
   );
 
@@ -754,6 +765,12 @@ function YouTubeGovernedPlayer({
       }
       if (data.completed) setCompleted(true);
       if (data.justCompleted) setJustCompleted(true);
+    },
+    () => {
+      const player = playerRef.current;
+      if (!player) return null;
+      const d = player.getDuration();
+      return Number.isFinite(d) && d > 0 ? d : null;
     }
   );
 

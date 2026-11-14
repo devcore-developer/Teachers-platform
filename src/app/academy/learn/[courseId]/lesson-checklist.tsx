@@ -13,7 +13,10 @@ import {
 
 import { MandatoryVideoPlayer } from "@/components/training/mandatory-video-player";
 import { EmbeddedVideoFrame } from "@/components/training/embedded-video-frame";
-import { parseEmbeddableVideoUrl } from "@/lib/media/video-url";
+import {
+  isYouTubeUrl,
+  parseEmbeddableVideoUrl,
+} from "@/lib/media/video-url";
 import {
   markLessonCompleteAction,
   type LearningActionState,
@@ -23,15 +26,22 @@ import { cn } from "@/lib/utils";
 /**
  * Batch 1 — the lesson checklist of the learning page.
  *
- * Mandatory-learning edition:
- *   - VIDEO lessons render the server-gated mandatory player; the manual
- *     إتمام toggle is gone for them (completion happens only in the
- *     heartbeat ledger on the server).
- *   - Locked lessons render a clear Arabic lock card — the server enforces
- *     the same rule on every action and on the media proxy, so this is
- *     presentation of a server decision, not the enforcement itself.
- *   - TEXT / EXTERNAL_VIDEO / RESOURCE lessons keep the manual toggle
- *     (nothing watchable to measure) but respect the sequence.
+ * Mandatory-learning edition (regression fix):
+ *   - EVERY governable video lesson (type VIDEO, or EXTERNAL_VIDEO whose
+ *     URL is a YouTube link / direct file) renders the server-gated
+ *     mandatory player for teachers — one surface, one heartbeat ledger.
+ *     The old split (EXTERNAL_VIDEO -> a free EmbeddedVideoFrame with the
+ *     provider's native seek bar + speed menu) is exactly what re-opened
+ *     seeking and playback-speed cheating; it is gone now.
+ *   - The manual إتمام toggle remains only for lessons the server can
+ *     honestly verify manually (TEXT / RESOURCE / plain external links) —
+ *     the backend now rejects manual marks for governable videos anyway
+ *     (markLessonComplete VIDEO_WATCH_REQUIRED rule), so UI and server agree.
+ *   - Locked lessons render a clear Arabic lock card — the server
+ *     enforces the same rule on every action and on the media proxy, so
+ *     this is presentation of a server decision, not the enforcement.
+ *   - Staff viewers keep the free preview surfaces (they never write
+ *     progress).
  */
 
 interface WatchSnapshot {
@@ -87,10 +97,23 @@ export function LessonChecklist({
     <ul className="divide-y divide-slate-100">
       {lessons.map((lesson) => {
         const done = completed.has(lesson.id);
-        const isManagedVideo = lesson.type === "VIDEO" && Boolean(lesson.videoUrl);
-        const canPlayVideo = isManagedVideo && !lesson.locked;
+        const videoUrl = lesson.videoUrl;
+        const hasVideo = videoUrl !== null && videoUrl.length > 0;
+        // Governable = the mandatory player can actually enforce it:
+        // YouTube links (IFrame API branch) or direct/R2 files (native
+        // branch). Vimeo and arbitrary page links stay "external".
+        const governedUrl =
+          hasVideo &&
+          videoUrl !== null &&
+          (lesson.type === "VIDEO" || isYouTubeUrl(videoUrl));
+        const embeddableUrl =
+          hasVideo && videoUrl !== null
+            ? parseEmbeddableVideoUrl(videoUrl)
+            : null;
+        const isGovernedVideo = hasVideo && governedUrl;
+        const canPlayVideo = isGovernedVideo && !lesson.locked;
         const manualCompletionAllowed =
-          isTeacher && !done && !lesson.locked && lesson.type !== "VIDEO";
+          isTeacher && !done && !lesson.locked && !isGovernedVideo;
 
         return (
           <li
@@ -161,12 +184,11 @@ export function LessonChecklist({
                         </p>
                       )}
 
-                      {/* Uploaded video — mandatory player for teachers.
-                          Teachers get the governed player (native R2 files
-                          AND YouTube links embed behind the same server
-                          ledger); staff get a free preview (embeds for
-                          YouTube/Vimeo, native video for files). */}
-                      {canPlayVideo && lesson.videoUrl && (
+                      {/* Governed video — ONE mandatory player for teachers
+                          across VIDEO and EXTERNAL_VIDEO (YouTube included).
+                          Staff get a free preview: embeds for YouTube/Vimeo,
+                          native video for files. */}
+                      {canPlayVideo && videoUrl && (
                         <div className="mt-3">
                           {isTeacher ? (
                             done ? (
@@ -179,7 +201,7 @@ export function LessonChecklist({
                                   <MandatoryVideoPlayer
                                     courseId={courseId}
                                     lessonId={lesson.id}
-                                    src={lesson.videoUrl}
+                                    src={videoUrl}
                                     title={lesson.titleAr}
                                     durationSeconds={lesson.durationSeconds}
                                     thresholdPercent={thresholdPercent}
@@ -196,7 +218,7 @@ export function LessonChecklist({
                               <MandatoryVideoPlayer
                                 courseId={courseId}
                                 lessonId={lesson.id}
-                                src={lesson.videoUrl}
+                                src={videoUrl}
                                 title={lesson.titleAr}
                                 durationSeconds={lesson.durationSeconds}
                                 thresholdPercent={thresholdPercent}
@@ -208,10 +230,10 @@ export function LessonChecklist({
                                 }}
                               />
                             )
-                          ) : parseEmbeddableVideoUrl(lesson.videoUrl) ? (
+                          ) : embeddableUrl ? (
                             /* Staff preview — embeddable providers render in-page. */
                             <EmbeddedVideoFrame
-                              src={lesson.videoUrl}
+                              src={videoUrl}
                               title={lesson.titleAr}
                               className="mt-2 aspect-video w-full overflow-hidden rounded-xl border border-slate-200 bg-black"
                             />
@@ -221,27 +243,29 @@ export function LessonChecklist({
                               controls
                               preload="metadata"
                               playsInline
-                              src={lesson.videoUrl}
+                              src={videoUrl}
                               className="mt-2 aspect-video w-full rounded-xl border border-slate-200 bg-black"
                             />
                           )}
                         </div>
                       )}
 
-                      {/* External video — embeddable providers (YouTube/
-                          Vimeo) play inside the page; anything else keeps
-                          the plain external link. No ledger here: external
-                          links stay manually-marked as before. */}
-                      {lesson.type === "EXTERNAL_VIDEO" && lesson.videoUrl && (
+                      {/* External video that is NOT governable (Vimeo or
+                          any non-YouTube/direct link): embeddable providers
+                          play in-page, anything else stays a plain external
+                          link. No ledger here by honest design — the manual
+                          completion button below is the verification, and
+                          the server allows the manual mark for these. */}
+                      {!isGovernedVideo && lesson.type === "EXTERNAL_VIDEO" && videoUrl && (
                         <div className="mt-2">
-                          {parseEmbeddableVideoUrl(lesson.videoUrl) ? (
+                          {embeddableUrl ? (
                             <EmbeddedVideoFrame
-                              src={lesson.videoUrl}
+                              src={videoUrl}
                               title={lesson.titleAr}
                             />
                           ) : (
                             <a
-                              href={lesson.videoUrl}
+                              href={videoUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1D5BD6] hover:text-[#174aa8]"
