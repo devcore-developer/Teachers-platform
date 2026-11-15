@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Eye,
   GraduationCap,
+  KeyRound,
   Landmark,
   LayoutDashboard,
   MessageSquare,
@@ -35,6 +36,10 @@ import type { NavItem } from "@/lib/types";
  * module anymore: it merged into the Home page (/) — the supervisor's
  * "الرئيسية" — and /supervision/dashboard now redirects there, so the
  * dashboard lives in exactly one place.
+ *
+ * IT_COORDINATOR workspace items (it-assignments / it-recovery) resolve
+ * to their real server-guarded pages; NAV_ROLES already restricted them
+ * to the IT role, so no other role ever receives them from the server.
  */
 export const navItems: NavItem[] = [
   {
@@ -205,6 +210,24 @@ export const navItems: NavItem[] = [
     plannedFeatures: [],
   },
   {
+    id: "it-assignments",
+    label: "إسناد المشرفين",
+    href: "/it/assignments",
+    description:
+      "مساحة منسق تقنية المعلومات: إسناد معلمي مدرستك إلى المشرفين التربويين، ونقل الإسناد أو إزالته — كل عملية تتحقق على الخادم داخل مدرستك فقط.",
+    icon: UserCheck,
+    plannedFeatures: [],
+  },
+  {
+    id: "it-recovery",
+    label: "استعادة الحسابات",
+    href: "/it/recovery",
+    description:
+      "إرسال رابط آمن لإعادة تعيين كلمة مرور المعلم إلى بريده المسجّل — يُستخدم مرة واحدة وينتهي بعد ساعة، مع حد أقصى للمحاولات.",
+    icon: KeyRound,
+    plannedFeatures: [],
+  },
+  {
     id: "training-archive",
     label: "السجل التدريبي السنوي",
     href: "/training-archive",
@@ -268,14 +291,16 @@ export function activeNavItemId(pathname: string, items: NavItem[]): string | nu
 /* trailing group, so a future module can never disappear from the UI   */
 /* by accident.                                                         */
 /*                                                                      */
-/* Two profiles:                                                        */
+/* Three profiles (deterministic, data-driven, role-invisible):         */
+/*   • IT_COORDINATOR — selected whenever the role-filtered set         */
+/*     contains "it-assignments" (IT-only module): the coordinator's    */
+/*     two server-enforced capabilities + communication/account group.  */
 /*   • SUPERVISOR — the approved supervisor information architecture    */
 /*     (الرئيسية / التدريب والتطوير / المتابعة والنتائج / التواصل       */
-/*     والحساب). Selected whenever the role-filtered set contains a     */
-/*     supervisor-only module ("supervisor-training") — deterministic,  */
-/*     data-driven, and invisible to every other role.                  */
+/*     والحساب). Selected whenever the set contains "supervisor-        */
+/*     training".                                                       */
 /*   • DEFAULT — the classic grouping, byte-for-byte identical output   */
-/*     to the previous sidebar for all non-supervisor roles.            */
+/*     to the previous sidebar for all other roles.                     */
 /* ------------------------------------------------------------------ */
 
 export interface NavGroupDef {
@@ -340,16 +365,40 @@ const SUPERVISOR_NAV_GROUPS: NavGroupDef[] = [
 ];
 
 /**
+ * IT coordinator profile — ONLY the modules the role actually owns.
+ * No academy, no reports, no training-management entries: the
+ * coordinator's workspace is the dashboard plus its exactly-two
+ * server-enforced capabilities and the shared communication/account
+ * group (messages / my-profile / account-security are already granted
+ * to every role in NAV_ROLES).
+ */
+const IT_NAV_GROUPS: NavGroupDef[] = [
+  {
+    label: "الرئيسية",
+    members: ["home"],
+  },
+  {
+    label: "صلاحيات تقنية المعلومات",
+    members: ["it-assignments", "it-recovery"],
+  },
+  {
+    label: "التواصل والحساب",
+    members: ["messages", "my-profile", "account-security"],
+  },
+];
+
+/**
  * Group the role-filtered items following the active profile. Items are
- * emitted in the profile's member order (so "الرسائل" precedes "ملفي
- * الشخصي" for the supervisor as designed), unknown ids fall back to an
+ * emitted in the profile's member order, unknown ids fall back to an
  * unlabeled trailing group in config order, and empty groups are
  * dropped — other roles keep exactly the groups they see today.
  */
 export function navGroupsForItems(items: NavItem[]): RenderedNavGroup[] {
-  const profile = items.some((item) => item.id === "supervisor-training")
-    ? SUPERVISOR_NAV_GROUPS
-    : DEFAULT_NAV_GROUPS;
+  const profile = items.some((item) => item.id === "it-assignments")
+    ? IT_NAV_GROUPS
+    : items.some((item) => item.id === "supervisor-training")
+      ? SUPERVISOR_NAV_GROUPS
+      : DEFAULT_NAV_GROUPS;
 
   const byId = new Map(items.map((item) => [item.id, item]));
   const known = new Set(profile.flatMap((group) => group.members));

@@ -1,3 +1,5 @@
+import { db } from "@/lib/db";
+
 import type { AdminContext, SupervisorTrainingContext } from "@/lib/auth/dev-admin";
 import type { TrainingErrorCode } from "@/lib/validation/training";
 
@@ -11,7 +13,10 @@ export type TrainingManageContext = AdminContext | SupervisorTrainingContext;
 /* ------------------------------------------------------------------ */
 /* Training academy — authorization & visibility predicates.            */
 /*                                                                      */
-/* Pure functions (no DB, no session) so the rules are unit-testable.   */
+/* Predicate functions are pure (no session) so the rules are           */
+/* unit-testable; the supervisor-training gate section at the bottom    */
+/* adds the ONE DB-backed read it needs (the teacher's current          */
+/* assignment) while keeping the rule itself a pure function on top.    */
 /* Tenancy rule: schoolId === null means PLATFORM-WIDE shared content;  */
 /* only SUPER_ADMIN may create or manage platform-wide records.         */
 /* ------------------------------------------------------------------ */
@@ -157,4 +162,85 @@ export function canAccessAttachment(
   }
 
   return false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Supervisor-training gate — the IT coordinator assignment rule.       */
+/*                                                                      */
+/* Business rule (server-enforced, single implementation):              */
+/*   A course AUTHORED by an EDUCATIONAL_SUPERVISOR is "supervisor      */
+/*   training". A TEACHER may see and reach it ONLY while the IT        */
+/*   coordinator's current TeacherSupervisorAssignment points at THAT   */
+/*   supervisor. Courses authored by SUPER_ADMIN / DEVELOPMENT_OFFICE_  */
+/*   MANAGER / SCHOOL_MANAGER are NEVER gated — their training remains  */
+/*   open to teachers unconditionally. Non-teacher viewers (managers    */
+/*   previewing, supervisors, deputies, SUPER_ADMIN) are never gated.   */
+/*                                                                      */
+/*   The gate reads the assignment at QUERY time, so assigning,         */
+/*   transferring or removing a supervisor updates the teacher's        */
+/*   accessible training on the very next request — no backfill, no     */
+/*   cache, no manual data changes.                                     */
+/*                                                                      */
+/*   Used by: the catalog listing (as a where-filter), the course and   */
+/*   lesson learning views, enrollment, lesson completion writes and    */
+/*   the playback gate — an unassigned teacher cannot reach supervisor  */
+/*   training through a direct URL or a crafted action call.            */
+/* ------------------------------------------------------------------ */
+
+export interface SupervisorGateRejection {
+  ok: false;
+  message: string;
+  code: "FORBIDDEN";
+}
+
+/**
+ * Pure rule — unit-testable. Allowed unless the course is
+ * supervisor-authored AND the viewer's assigned supervisor differs.
+ */
+export function supervisorCourseAllowed(
+  creatorRole: string,
+  creatorId: string,
+  assignedSupervisorId: string | null
+): boolean {
+  if (creatorRole !== "EDUCATIONAL_SUPERVISOR") return true;
+  return assignedSupervisorId !== null && assignedSupervisorId === creatorId;
+}
+
+/** The teacher's CURRENT explicit supervisor id (null = unassigned). */
+export async function assignedSupervisorIdFor(
+  teacherId: string
+): Promise<string | null> {
+  const row = await db.teacherSupervisorAssignment.findUnique({
+    where: { teacherId },
+    select: { supervisorId: true },
+  });
+  return row?.supervisorId ?? null;
+}
+
+/** Arabic rejection shown when the gate blocks a supervisor course. */
+export const SUPERVISOR_GATE_MESSAGE =
+  "هذا التدريب من إعداد المشرف التربوي — يتطلب إسنادًا ساريًا إليه من منسق تقنية المعلومات في مدرستك";
+
+/**
+ * Single-record gate (course view, lesson view, enrollment, completion
+ * writes, playback). Returns the rejection, or null = allowed.
+ * `course` must carry the creator's id and role — every call-site
+ * selects `createdById` + `createdBy: { select: { role: true } }`.
+ */
+export async function supervisorTrainingGateError(
+  viewer: ViewerIdentity,
+  course: { createdById: string; createdBy: { role: string } }
+): Promise<SupervisorGateRejection | null> {
+  if (viewer.role !== "TEACHER") return null;
+  const assignedSupervisorId = await assignedSupervisorIdFor(viewer.id);
+  if (
+    supervisorCourseAllowed(
+      course.createdBy.role,
+      course.createdById,
+      assignedSupervisorId
+    )
+  ) {
+    return null;
+  }
+  return { ok: false, message: SUPERVISOR_GATE_MESSAGE, code: "FORBIDDEN" };
 }

@@ -103,12 +103,27 @@ export function requiresEmailVerification(role: string): boolean {
  *
  * The supervisor's dashboard is the Home page itself (merged, single
  * source of truth) — there is no separate supervisor dashboard module.
+ *
+ * IT_COORDINATOR is scoped to EXACTLY its workspace: the academy and
+ * reports modules are NOT part of the coordinator's authorization
+ * (the academy is a training-consumer surface, reports were never
+ * authorized for the role and their link 404'd) — the role keeps home,
+ * its two server-enforced IT pages, and the shared
+ * messages / my-profile / account-security surfaces.
  */
 const NAV_ROLES: Record<string, Role[]> = {
   home: [...ROLE_KEYS],
   // Phase 5 — training academy catalog (published courses, scoped by
-  // school; publishing controls live behind separate admin modules)
-  academy: [...ROLE_KEYS],
+  // school; publishing controls live behind separate admin modules).
+  // IT_COORDINATOR deliberately excluded — not part of its workspace.
+  academy: [
+    "SUPER_ADMIN",
+    "DEVELOPMENT_OFFICE_MANAGER",
+    "SCHOOL_MANAGER",
+    "EDUCATIONAL_DEPUTY",
+    "EDUCATIONAL_SUPERVISOR",
+    "TEACHER",
+  ],
   // Platform + school administration
   schools: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],
   // Multi-school branding — school identity management (logo/name/colors)
@@ -173,7 +188,17 @@ const NAV_ROLES: Record<string, Role[]> = {
     "SCHOOL_MANAGER",
     "EDUCATIONAL_SUPERVISOR",
   ],
-  reports: [...ROLE_KEYS],
+  // Reports — real data exports for the administrative and educational
+  // roles. IT_COORDINATOR deliberately excluded (unauthorized for the
+  // role; the stale sidebar link used to 404).
+  reports: [
+    "SUPER_ADMIN",
+    "DEVELOPMENT_OFFICE_MANAGER",
+    "SCHOOL_MANAGER",
+    "EDUCATIONAL_DEPUTY",
+    "EDUCATIONAL_SUPERVISOR",
+    "TEACHER",
+  ],
   // Batch 3 — settings is role-aware: platform settings for
   // SUPER_ADMIN, school workspace hub for the school-admin pair
   settings: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],

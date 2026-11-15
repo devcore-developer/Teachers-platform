@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Info,
   Layers,
   MonitorPlay,
 } from "lucide-react";
@@ -39,6 +40,12 @@ export const metadata = {
  * listing. The fix is structural, not cosmetic: for supervisors the
  * catalog queries are skipped entirely and the catalog JSX is never
  * rendered — no CSS hiding, no duplicated data path.
+ *
+ * Supervisor-training visibility (IT assignment rule) is enforced
+ * SERVER-SIDE inside listPublishedCourses; this page only adds the
+ * honest hint for an unassigned teacher (their catalog intentionally
+ * shows no supervisor-authored trainings until the IT coordinator
+ * assigns them).
  */
 export default async function AcademyPage({
   searchParams,
@@ -60,6 +67,18 @@ export default async function AcademyPage({
   const isManager =
     user.role === "SUPER_ADMIN" || user.role === "DEVELOPMENT_OFFICE_MANAGER";
   const isSupervisor = user.role === "EDUCATIONAL_SUPERVISOR";
+  const isTeacher = user.role === "TEACHER";
+
+  // Honest unassigned hint (Task: clear message when appropriate) — one
+  // indexed read, teacher-only; assigned teachers and other roles skip it.
+  const assignedSupervisorName = isTeacher
+    ? (
+        await db.teacherSupervisorAssignment.findUnique({
+          where: { teacherId: user.id },
+          select: { supervisor: { select: { name: true } } },
+        })
+      )?.supervisor.name ?? null
+    : null;
 
   /* Catalog data — fetched ONLY for non-supervisor roles. The
    * supervisor never sees the catalog, so its queries are skipped
@@ -135,7 +154,24 @@ export default async function AcademyPage({
             supervisor only; returns null for every other role. */}
         <AcademySupervisorTrainings q={flat.q} category={flat.category} />
 
-        {/* 2) The public catalog — untouched for every OTHER role
+        {/* 2) Unassigned-teacher hint — the catalog they see below has
+            no supervisor-authored trainings by the server-enforced
+            rule; say so honestly instead of a silently smaller list. */}
+        {isTeacher && !assignedSupervisorName && (
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-800"
+          >
+            <Info className="mt-0.5 size-4 shrink-0 text-brand-600" aria-hidden="true" />
+            <p>
+              لم يتم إسنادك إلى مشرف تربوي بعد — تدريبات المشرفين التربويين ستظهر هنا
+              تلقائيًا فور إسنادك من منسق تقنية المعلومات في مدرستك. باقي التدريبات
+              المتاحة لك (تدريبات المكتب والإدارة والمنصة) معروضة أدناه كالمعتاد.
+            </p>
+          </div>
+        )}
+
+        {/* 3) The public catalog — untouched for every OTHER role
             (teachers, managers, admins). NEVER rendered for the
             supervisor: it re-showed their own published trainings as
             the duplicated second listing. */}

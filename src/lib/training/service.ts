@@ -3,8 +3,10 @@ import { Prisma } from "@prisma/client";
 import type { AdminContext } from "@/lib/auth/dev-admin";
 import type { ViewerIdentity } from "@/lib/training/access";
 import {
+  assignedSupervisorIdFor,
   canManageTraining,
   publishedVisibilityWhere,
+  supervisorTrainingGateError,
   trainingScopeError,
 } from "@/lib/training/access";
 import { db } from "@/lib/db";
@@ -34,6 +36,10 @@ import {
 /* Every mutation re-validates ownership on the server: the actor's     */
 /* scope comes from AdminContext (session-backed), never from the       */
 /* client. Platform-wide records (schoolId null) are SUPER_ADMIN-only.  */
+/*                                                                      */
+/* Teacher-side reads additionally enforce the supervisor-training      */
+/* gate (IT assignment rule): supervisor-authored courses reach a       */
+/* teacher only through a current assignment to that exact supervisor.  */
 /* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
@@ -802,6 +808,28 @@ export async function listPublishedCourses(
   const visibility = publishedVisibilityWhere(viewer);
   const where: Prisma.CourseWhereInput = { ...visibility };
 
+  // Supervisor-training gate (IT assignment rule): TEACHER viewers see
+  // supervisor-authored courses ONLY from their CURRENTLY assigned
+  // supervisor — office-manager/school-manager/platform courses stay
+  // open. One extra indexed read for the assignment; the supervisor
+  // filter runs INSIDE this same catalog query (no per-row gating,
+  // no N+1), and it always reflects the assignment as of NOW, so an
+  // assign/transfer/remove by the IT coordinator updates the catalog
+  // on the very next request.
+  if (viewer.role === "TEACHER") {
+    const assignedSupervisorId = await assignedSupervisorIdFor(viewer.id);
+    where.AND = [
+      {
+        OR: [
+          { createdBy: { role: { not: "EDUCATIONAL_SUPERVISOR" } } },
+          ...(assignedSupervisorId
+            ? [{ createdById: assignedSupervisorId }]
+            : []),
+        ],
+      },
+    ];
+  }
+
   if (filters.q && filters.q.trim().length > 0) {
     where.titleAr = { contains: filters.q.trim() };
   }
@@ -874,6 +902,8 @@ export async function getCourseForViewer(
   const course = await db.course.findUnique({
     where: { id: courseId },
     include: {
+      // Creator role — feeds the supervisor-training gate below.
+      createdBy: { select: { role: true } },
       program: { select: { nameAr: true } },
       school: { select: { nameAr: true } },
       instructor: { select: { name: true } },
@@ -912,6 +942,15 @@ export async function getCourseForViewer(
   if (!allowed) {
     return fail("هذه الدورة غير متاحة لك", "FORBIDDEN");
   }
+
+  // Supervisor-training gate (IT assignment rule) — enforced here so a
+  // direct URL can never open a supervisor-authored course without a
+  // valid current assignment; the catalog filter alone is only UX.
+  const supervisorGate = await supervisorTrainingGateError(viewer, {
+    createdById: course.createdById,
+    createdBy: course.createdBy,
+  });
+  if (supervisorGate) return supervisorGate;
 
   const sections: ViewerSection[] = course.sections.map((section) => ({
     id: section.id,
@@ -1035,7 +1074,13 @@ export async function enrollTeacher(
 
   const course = await db.course.findUnique({
     where: { id: parsed.data.courseId },
-    select: { id: true, status: true, schoolId: true },
+    select: {
+      id: true,
+      status: true,
+      schoolId: true,
+      createdById: true,
+      createdBy: { select: { role: true } },
+    },
   });
   if (!course) return fail("الدورة غير موجودة", "NOT_FOUND");
 
@@ -1045,6 +1090,15 @@ export async function enrollTeacher(
   if (!visible) {
     return fail("هذه الدورة غير متاحة لتسجيلك", "FORBIDDEN");
   }
+
+  // Supervisor-training gate (IT assignment rule) — enrollment is a
+  // WRITE: a crafted request cannot sign an unassigned teacher into a
+  // supervisor-authored course.
+  const supervisorGate = await supervisorTrainingGateError(viewer, {
+    createdById: course.createdById,
+    createdBy: course.createdBy,
+  });
+  if (supervisorGate) return supervisorGate;
 
   const existing = await db.courseEnrollment.findUnique({
     where: { courseId_userId: { courseId: course.id, userId: viewer.id } },

@@ -1,7 +1,10 @@
 import { db } from "@/lib/db";
 
 import type { ViewerIdentity } from "@/lib/training/access";
-import { canManageTraining } from "@/lib/training/access";
+import {
+  canManageTraining,
+  supervisorTrainingGateError,
+} from "@/lib/training/access";
 
 /* ------------------------------------------------------------------ */
 /* Mandatory learning — sequential unlocking & watch heartbeat.         */
@@ -17,6 +20,9 @@ import { canManageTraining } from "@/lib/training/access";
 /*      clock — playback speed above 1x buys nothing), keeps the        */
 /*      monotonic max position bounded by accumulated watch time, and   */
 /*      is the ONLY writer of lesson completion for VIDEO lessons.      */
+/*   3. Supervisor-training gate (IT assignment rule): teacher viewers  */
+/*      can open/play lessons of supervisor-authored courses only while */
+/*      currently assigned to that exact supervisor.                    */
 /* ------------------------------------------------------------------ */
 
 /* ------------------------------ types ----------------------------- */
@@ -144,9 +150,10 @@ export async function getOrderedPublishedLessons(courseId: string): Promise<
 
 /**
  * Server-side sequential gate for ONE lesson: is this viewer allowed to
- * open/play it right now? Enforces visibility + publication + the
- * sequential policy (managers bypass — preview mode). Used by the
- * heartbeat, the media proxy and (transitively) completion writes.
+ * open/play it right now? Enforces visibility + the supervisor-training
+ * gate + publication + the sequential policy (managers bypass — preview
+ * mode). Used by the heartbeat, the media proxy and (transitively)
+ * completion writes.
  */
 export async function assertLessonPlayable(
   viewer: ViewerIdentity,
@@ -167,6 +174,8 @@ export async function assertLessonPlayable(
               status: true,
               schoolId: true,
               requireSequentialLessons: true,
+              createdById: true,
+              createdBy: { select: { role: true } },
             },
           },
         },
@@ -187,6 +196,18 @@ export async function assertLessonPlayable(
   if (!visible) {
     return { ok: false, message: "هذه الدورة غير متاحة لك", code: "FORBIDDEN" };
   }
+
+  // Supervisor-training gate (IT assignment rule) — the heartbeat and
+  // the media proxy go through here, so watch time cannot accumulate on
+  // a supervisor-authored course without a current assignment.
+  const supervisorGate = await supervisorTrainingGateError(viewer, {
+    createdById: course.createdById,
+    createdBy: course.createdBy,
+  });
+  if (supervisorGate) {
+    return { ok: false, message: supervisorGate.message, code: "FORBIDDEN" };
+  }
+
   if (!lesson.isPublished) {
     return { ok: false, message: "هذا الدرس غير منشور بعد", code: "LESSON_NOT_PUBLISHED" };
   }

@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client";
 
 import type { ViewerIdentity } from "@/lib/training/access";
-import { canManageTraining } from "@/lib/training/access";
+import {
+  canManageTraining,
+  supervisorTrainingGateError,
+} from "@/lib/training/access";
 import { db } from "@/lib/db";
 import { getActiveAcademicYear } from "@/lib/academic-year";
 import {
@@ -27,6 +30,11 @@ import { isYouTubeUrl } from "@/lib/media/video-url";
 /* session; every write re-checks course visibility, lesson            */
 /* publication and enrollment. Progress marks and completions are      */
 /* idempotent through DB unique constraints.                           */
+/*                                                                     */
+/* Supervisor-training gate (IT assignment rule): teacher progress     */
+/* writes on supervisor-authored courses additionally require a        */
+/* current assignment to that exact supervisor — applied to BOTH the   */
+/* manual mark path and the mandatory-playback heartbeat path.         */
 /* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
@@ -124,7 +132,8 @@ export interface CourseLearningStatus {
 /**
  * Full learning status for the course learning page. Visibility rules
  * mirror getCourseForViewer (published + own school or platform-wide;
- * managers may preview their school's non-published courses).
+ * managers may preview their school's non-published courses) plus the
+ * supervisor-training gate for teacher viewers.
  */
 export async function getCourseLearningStatus(
   viewer: ViewerIdentity,
@@ -139,6 +148,8 @@ export async function getCourseLearningStatus(
       estimatedHours: true,
       requireSequentialLessons: true,
       lessonCompletionThreshold: true,
+      createdById: true,
+      createdBy: { select: { role: true } },
       sections: {
         orderBy: { orderIndex: "asc" },
         select: {
@@ -174,6 +185,17 @@ export async function getCourseLearningStatus(
       (course.schoolId === null || course.schoolId === viewer.schoolId));
   if (!allowed) {
     return progressFail("هذه الدورة غير متاحة لك", "FORBIDDEN");
+  }
+
+  // Supervisor-training gate (IT assignment rule) — defense in depth:
+  // the learning page already gates via getCourseForViewer, this keeps
+  // the status read unusable through any other call path.
+  const supervisorGate = await supervisorTrainingGateError(viewer, {
+    createdById: course.createdById,
+    createdBy: course.createdBy,
+  });
+  if (supervisorGate) {
+    return progressFail(supervisorGate.message, "FORBIDDEN");
   }
 
   const [progressRows, enrollment, attempts, completion, watchRows] = await Promise.all([
@@ -380,7 +402,14 @@ export async function markLessonComplete(
         select: {
           courseId: true,
           course: {
-            select: { id: true, status: true, schoolId: true, requireSequentialLessons: true },
+            select: {
+              id: true,
+              status: true,
+              schoolId: true,
+              requireSequentialLessons: true,
+              createdById: true,
+              createdBy: { select: { role: true } },
+            },
           },
         },
       },
@@ -400,6 +429,19 @@ export async function markLessonComplete(
   if (!visible) {
     return progressFail("هذه الدورة غير متاحة لك", "FORBIDDEN");
   }
+
+  // Supervisor-training gate (IT assignment rule) — enforced BEFORE any
+  // write, for BOTH the manual mark and the heartbeat "watch" source:
+  // an unassigned (or reassigned-away) teacher cannot keep completing
+  // lessons of a supervisor-authored course through a direct call.
+  const supervisorGate = await supervisorTrainingGateError(viewer, {
+    createdById: course.createdById,
+    createdBy: course.createdBy,
+  });
+  if (supervisorGate) {
+    return progressFail(supervisorGate.message, "FORBIDDEN");
+  }
+
   if (!lesson.isPublished) {
     return progressFail("هذا الدرس غير منشور بعد", "LESSON_NOT_PUBLISHED");
   }
@@ -554,7 +596,9 @@ export interface CourseCompletionOutcome {
  * assessment passed. Idempotent — an existing completion short-circuits,
  * and concurrent callers collapse on the unique (courseId, userId)
  * constraint. Called after the last lesson mark and after any PASSED
- * attempt (auto-graded or manually reviewed).
+ * attempt (auto-graded or manually reviewed). Reachability is already
+ * guaranteed by the callers' gates — this function stays a pure
+ * requirement checker over real persisted data.
  */
 export async function maybeCompleteCourse(
   userId: string,
