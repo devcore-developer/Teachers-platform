@@ -64,7 +64,6 @@ export function TrainingImpactSection({
     <SectionCard
       icon={<TrendingUp className="size-4" aria-hidden="true" />}
       title="قياس أثر التدريب"
-      description="قياس مدى انعكاس التدريب على الممارسات التعليمية والأداء المهني"
     >
       {survey ? (
         <ImpactSummary courseId={courseId} survey={survey} />
