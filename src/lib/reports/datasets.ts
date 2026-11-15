@@ -20,11 +20,17 @@ import { toCsv } from "@/lib/reports/csv";
 export type ReportActor =
   | { role: "SUPER_ADMIN"; id: string; schoolId: string | null }
   | { role: "DEVELOPMENT_OFFICE_MANAGER"; id: string; schoolId: string }
+  | { role: "SCHOOL_MANAGER"; id: string; schoolId: string }
   | { role: "EDUCATIONAL_SUPERVISOR"; id: string; schoolId: string | null };
 
-/** Tenant filter for office/admin reports (null = whole platform). */
+/**
+ * Tenant filter for office/admin reports (null = whole platform).
+ * SCHOOL_MANAGER mirrors DEVELOPMENT_OFFICE_MANAGER: both are
+ * structurally confined to their OWN school — the id comes from the
+ * session/DB, never from a client payload.
+ */
 function schoolWhere(actor: ReportActor, schoolId?: string | null) {
-  if (actor.role === "DEVELOPMENT_OFFICE_MANAGER") {
+  if (actor.role === "DEVELOPMENT_OFFICE_MANAGER" || actor.role === "SCHOOL_MANAGER") {
     return { schoolId: actor.schoolId };
   }
   if (actor.role === "EDUCATIONAL_SUPERVISOR") {
@@ -347,6 +353,7 @@ export async function buildAccountsReport(actor: ReportActor): Promise<ReportFil
   const roleLabels: Record<string, string> = {
     SUPER_ADMIN: "مدير المنصة",
     DEVELOPMENT_OFFICE_MANAGER: "مدير مكتب التطوير",
+    SCHOOL_MANAGER: "مدير مدرسة",
     EDUCATIONAL_DEPUTY: "الوكيل التعليمي",
     EDUCATIONAL_SUPERVISOR: "المشرف التربوي",
     TEACHER: "معلم",
@@ -450,7 +457,12 @@ export async function buildBundleReport(actor: ReportActor): Promise<ReportFile>
         take: 10000,
       }),
       db.surveyResponse.findMany({
-        where: { schoolId: actor.role === "DEVELOPMENT_OFFICE_MANAGER" ? actor.schoolId : undefined },
+        where: {
+          schoolId:
+            actor.role === "DEVELOPMENT_OFFICE_MANAGER" || actor.role === "SCHOOL_MANAGER"
+              ? actor.schoolId
+              : undefined,
+        },
         select: {
           id: true,
           status: true,

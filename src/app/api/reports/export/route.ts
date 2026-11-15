@@ -25,9 +25,11 @@ import { downloadHeaders } from "@/lib/reports/csv";
  *   accounts   -> Qurtuba_User_Accounts.csv (WITHOUT passwords — hardened)
  *   bundle     -> Qurtuba_Manara_Report.json (format=json forced)
  *
- * Tenant rules: the office manager is ALWAYS confined to its own school;
- * the supervisor gets only its own scope analytics; SUPER_ADMIN covers
- * the platform (and passes an optional schoolId filter).
+ * Tenant rules: the office manager AND the school manager are ALWAYS
+ * confined to their own school (session-derived scope; a manager with
+ * no school binding gets an explicit 403 — fail-closed); the supervisor
+ * gets only its own scope analytics; SUPER_ADMIN covers the platform
+ * (and passes an optional schoolId filter).
  */
 
 export const dynamic = "force-dynamic";
@@ -51,20 +53,36 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "UNKNOWN_REPORT_TYPE" }, { status: 400 });
   }
 
-  if (user.role !== "SUPER_ADMIN" && user.role !== "DEVELOPMENT_OFFICE_MANAGER" && user.role !== "EDUCATIONAL_SUPERVISOR") {
+  if (
+    user.role !== "SUPER_ADMIN" &&
+    user.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    user.role !== "SCHOOL_MANAGER" &&
+    user.role !== "EDUCATIONAL_SUPERVISOR"
+  ) {
+    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  }
+
+  // Fail-closed: a school-scoped manager WITHOUT a school binding gets
+  // an explicit 403 — never an empty-scoped actor.
+  if (
+    (user.role === "DEVELOPMENT_OFFICE_MANAGER" || user.role === "SCHOOL_MANAGER") &&
+    !user.schoolId
+  ) {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }
 
   const actor: ReportActor =
     user.role === "SUPER_ADMIN"
       ? { role: "SUPER_ADMIN", id: user.id, schoolId: user.schoolId }
-      : user.role === "DEVELOPMENT_OFFICE_MANAGER"
-        ? {
-            role: "DEVELOPMENT_OFFICE_MANAGER",
+      : user.role === "EDUCATIONAL_SUPERVISOR"
+        ? { role: "EDUCATIONAL_SUPERVISOR", id: user.id, schoolId: user.schoolId }
+        : {
+            // DEVELOPMENT_OFFICE_MANAGER | SCHOOL_MANAGER — النطاق يأتي
+            // من الجلسة (الحساب غير المرتبط بمدرسة رُفض أعلاه).
+            role: user.role as "DEVELOPMENT_OFFICE_MANAGER" | "SCHOOL_MANAGER",
             id: user.id,
-            schoolId: user.schoolId ?? "",
-          }
-        : { role: "EDUCATIONAL_SUPERVISOR", id: user.id, schoolId: user.schoolId };
+            schoolId: user.schoolId as string,
+          };
 
   try {
     if (type === "supervisor") {

@@ -911,7 +911,10 @@ export async function listCertificatesForManage(
   filters: CertificateListFilters
 ): Promise<CertificateResult<Paginated<CertificateManageRow>>> {
   if (!canIssueCertificates(ctx.role) || !ctx.schoolId) {
-    return certificateFail("إدارة الشهادات متاحة لمديري مكاتب التطوير فقط", "FORBIDDEN");
+    return certificateFail(
+      "إدارة الشهادات متاحة لمديري مكاتب التطوير ومديري المدارس فقط",
+      "FORBIDDEN"
+    );
   }
 
   const where: Prisma.CertificateWhereInput = { schoolId: ctx.schoolId };
@@ -1256,15 +1259,20 @@ export async function getCertificateMetrics(
 ): Promise<CertificateResult<CertificateMetrics>> {
   if (
     ctx.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    ctx.role !== "SCHOOL_MANAGER" &&
     ctx.role !== "SUPER_ADMIN"
   ) {
     return certificateFail(
-      "إحصاءات الشهادات متاحة لمديري مكاتب التطوير والإدارة العامة فقط",
+      "إحصاءات الشهادات متاحة لمديري مكاتب التطوير ومديري المدارس والإدارة العامة فقط",
       "FORBIDDEN"
     );
   }
-  const schoolScope = ctx.role === "DEVELOPMENT_OFFICE_MANAGER" ? ctx.schoolId : null;
-  if (ctx.role === "DEVELOPMENT_OFFICE_MANAGER" && !schoolScope) {
+  // SCHOOL_MANAGER mirrors DEVELOPMENT_OFFICE_MANAGER: the metrics are
+  // always confined to its OWN school (fail-closed without a binding);
+  // SUPER_ADMIN alone sees platform-wide aggregates.
+  const schoolScope =
+    ctx.role === "SUPER_ADMIN" ? null : ctx.schoolId;
+  if (ctx.role !== "SUPER_ADMIN" && !schoolScope) {
     return certificateFail("النطاق المدرسي غير محدد", "FORBIDDEN");
   }
 

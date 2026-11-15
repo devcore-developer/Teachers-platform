@@ -31,8 +31,11 @@ export const metadata = {
  *     (T0..T5 + suggestion), per-year history, certificates.
  *   - EDUCATIONAL_SUPERVISOR: the assigned-teachers analytics (v13) with
  *     CSV export and the printable report.
- *   - SUPER_ADMIN / DEVELOPMENT_OFFICE_MANAGER: the school/platform
- *     annual summary and the full export center (CSV/JSON).
+ *   - SUPER_ADMIN / DEVELOPMENT_OFFICE_MANAGER / SCHOOL_MANAGER: the
+ *     school/platform annual summary and the full export center
+ *     (CSV/JSON). The school-scoped pair is confined to its OWN school
+ *     via the session schoolId; a school-scoped admin without a school
+ *     binding is rejected fail-closed.
  */
 
 function Stat({
@@ -306,13 +309,22 @@ export default async function ReportsPage() {
     );
   }
 
-  /* --------------------- OFFICE / SUPER_ADMIN -------------------------- */
-  if (user.role !== "SUPER_ADMIN" && user.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  /* ---------------- SCHOOL-SCOPED ADMIN / SUPER_ADMIN ------------------ */
+  if (
+    user.role !== "SUPER_ADMIN" &&
+    user.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    user.role !== "SCHOOL_MANAGER"
+  ) {
+    redirect("/forbidden");
+  }
+  // Fail-closed: a school-scoped admin with NO school binding can never
+  // fall through to platform-wide data.
+  if (user.role !== "SUPER_ADMIN" && !user.schoolId) {
     redirect("/forbidden");
   }
 
   const summary = await annualSummary(
-    user.role === "DEVELOPMENT_OFFICE_MANAGER" ? user.schoolId : null
+    user.role === "SUPER_ADMIN" ? null : user.schoolId
   );
 
   return (

@@ -106,17 +106,12 @@ function useWatchHeartbeat(
   courseId: string,
   lessonId: string,
   durationSeconds: number | null,
-    onSnapshot: (data: {
-      watchSeconds?: number;
-      completed?: boolean;
-      justCompleted?: boolean;
-    }) => void,
-    /** Live media duration probe (metadata) — lets the server learn the
-     * real length when the instructor never captured durationSeconds, so
-     * the completion threshold can actually fire. */
-    getLiveDuration?: () => number | null
+  onSnapshot: (data: {
+    watchSeconds?: number;
+    completed?: boolean;
+    justCompleted?: boolean;
+  }) => void
 ) {
-  const router = useRouter();
   const onSnapshotRef = React.useRef(onSnapshot);
   React.useEffect(() => {
     onSnapshotRef.current = onSnapshot;
@@ -132,12 +127,17 @@ function useWatchHeartbeat(
           lessonId,
           positionSeconds,
           durationSeconds:
-            durationSeconds ?? (getLiveDuration ? getLiveDuration() : null),
+            durationSeconds ?? null,
           ended,
         });
         if (result.ok && result.data) {
           onSnapshotRef.current(result.data);
-          if (result.data.justCompleted) router.refresh();
+          // NOTE: justCompleted no longer refreshes the page here. The
+          // completion is already recorded on the SERVER; refreshing
+          // immediately used to swap the checklist branch (done) and
+          // UNMOUNT the still-playing video at the threshold moment.
+          // Each player branch refreshes once playback is no longer
+          // active (see the deferred-refresh effect).
         }
       } catch {
         // Transient network issues are fine — the next beat re-syncs.
@@ -145,7 +145,7 @@ function useWatchHeartbeat(
         beatInFlightRef.current = false;
       }
     },
-    [courseId, lessonId, durationSeconds, router]
+    [courseId, lessonId, durationSeconds]
   );
   return sendHeartbeat;
 }
@@ -284,10 +284,13 @@ function NativeGovernedPlayer({
   thresholdPercent,
   initial,
 }: MandatoryVideoPlayerProps) {
+  const router = useRouter();
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const clampingRef = React.useRef(false);
   const localMaxWatchedRef = React.useRef(initial.maxPositionSeconds);
+  /** Video position at the previous timeupdate tick (safety-net anchor). */
+  const lastTickTimeRef = React.useRef(initial.lastPositionSeconds);
 
   const [duration, setDuration] = React.useState(durationSeconds ?? 0);
   const [current, setCurrent] = React.useState(0);
@@ -309,13 +312,6 @@ function NativeGovernedPlayer({
       }
       if (data.completed) setCompleted(true);
       if (data.justCompleted) setJustCompleted(true);
-    },
-    () => {
-      const video = videoRef.current;
-      if (!video) return null;
-      return Number.isFinite(video.duration) && video.duration > 0
-        ? video.duration
-        : null;
     }
   );
 
@@ -327,11 +323,26 @@ function NativeGovernedPlayer({
 
   /* --------------------------- media guards -------------------------- */
 
+  /**
+   * Forward-seek clamp — reads the LIVE ceiling (the honest max is a ref
+   * that advances with every tick). The previous version compared against
+   * a RENDER-TIME snapshot with the same 0.25s tolerance: any timeupdate
+   * gap above ~250ms — normal cadence jitter, GC pauses, deferred React
+   * commits — then read as a "forward seek" and rewound the video,
+   * producing the first-playback stutter (the anti-seeking MECHANISM was
+   * sound; its anchor was stale). The 0.25s tolerance here only has to
+   * absorb rounding on REAL seeks, which always announce themselves via
+   * the `seeking` event, where this function is invoked.
+   */
   function clampForward(attempted: number): number {
     if (completed) return attempted;
-    if (attempted > allowedMax + 0.25) {
+    const ceiling = Math.max(
+      initial.maxPositionSeconds,
+      localMaxWatchedRef.current
+    );
+    if (attempted > ceiling + 0.25) {
       setNotice("التخطي للأمام معطّل — أكمل المشاهدة بالترتيب.");
-      return allowedMax;
+      return ceiling;
     }
     return attempted;
   }
@@ -375,22 +386,39 @@ function NativeGovernedPlayer({
     }
   }
 
+  /**
+   * TRACKING ONLY during continuous playback — this handler never judges
+   * normal playback. A playing video's position cannot jump on its own:
+   * stalls and pauses freeze it, hidden tabs are paused by the
+   * visibilitychange guard, and every real seek fires `seeking` (clamped
+   * above). The only tolerated correction is a WIDE video-time safety
+   * net: a jump beyond the last tick + 2.5s can only be a seek that
+   * somehow bypassed the `seeking` event (exotic embed paths). The old
+   * version clamped EVERY tick against the stale render snapshot — that
+   * is the stutter bug fixed here.
+   */
   function handleTimeUpdate() {
     const video = videoRef.current;
     if (!video) return;
     const t = video.currentTime;
+    if (!completed && t - lastTickTimeRef.current > 2.5) {
+      const target = clampForward(t);
+      if (target !== t) {
+        clampingRef.current = true;
+        video.currentTime = target;
+        requestAnimationFrame(() => {
+          clampingRef.current = false;
+        });
+        setCurrent(target);
+        lastTickTimeRef.current = target;
+        return;
+      }
+    }
     if (!completed && t > localMaxWatchedRef.current) {
       localMaxWatchedRef.current = t;
     }
-    const clamped = clampForward(t);
-    if (clamped !== t) {
-      clampingRef.current = true;
-      video.currentTime = clamped;
-      requestAnimationFrame(() => {
-        clampingRef.current = false;
-      });
-    }
-    setCurrent(clamped);
+    lastTickTimeRef.current = t;
+    setCurrent(t);
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -440,6 +468,17 @@ function NativeGovernedPlayer({
     document.addEventListener("visibilitychange", onHidden);
     return () => document.removeEventListener("visibilitychange", onHidden);
   }, [sendHeartbeat]);
+
+  // The heartbeat completes the lesson on the SERVER at the threshold;
+  // the page refresh that reveals the unlocked checklist entry is
+  // DEFERRED until playback is no longer active. Refreshing mid-playback
+  // used to swap the checklist branch (done -> collapsed replay details)
+  // and unmount the still-playing video — a jolt at the completion point
+  // of the first viewing. The video element now stays stable throughout
+  // playback; the refresh lands on the next pause / ended event.
+  React.useEffect(() => {
+    if (justCompleted && !playing) router.refresh();
+  }, [justCompleted, playing, router]);
 
   /* ------------------------------ controls --------------------------- */
 
@@ -724,6 +763,7 @@ function YouTubeGovernedPlayer({
   /** Kept for future start-offset handling; resume uses playerVars.start. */
   startAt: number;
 }) {
+  const router = useRouter();
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   // React-owned wrapper; the YT API mount node is created manually
   // inside it so provider DOM swaps never fight the reconciler.
@@ -734,6 +774,8 @@ function YouTubeGovernedPlayer({
   // The last honest playback position — anything jumping beyond it is
   // an in-frame seek attempt and gets clamped back.
   const lastHonestTimeRef = React.useRef(initial.lastPositionSeconds);
+  /** Set while the IFrame API reports BUFFERING (its own transitions). */
+  const bufferingRef = React.useRef(false);
   const durationRef = React.useRef(durationSeconds ?? 0);
   const completedRef = React.useRef(initial.completed);
 
@@ -765,12 +807,6 @@ function YouTubeGovernedPlayer({
       }
       if (data.completed) setCompleted(true);
       if (data.justCompleted) setJustCompleted(true);
-    },
-    () => {
-      const player = playerRef.current;
-      if (!player) return null;
-      const d = player.getDuration();
-      return Number.isFinite(d) && d > 0 ? d : null;
     }
   );
 
@@ -885,11 +921,34 @@ function YouTubeGovernedPlayer({
       const player = playerRef.current;
       if (!player || completedRef.current) return;
       const state = player.getPlayerState();
-      if (state !== 1 && state !== 3) return; // playing or buffering only
+      // Judge ONLY the PLAYING state. While BUFFERING the IFrame API can
+      // report a jumped position for its OWN transitions (quality switch,
+      // ad roll) — the old poll clamped those and stuttered playback. A
+      // genuine forward seek cannot hide behind this: in-frame seeks are
+      // impossible (controls disabled, cross-origin iframe) and the
+      // governed bar clamps BEFORE seeking, so any real jump surfaces in
+      // the PLAYING state below and is still caught.
+      if (state === 3) {
+        bufferingRef.current = true;
+        return;
+      }
+      if (state !== 1) return;
       const t = player.getCurrentTime();
       const d = player.getDuration();
       if (Number.isFinite(d) && d > 0 && durationRef.current !== d) {
         setDuration(d);
+      }
+      // Re-baseline after YouTube's own buffering transition: a small
+      // drift is the API's, not the user's. Larger jumps are NOT
+      // accepted here — they fall through to the clamp below.
+      if (bufferingRef.current) {
+        bufferingRef.current = false;
+        if (t > lastHonestTimeRef.current && t - lastHonestTimeRef.current <= 3) {
+          lastHonestTimeRef.current = t;
+          if (t > localMaxWatchedRef.current) {
+            localMaxWatchedRef.current = t;
+          }
+        }
       }
       // Forward-seek detection: at 1x the position advances a little per
       // tick; a jump beyond the honest position + tolerance is a seek.
@@ -943,13 +1002,26 @@ function YouTubeGovernedPlayer({
     return () => document.removeEventListener("visibilitychange", onHidden);
   }, [sendHeartbeat]);
 
+  // Deferred completion refresh — same contract as the native branch:
+  // the checklist refresh lands only once playback is no longer active,
+  // so the playing iframe is never unmounted mid-playback.
+  React.useEffect(() => {
+    if (justCompleted && !playing) router.refresh();
+  }, [justCompleted, playing, router]);
+
   /* ------------------------------ controls --------------------------- */
 
   function clampForward(attempted: number): number {
     if (completed) return attempted;
-    if (attempted > allowedMax + 0.25) {
+    // LIVE ceiling — same rule as the native branch (the render-time
+    // snapshot lags one poll tick behind the honest position).
+    const ceiling = Math.max(
+      initial.maxPositionSeconds,
+      localMaxWatchedRef.current
+    );
+    if (attempted > ceiling + 0.25) {
       setNotice("التخطي للأمام معطّل — أكمل المشاهدة بالترتيب.");
-      return allowedMax;
+      return ceiling;
     }
     return attempted;
   }
