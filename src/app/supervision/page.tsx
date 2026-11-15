@@ -54,9 +54,7 @@ export default async function SupervisionPage() {
 
       <div className="space-y-6">
         <SectionCard
-          title="الفروع المسندة إليك"
-          description="الإسناد يتم من إدارة مكتب التطوير في مدرستك — أنت ترى معلمي هذه الفروع تلقائيًا."
-        >
+          title="الفروع المسندة إليك"        >
           {workspace.branches.length === 0 ? (
             <EmptyState
               icon={MapPin}
@@ -89,7 +87,6 @@ export default async function SupervisionPage() {
 
         <SectionCard
           title={`المعلمون في نطاقك (${workspace.teachers.length})`}
-          description="قائمة حقيقية من قاعدة البيانات — إسناد مباشر أو عبر تغطية الفرع، ومحصورة دائمًا داخل مدرستك."
         >
           {workspace.teachers.length === 0 ? (
             <EmptyState
@@ -135,7 +132,6 @@ export default async function SupervisionPage() {
 
         <SectionCard
           title="نقاط المتابعة"
-          description="بوابات المتابعة التربوية والتكليفات — تُفتح مع وحدة التكليفات في مرحلة لاحقة."
         >
           <div className="flex items-center gap-3 rounded-xl border bg-muted/40 p-4">
             <span className="flex size-10 items-center justify-center rounded-lg bg-brand-100 text-brand-700">

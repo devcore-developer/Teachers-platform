@@ -11,10 +11,15 @@ import { VerifyForm } from "./verify-form";
  * The QR code printed on every certificate points here
  * (/verify?code=...). Public, no session required — the page exposes
  * ONLY the printed-on-the-sheet facts (holder name, title, school,
- * issue date, effective status, signatory), the same information the
- * original HTML verifyCertificate showed, and nothing else. Lookup
- * accepts either the 16-char verification code or the MQ-YYYY-XXXXXX
- * serial, dash/space-insensitive, case-insensitive.
+ * issue date, effective status, training hours, signatory), the same
+ * information the original HTML verifyCertificate showed, and nothing
+ * else. Lookup accepts either the 16-char verification code or the
+ * MQ-YYYY-XXXXXX serial, dash/space-insensitive, case-insensitive.
+ *
+ * Premium revision: the result card adopts the ISSUING school's
+ * branding (logo + primary brand color accent) so every school's
+ * certificates verify inside their own visual identity — read-only
+ * public fields only, never internal platform data.
  */
 export const dynamic = "force-dynamic";
 
@@ -28,11 +33,15 @@ interface VerifiedCertificate {
   teacherName: string;
   schoolName: string;
   contentTitle: string | null;
+  trainingHours: number | null;
   issuedAt: Date;
   status: string;
   expiresAt: Date | null;
   signatoryName: string | null;
   signatoryTitle: string | null;
+  /** Issuing-school identity for the branded result card. */
+  brandColor: string;
+  logoUrl: string | null;
 }
 
 async function lookup(query: string): Promise<VerifiedCertificate | null> {
@@ -51,8 +60,8 @@ async function lookup(query: string): Promise<VerifiedCertificate | null> {
       schoolSignatoryName: true,
       schoolSignatoryTitle: true,
       teacher: { select: { name: true } },
-      school: { select: { nameAr: true } },
-      course: { select: { titleAr: true } },
+      school: { select: { nameAr: true, brandColor: true, logoUrl: true } },
+      course: { select: { titleAr: true, estimatedHours: true } },
       program: { select: { nameAr: true } },
     },
   });
@@ -63,11 +72,14 @@ async function lookup(query: string): Promise<VerifiedCertificate | null> {
     teacherName: row.teacher.name,
     schoolName: row.school.nameAr,
     contentTitle: row.course?.titleAr ?? row.program?.nameAr ?? null,
+    trainingHours: row.course?.estimatedHours ?? null,
     issuedAt: row.issuedAt,
     status: row.status,
     expiresAt: row.expiresAt,
     signatoryName: row.schoolSignatoryName,
     signatoryTitle: row.schoolSignatoryTitle,
+    brandColor: row.school.brandColor,
+    logoUrl: row.school.logoUrl,
   };
 }
 
@@ -137,8 +149,13 @@ export default async function VerifyPage({
                 <div
                   className={
                     effectiveStatus === "ISSUED"
-                      ? "bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white"
+                      ? "px-5 py-3 text-sm font-extrabold text-white"
                       : "bg-amber-600 px-5 py-3 text-sm font-extrabold text-white"
+                  }
+                  style={
+                    effectiveStatus === "ISSUED"
+                      ? { backgroundColor: result.brandColor }
+                      : undefined
                   }
                 >
                   {effectiveStatus === "ISSUED"
@@ -146,6 +163,28 @@ export default async function VerifyPage({
                     : effectiveStatus === "REVOKED"
                       ? "شهادة مُلغاة — لم تعد سارية"
                       : "شهادة منتهية الصلاحية"}
+                </div>
+                <div
+                  className="flex items-center gap-3 border-b px-5 py-3"
+                  style={{ borderColor: `${result.brandColor}33` }}
+                >
+                  {result.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={result.logoUrl}
+                      alt={result.schoolName}
+                      className="h-10 w-10 rounded-full border bg-white object-contain p-0.5"
+                      style={{ borderColor: `${result.brandColor}55` }}
+                    />
+                  ) : null}
+                  <div>
+                    <p className="text-sm font-extrabold" style={{ color: result.brandColor }}>
+                      {result.schoolName}
+                    </p>
+                    <p className="text-[11px] font-medium text-slate-400">
+                      الجهة المانحة لهذه الشهادة
+                    </p>
+                  </div>
                 </div>
                 <dl className="grid grid-cols-1 gap-x-6 gap-y-3 p-5 text-sm sm:grid-cols-2">
                   <div>
@@ -162,10 +201,20 @@ export default async function VerifyPage({
                     <dt className="text-xs font-semibold text-slate-400">عنوان الشهادة</dt>
                     <dd className="mt-0.5 font-bold text-slate-900">{result.titleAr}</dd>
                   </div>
-                  <div>
-                    <dt className="text-xs font-semibold text-slate-400">الجهة المانحة</dt>
-                    <dd className="mt-0.5 font-semibold text-slate-800">{result.schoolName}</dd>
-                  </div>
+                  {result.contentTitle ? (
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-400">البرنامج التدريبي</dt>
+                      <dd className="mt-0.5 font-semibold text-slate-800">{result.contentTitle}</dd>
+                    </div>
+                  ) : null}
+                  {typeof result.trainingHours === "number" && result.trainingHours > 0 ? (
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-400">عدد الساعات التدريبية</dt>
+                      <dd className="mt-0.5 font-semibold text-slate-800">
+                        {result.trainingHours} ساعات
+                      </dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt className="text-xs font-semibold text-slate-400">تاريخ الإصدار</dt>
                     <dd className="mt-0.5 font-semibold text-slate-800">

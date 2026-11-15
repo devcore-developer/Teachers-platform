@@ -192,7 +192,6 @@ export async function RoleDashboard({ user }: { user: SafeUser }) {
       <WelcomeHeader user={user} />
       <SectionCard
         title="ملفي الشخصي"
-        description="بيانات حسابك الحقيقية — وحدات التدريب والتقييم والشهادات الخاصة بك ستتوفر في مراحل لاحقة."
         action={
           <Link
             href="/my-profile"
@@ -238,12 +237,38 @@ export async function RoleDashboard({ user }: { user: SafeUser }) {
               </span>
             </span>
           </div>
+
+          {/* Assignment status — registration and supervisor assignment are
+              two separate operations; the teacher always sees exactly
+              where their account stands. */}
+          <div className="flex items-center gap-3 rounded-xl border bg-background/60 p-3.5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+              <UserCheck className="size-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 leading-tight">
+              <span className="block text-xs font-medium text-muted-foreground">
+                حالة الإسناد
+              </span>
+              <span className="mt-1 block">
+                <StatusBadge tone={profile?.supervisor ? "success" : "warning"}>
+                  {profile?.supervisor
+                    ? `مسند إلى ${profile.supervisor.name}`
+                    : "بانتظار إسناد مشرف تربوي"}
+                </StatusBadge>
+              </span>
+              {!profile?.supervisor && (
+                <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">
+                  سيُسند إليك المشرف التربوي من تقنية المعلومات في مدرستك —
+                  حسابك مسجل وموثّق ولن يتأثر بالانتظار.
+                </span>
+              )}
+            </span>
+          </div>
         </div>
       </SectionCard>
 
       <SectionCard
         title="رحلتي المهنية"
-        description="قيد التطوير — ستشمل برامجك التدريبية واختباراتك وشهاداتك في مراحل قادمة."
       >
         <div className="flex items-center gap-3 rounded-xl border bg-muted/40 p-4">
           <span className="flex size-10 items-center justify-center rounded-lg bg-brand-100 text-brand-700">

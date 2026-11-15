@@ -66,6 +66,7 @@ const QUESTION_TYPES = [
 
 type QuestionType = (typeof QUESTION_TYPES)[number]["value"];
 
+
 export function TrainingAssessmentSection({
   courseId,
   workspace,
@@ -79,16 +80,19 @@ export function TrainingAssessmentSection({
     <SectionCard
       icon={<Plus className="size-4" aria-hidden="true" />}
       title="الاختبار النهائي"
-      description="أسئلة الاختبار ونسبتها الادائية — تصحيح آلي للاختيار، ويدوي للمقالي قبل إصدار الشهادة."
     >
       {assessment ? (
         <AssessmentEditor courseId={courseId} assessment={assessment} />
       ) : (
-        <AssessmentCreateForm courseId={courseId} courseTitle={workspace.course.titleAr} />
+        <AssessmentCreateForm
+          courseId={courseId}
+          courseTitle={workspace.course.titleAr}
+        />
       )}
     </SectionCard>
   );
 }
+
 
 /* ------------------------- create form ----------------------------- */
 

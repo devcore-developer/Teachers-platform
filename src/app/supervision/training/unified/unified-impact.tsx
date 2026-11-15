@@ -50,6 +50,7 @@ function emptyQuestion(): DraftQuestion {
   return { textAr: "", type: "RATING", required: true, options: ["", ""] };
 }
 
+
 export function TrainingImpactSection({
   courseId,
   workspace,
@@ -58,11 +59,12 @@ export function TrainingImpactSection({
   workspace: TrainingWorkspace;
 }) {
   const survey = workspace.survey;
+
   return (
     <SectionCard
       icon={<TrendingUp className="size-4" aria-hidden="true" />}
       title="قياس أثر التدريب"
-      description="أداة قياس تُفتح للمعلم بعد اجتياز الاختبار والحصول على الشهادة — استجاباتها تُحفظ على مستوى المعلم والتدريب والمدرسة."
+      description="قياس مدى انعكاس التدريب على الممارسات التعليمية والأداء المهني"
     >
       {survey ? (
         <ImpactSummary courseId={courseId} survey={survey} />
@@ -72,6 +74,7 @@ export function TrainingImpactSection({
     </SectionCard>
   );
 }
+
 
 function ImpactSummary({
   survey,

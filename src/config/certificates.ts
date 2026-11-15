@@ -157,3 +157,36 @@ export const CERTIFICATE_GOLD = "#C9A227";
 
 /** Brand fallback (matches School.brandColor default). */
 export const DEFAULT_BRAND_COLOR = "#1D5BD6";
+
+/* ------------------------------------------------------------------ */
+/* Premium sheet — certificate wording                                  */
+/*                                                                      */
+/* The printed wording lives here so a school/operator can customize    */
+/* it in ONE place without touching the sheet component. The school     */
+/* name inside sentences is NEVER hardcoded here — the sheet injects    */
+/* view.school.nameAr dynamically at render time.                       */
+/* ------------------------------------------------------------------ */
+
+/** The dominant certificate heading. */
+export const CERT_TITLE_AR = "شهادة إتمام تدريب";
+
+/** Lead-in line above the recipient name container. */
+export const CERT_GRANT_AR = "تمنح هذه الشهادة إلى";
+
+/** Recipient label printed inside the name container. */
+export const CERT_RECIPIENT_LABEL_AR = "المعلم / المعلمة:";
+
+/** Completion statement before the program title. */
+export const CERT_COMPLETION_STATEMENT_AR =
+  "وذلك لإتمامه/إتمامها بنجاح متطلبات البرنامج التدريبي:";
+
+/** Professional-development statement (school name appended dynamically). */
+export const CERT_PD_STATEMENT_AR =
+  "ضمن برامج التطوير المهني المقدمة عبر منصة منارة";
+
+/** English institutional names for the header columns. */
+export const DEV_OFFICE_NAME_EN = "Educational Development Office";
+export const PLATFORM_NAME_EN = "Manara Digital Training Platform";
+
+/** Deep institutional ink for the recipient name / body typography. */
+export const CERT_INK = "#102F55";

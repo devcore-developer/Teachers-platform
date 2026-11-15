@@ -154,7 +154,6 @@ export function TrainingVideosSection({
     <SectionCard
       icon={<Plus className="size-4" aria-hidden="true" />}
       title="فيديوهات التدريب"
-      description="ارفع الفيديوهات من جهازك مباشرة أو ألصق رابط يوتيوب — تُعرض للمعلمين بالترتيب مع مشغّل إلزامي يحتسب المشاهدة على الخادم."
     >
       {feedback && (
         <div className="mb-3">

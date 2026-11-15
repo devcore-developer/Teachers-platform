@@ -225,7 +225,9 @@ export type UsersServiceResult<T> =
         | "FORBIDDEN"
         | "NOT_FOUND"
         | "RELATION_ERROR"
-        | "DUPLICATE_EMAIL";
+        | "DUPLICATE_EMAIL"
+        /** Rate-limit cap hit (e.g. IT recovery issuance caps). */
+        | "RATE_LIMITED";
     };
 
 export function zodUsersFieldErrors(error: z.ZodError): Record<string, string> {

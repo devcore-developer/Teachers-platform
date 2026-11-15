@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -12,7 +13,7 @@ import { SectionCard } from "./unified-editor";
 
 /* ------------------------------------------------------------------ */
 /* Teacher participation & results — ONE section inside the training    */
-/* workspace. Read-only aggregation over EXISTING models:               */
+/* workspace. Read-only aggregation over EXISTING models:              */
 /*   • lesson progress  → CourseLessonProgress                          */
 /*   • exam results     → AssessmentAttempt (best finalized + reviews)  */
 /*   • essay grading    → NEEDS_REVIEW attempts → the existing review   */
@@ -52,10 +53,18 @@ function ExamCell({
   if (!row.exam) {
     return <span className="text-muted-foreground">—</span>;
   }
-  const { bestPercentage, bestPassed, attemptsCount, needsReviewCount } = row.exam;
-  if (bestPercentage === null && attemptsCount === 0 && needsReviewCount === 0) {
+
+  const { bestPercentage, bestPassed, attemptsCount, needsReviewCount } =
+    row.exam;
+
+  if (
+    bestPercentage === null &&
+    attemptsCount === 0 &&
+    needsReviewCount === 0
+  ) {
     return <span className="text-muted-foreground">لم يتقدم بعد</span>;
   }
+
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       {bestPercentage !== null ? (
@@ -69,11 +78,13 @@ function ExamCell({
           {bestPercentage}%
         </span>
       ) : null}
+
       {attemptsCount > 0 && (
         <span className="text-[10px] text-muted-foreground">
           {attemptsCount} {attemptsCount === 1 ? "محاولة" : "محاولات"}
         </span>
       )}
+
       {needsReviewCount > 0 && (
         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
           مقالي بانتظار التصحيح
@@ -95,20 +106,22 @@ export function TrainingProgressSection({
   const rows = progress?.rows ?? [];
   const enrolledCount = workspace.enrollments.length;
   const completedCount = rows.filter((row) => row.completedAt).length;
+
   const pendingReviews = rows.reduce(
     (sum, row) => sum + (row.exam?.needsReviewCount ?? 0),
     0
   );
+
   const certificatesCount = rows.filter(
     (row) => row.certificate && row.certificate.status === "ISSUED"
   ).length;
+
   const impactCount = progress?.surveyResponsesCount ?? 0;
 
   return (
     <SectionCard
       icon={<BarChart3 className="size-4" aria-hidden="true" />}
       title="متابعة المعلمين والنتائج"
-      description="مشاركة المعلمين وتقدمهم، نتائج الاختبار والدرجات، التصحيح اليدوي للمقالي، الشهادات، واستجابات قياس الأثر — كل ذلك من مكان واحد."
     >
       {enrolledCount === 0 ? (
         <p className="rounded-lg border border-dashed bg-muted/30 px-4 py-4 text-center text-[11px] text-muted-foreground">
@@ -120,10 +133,13 @@ export function TrainingProgressSection({
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Chip label="مسجلون" value={enrolledCount} />
             <Chip label="أتمّوا" value={completedCount} />
+
             {progress?.assessmentId && (
               <Chip label="بانتظار تصحيح مقالي" value={pendingReviews} />
             )}
+
             <Chip label="شهادات صادرة" value={certificatesCount} />
+
             {progress?.surveyId && (
               <Chip label="استجابات قياس الأثر" value={impactCount} />
             )}
@@ -136,21 +152,29 @@ export function TrainingProgressSection({
                   <th className="px-2 py-2 font-bold">المعلم</th>
                   <th className="px-2 py-2 font-bold">إنجاز الدروس</th>
                   <th className="px-2 py-2 font-bold">الإكمال</th>
+
                   {progress?.assessmentId && (
                     <th className="px-2 py-2 font-bold">الاختبار</th>
                   )}
+
                   <th className="px-2 py-2 font-bold">الشهادة</th>
+
                   {progress?.surveyId && (
                     <th className="px-2 py-2 font-bold">قياس الأثر</th>
                   )}
                 </tr>
               </thead>
+
               <tbody>
                 {rows.map((row) => {
                   const done = row.lessonsDone;
                   const total = progress?.lessonsTotal ?? 0;
+
                   const percent =
-                    total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+                    total > 0
+                      ? Math.min(100, Math.round((done / total) * 100))
+                      : 0;
+
                   return (
                     <tr key={row.userId} className="border-b last:border-b-0">
                       <td className="px-2 py-2.5">
@@ -159,6 +183,7 @@ export function TrainingProgressSection({
                           مسجل {shortDate(row.enrolledAt)}
                         </p>
                       </td>
+
                       <td className="px-2 py-2.5">
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
@@ -167,11 +192,13 @@ export function TrainingProgressSection({
                               style={{ width: `${percent}%` }}
                             />
                           </div>
+
                           <span className="text-[10px] font-bold text-muted-foreground">
                             {done}/{total}
                           </span>
                         </div>
                       </td>
+
                       <td className="px-2 py-2.5">
                         {row.completedAt ? (
                           <span className="rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-bold text-success">
@@ -183,11 +210,13 @@ export function TrainingProgressSection({
                           </span>
                         )}
                       </td>
+
                       {progress?.assessmentId && (
                         <td className="px-2 py-2.5">
                           <ExamCell row={row} />
                         </td>
                       )}
+
                       <td className="px-2 py-2.5">
                         {row.certificate ? (
                           <Link
@@ -199,7 +228,11 @@ export function TrainingProgressSection({
                             }`}
                             title={row.certificate.certificateNumber}
                           >
-                            <GraduationCap className="size-3" aria-hidden="true" />
+                            <GraduationCap
+                              className="size-3"
+                              aria-hidden="true"
+                            />
+
                             {row.certificate.status === "ISSUED"
                               ? "صادرة"
                               : "ملغاة"}
@@ -208,6 +241,7 @@ export function TrainingProgressSection({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
+
                       {progress?.surveyId && (
                         <td className="px-2 py-2.5">
                           {row.impactSubmittedAt ? (
@@ -233,16 +267,23 @@ export function TrainingProgressSection({
                 href={`/assessments/manage/${progress.assessmentId}`}
                 className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-[11px] font-bold text-brand-600 transition-colors hover:bg-accent"
               >
-                <ClipboardCheck className="size-3.5" aria-hidden="true" />
+                <ClipboardCheck
+                  className="size-3.5"
+                  aria-hidden="true"
+                />
                 نتائج الاختبار وتصحيح المقالي
               </Link>
             )}
+
             {progress?.surveyId && (
               <Link
                 href={`/surveys/${progress.surveyId}/results`}
                 className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-[11px] font-bold text-brand-600 transition-colors hover:bg-accent"
               >
-                <TrendingUp className="size-3.5" aria-hidden="true" />
+                <TrendingUp
+                  className="size-3.5"
+                  aria-hidden="true"
+                />
                 نتائج قياس الأثر
               </Link>
             )}

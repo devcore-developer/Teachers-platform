@@ -2017,9 +2017,6 @@ export async function getSupervisorTrainingWorkspace(
 
 /** Placeholder title of an auto-created untouched draft course. */
 export const SUPERVISOR_DRAFT_TITLE = "تدريب بدون عنوان";
-const SUPERVISOR_DRAFT_DESCRIPTION =
-  "مسودة تدريب جديدة — أكمل بيانات التدريب ثم اضغط «حفظ بيانات التدريب» قبل النشر.";
-
 export interface SupervisorDraftHandle {
   id: string;
   created: boolean;
@@ -2067,9 +2064,9 @@ export async function ensureSupervisorTrainingDraft(
       instructorId: ctx.id,
       status: "DRAFT",
       titleAr: SUPERVISOR_DRAFT_TITLE,
-      descriptionAr: SUPERVISOR_DRAFT_DESCRIPTION,
       category: TRAINING_DOMAINS[0],
       trainingType: "VIRTUAL_LIVE",
+      descriptionAr: "",
     },
     select: { id: true },
   });

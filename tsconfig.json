@@ -38,6 +38,9 @@
   "exclude": [
     "node_modules",
     "tests",
-    "scripts"
+    "scripts",
+    "_integration-backup-20261115-214157",
+    "_file-audit-20261115-200652",
+    "_*"
   ]
 }

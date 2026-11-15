@@ -14,7 +14,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 
-import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getCertificateView } from "@/lib/certificates/service";
 import { qrDataUrl } from "@/lib/certificates/qr";
@@ -42,12 +41,6 @@ export default async function CertificatePrintPage({
   if (!result.ok) return <AccessDenied hint={result.message} />;
   const view = result.data;
 
-  const hoursRow = await db.certificate.findUnique({
-    where: { id },
-    select: { course: { select: { estimatedHours: true } } },
-  });
-  const trainingHours = hoursRow?.course?.estimatedHours ?? null;
-
   const headerList = await headers();
   const host = headerList.get("host") ?? "localhost:3000";
   const proto = headerList.get("x-forwarded-proto") ?? "http";
@@ -58,12 +51,7 @@ export default async function CertificatePrintPage({
     <div id="certificate-print-page-root">
       <AutoPrint certificateNumber={view.certificateNumber} />
 
-      <CertificateSheet
-        view={view}
-        qrDataUrl={qr}
-        verifyUrl={verifyUrl}
-        trainingHours={trainingHours}
-      />
+      <CertificateSheet view={view} qrDataUrl={qr} verifyUrl={verifyUrl} />
 
       <div className="no-print mt-6 text-center">
         <Link
@@ -98,29 +86,34 @@ export default async function CertificatePrintPage({
             border-radius: 0 !important;
             margin: 0 !important;
           }
-          #certificate-print-area > div:first-child { height: 100% !important; }
+          #certificate-print-area > .cert-frame-outer,
+          #certificate-print-area > .cert-frame-outer > .cert-frame-gold {
+            height: 100% !important;
+          }
           .cert-frame-inner {
             height: 100% !important;
             padding: 10px 26px 8px !important;
             display: flex !important;
             flex-direction: column !important;
           }
-          .cert-head { padding-bottom: 8px !important; gap: 12px !important; }
-          .cert-head img, .cert-head .cert-logo-fallback { height: 44px !important; width: 44px !important; }
-          .cert-title { margin-top: 6px !important; font-size: 30px !important; line-height: 1.25 !important; }
+          .cert-head { padding-bottom: 8px !important; gap: 10px !important; }
+          .cert-head img, .cert-head .cert-logo-fallback { height: 42px !important; width: 42px !important; }
+          .cert-title { font-size: 30px !important; line-height: 1.25 !important; }
           .cert-subtitle-en { margin-top: 2px !important; }
-          .cert-grant { margin-top: 14px !important; }
-          .cert-name { margin-top: 4px !important; font-size: 34px !important; line-height: 1.3 !important; }
-          .cert-underline { margin-top: 8px !important; }
-          /* balance: the free vertical space splits evenly between the
-     statement block and the footer rail (classic certificate rhythm) */
-  .cert-statement { margin-top: auto !important; padding-top: 10px !important; }
-          .cert-desc { margin-top: 4px !important; }
-          .cert-info-grid { margin-top: auto !important; padding-top: 10px !important; gap: 20px !important; }
-          .cert-qr { height: 66px !important; width: 66px !important; }
-          .cert-seal-wrap { bottom: 12px !important; left: 14px !important; }
-          .cert-seal-wrap svg { height: 80px !important; width: 80px !important; }
-          .cert-footline { margin-top: 10px !important; }
+          .cert-grant { margin-top: 10px !important; }
+          .cert-name-box { margin-top: 5px !important; padding-top: 5px !important; padding-bottom: 5px !important; }
+          .cert-name { font-size: 31px !important; line-height: 1.3 !important; }
+          /* balance: free vertical space splits evenly between the
+             statement block, the info strip and the bottom rail */
+          .cert-statement { margin-top: auto !important; padding-top: 8px !important; }
+          .cert-desc { margin-top: 3px !important; }
+          .cert-info-grid { margin-top: auto !important; }
+          .cert-bottom { margin-top: auto !important; padding-top: 10px !important; }
+          .cert-sign-line { margin-top: 6px !important; }
+          .cert-qr { height: 64px !important; width: 64px !important; }
+          .cert-seal { height: 86px !important; width: 86px !important; }
+          .cert-seal img, .cert-seal > div:last-child { height: 32px !important; width: 32px !important; }
+          .cert-footline { margin-top: 6px !important; }
         }
         @page { size: A4 landscape; margin: 8mm; }
       `}</style>

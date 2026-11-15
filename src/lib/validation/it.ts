@@ -1,59 +1,73 @@
-
 import { z } from "zod";
 
+import {
+  zodUsersFieldErrors,
+  type UsersServiceResult,
+} from "@/lib/validation/users";
+
 /* ------------------------------------------------------------------ */
-/* IT coordinator workspace validation schemas (Zod v4, same style as   */
-/* src/lib/validation/auth.ts). Every IT server entry point parses its  */
-/* input here first — the DB is always re-verified for existence and    */
-/* school scope inside the service layer.                               */
+/* IT_COORDINATOR workspace schemas.                                    */
+/*                                                                      */
+/* The coordinator has exactly TWO capabilities — teacher→supervisor    */
+/* assignments and teacher account recovery — both structurally         */
+/* confined to the coordinator's own school by the service layer.       */
+/* These schemas follow the same conventions as validation/users.ts.    */
 /* ------------------------------------------------------------------ */
 
-/** Internal record id (cuid) — length-bounded; existence is DB-checked. */
-const idField = z
-  .string({ message: "المعرّف مطلوب" })
-  .trim()
-  .min(10, "معرّف غير صالح")
-  .max(64, "معرّف غير صالح");
+/** Rows per page for the IT assignment table (server-enforced). */
+export const IT_PAGE_SIZE = 12;
 
-/** Teacher list filters for the IT support views. */
+/** Assignment-status filter for the IT teacher list. */
+export const IT_ASSIGNMENT_STATUS_FILTER = ["ALL", "ASSIGNED", "UNASSIGNED"] as const;
+
 export const itTeacherQuerySchema = z.object({
-  q: z.string().trim().max(120).optional(),
-  status: z.enum(["all", "assigned", "unassigned"]).default("all"),
+  /** Free-text search over teacher name and email (server applies contains). */
+  q: z
+    .string()
+    .trim()
+    .max(120, "نص البحث طويل جدًا")
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  branchId: z
+    .string()
+    .trim()
+    .max(64)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  status: z
+    .enum(IT_ASSIGNMENT_STATUS_FILTER, { message: "تصفية الإسناد غير صالحة" })
+    .optional()
+    .transform((v) => (v && v !== "ALL" ? v : undefined)),
+  page: z.coerce
+    .number({ message: "رقم الصفحة غير صالح" })
+    .int()
+    .min(1, "رقم الصفحة غير صالح")
+    .max(100000)
+    .default(1),
 });
 
 export type ItTeacherQuery = z.infer<typeof itTeacherQuerySchema>;
 
-/** Assign (or reassign) a teacher of the IT coordinator's school. */
-export const assignTeacherSchema = z.object({
-  teacherId: idField,
-  supervisorId: idField,
+/**
+ * Assign (or transfer) a teacher's supervisor. Same shape as the admin
+ * directory schema — intentionally reused so both entry points validate
+ * identically.
+ */
+export const itAssignTeacherSchema = z.object({
+  teacherId: z.string().trim().min(1, "معرّف المعلم مطلوب"),
+  supervisorId: z.string().trim().min(1, "معرّف المشرف مطلوب"),
 });
 
-export type AssignTeacherInput = z.infer<typeof assignTeacherSchema>;
-
-/** Remove a teacher's current assignment (same school only). */
-export const unassignTeacherSchema = z.object({
-  teacherId: idField,
+/** Remove a teacher's current supervisor. */
+export const itRemoveTeacherSchema = z.object({
+  teacherId: z.string().trim().min(1, "معرّف المعلم مطلوب"),
 });
 
-export type UnassignTeacherInput = z.infer<typeof unassignTeacherSchema>;
-
-/** Initiate the secure recovery flow for one teacher of the school. */
-export const initiateRecoverySchema = z.object({
-  teacherId: idField,
+/** Issue a recovery link for one teacher of the coordinator's school. */
+export const itRecoverySchema = z.object({
+  teacherId: z.string().trim().min(1, "معرّف المعلم مطلوب"),
 });
 
-export type InitiateRecoveryInput = z.infer<typeof initiateRecoverySchema>;
+export type ItServiceResult<T> = UsersServiceResult<T>;
 
-/* --------------------------- Result helper ------------------------ */
-
-/** Same uniform shape as the auth module's ServiceResult. */
-export type ItResult<T> =
-  | { ok: true; data: T }
-  | {
-      ok: false;
-      /** Arabic, user-facing error message. */
-      message: string;
-      fieldErrors?: Record<string, string>;
-      code?: "VALIDATION_ERROR" | "FORBIDDEN" | "NOT_FOUND";
-    };
+export { zodUsersFieldErrors };

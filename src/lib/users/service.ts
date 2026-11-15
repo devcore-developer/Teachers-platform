@@ -27,6 +27,7 @@ import {
   zodAuthFieldErrors,
   type AuthResult,
 } from "@/lib/validation/auth";
+import { resolveRegistrationToken } from "@/lib/registration-links/service";
 
 /* ------------------------------------------------------------------ */
 /* User & account service layer.                                        */
@@ -52,7 +53,7 @@ function toSafeUser(user: Prisma.UserGetPayload<{
 
 /** Build an absolute URL from a base that actions derive from headers. */
 function verificationUrl(appBaseUrl: string, rawToken: string): string {
-  return `${appBaseUrl.replace(/\/$/, "")}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}`;
+  return `${appBaseUrl.replace(/\/$/, "")}/account/verify-email?token=${encodeURIComponent(rawToken)}`;
 }
 
 function passwordResetUrl(appBaseUrl: string, rawToken: string): string {
@@ -99,16 +100,22 @@ export async function registerTeacher(
   }
   const input = parsed.data;
 
-  // Re-validate the registration context on the server — the slug from
-  // the URL must resolve to an ACTIVE school; client hints are ignored.
-  const school = await db.school.findUnique({ where: { slug: input.slug } });
-  if (!school || !school.isActive) {
+  // Re-validate the registration context on the server — the school and
+  // the link association come EXCLUSIVELY from the raw token (hashed
+  // lookup; a client-supplied school id is never trusted). Revoked
+  // links, expired links and inactive schools all fail closed here.
+  const resolution = await resolveRegistrationToken(input.token);
+  if (resolution.status !== "valid") {
     return {
       ok: false,
-      message: "رابط التسجيل غير صالح أو أُغلق التسجيل لهذه المدرسة",
+      message:
+        resolution.status === "expired"
+          ? "انتهت صلاحية رابط التسجيل — اطلب رابطًا جديدًا من مكتب التطوير في مدرستك"
+          : "رابط التسجيل غير صالح أو أُغلق التسجيل لهذه المدرسة",
       code: "REGISTRATION_CLOSED",
     };
   }
+  const schoolId = resolution.school.id;
 
   // Optional home branch must belong to this school and stay active.
   let branchId: string | null = null;
@@ -116,7 +123,7 @@ export async function registerTeacher(
     const branch = await db.branch.findUnique({
       where: { id: input.branchId },
     });
-    if (!branch || branch.schoolId !== school.id || !branch.isActive) {
+    if (!branch || branch.schoolId !== schoolId || !branch.isActive) {
       return {
         ok: false,
         message: "الفرع المحدد غير متاح للتسجيل في هذه المدرسة",
@@ -140,8 +147,11 @@ export async function registerTeacher(
       email: input.email, // already normalized by the schema
       passwordHash: await hashPassword(input.password),
       role: "TEACHER",
-      schoolId: school.id,
+      schoolId,
       branchId,
+      // Audit link to the registration link used — powers the
+      // per-link registration stats and the IT workspace flag.
+      registrationLinkId: resolution.linkId,
       isActive: true,
       emailVerifiedAt: null,
     },

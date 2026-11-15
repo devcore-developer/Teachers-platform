@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { resolvePublicBranding } from "@/lib/branding";
@@ -32,9 +31,12 @@ interface LoginPageProps {
  *
  * The premium composition (identity header, decorated background,
  * elevated card and platform footer) lives in the shared AuthCard so
- * every gate screen stays consistent. The footer call-to-action adapts:
- * with a school context it links to that school's registration page,
- * otherwise it keeps the generic hint — never a hardcoded school name.
+ * every gate screen stays consistent. The footer is school-agnostic by
+ * design: self-registration runs ONLY through the school's dedicated
+ * registration link (a hashed token URL generated from
+ * /registration-links), so there is intentionally no clickable
+ * /register/{slug} shortcut here — the old slug links landed on the
+ * "school_closed" screen and are gone from this page.
  */
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { next, reset, school } = await searchParams;
@@ -47,22 +49,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     ? `/forgot-password?school=${encodeURIComponent(resolved.school.slug)}`
     : "/forgot-password";
 
-  const footer = resolved.school ? (
-    <>
-      معلم جديد في {resolved.branding.productName}؟{" "}
-      <Link
-        href={`/register/${encodeURIComponent(resolved.school.slug)}`}
-        className="font-semibold text-brand-600 transition-colors hover:text-brand-700 hover:underline"
-      >
-        أنشئ حسابك الآن
-      </Link>
-    </>
-  ) : (
+  const footer = (
     <span>
-      معلم جديد؟ التسجيل يتم عبر رابط مدرستك —
-      <span className="mx-1 text-muted-foreground/70" dir="ltr">
-        /register/اسم-المدرسة
-      </span>
+      معلم جديد؟ التسجيل يتم عبر رابط مدرستك المخصص — اطلب الرابط من مكتب
+      التطوير في مدرستك ثم افتحه لإنشاء حسابك وتأكيد بريدك.
     </span>
   );
 

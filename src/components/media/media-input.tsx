@@ -446,10 +446,6 @@ export function MediaInput({
                 {urlError}
               </p>
             )}
-            <p className="text-[11px] text-muted-foreground">
-              الروابط الخارجية تُحفظ كما هي — لا تُنسخ إلى التخزين السحابي، وروابط
-              يوتيوب (watch و youtu.be و shorts و embed) تُشغَّل مدمجةً داخل صفحة الدرس.
-            </p>
           </div>
         ) : (
           <div className="space-y-2">

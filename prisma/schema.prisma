@@ -32,18 +32,18 @@ datasource db {
  * hard-deleted once related records exist — they are deactivated.
  */
 model School {
-  id         String   @id @default(cuid())
+  id                  String   @id @default(cuid())
   /// Arabic school name (primary, required).
-  nameAr     String
+  nameAr              String
   /// Optional English school name.
-  nameEn     String?
+  nameEn              String?
   /// Unique URL-friendly identifier used in routes and in the
   /// school-specific teacher registration link (/register/{slug}).
-  slug       String   @unique
+  slug                String   @unique
   /// Logo reference. Stores a URL — never inline image bytes.
-  logoUrl    String?
+  logoUrl             String?
   /// Primary brand color as #RRGGBB. Defaults to the platform blue.
-  brandColor String   @default("#1D5BD6")
+  brandColor          String   @default("#1D5BD6")
   /// Multi-school branding (Batch 3) — supporting palette. Every field
   /// is optional: null means "derive a harmonious value from the
   /// primary color" so old schools keep rendering without migration.
@@ -53,32 +53,44 @@ model School {
   /// Supporting (sidebar/deep surfaces) color (#RRGGBB or null).
   brandColorNeutral   String?
   /// Optional school tagline rendered under the school name.
-  brandTagline String?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  brandTagline        String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  branches Branch[]
-  users    User[]
-
+  branches              Branch[]
+  users                 User[]
   supervisorAssignments SupervisorAssignment[]
   deputyGrants          DeputyGrant[]
 
   teacherSupervisorAssignments TeacherSupervisorAssignment[]
+  /**
+   * School-specific teacher self-registration links (token-based).
+   */
+  registrationLinks            RegistrationLink[]
 
   trainingPrograms TrainingProgram[]
   academyCourses   Course[]
 
-  /** Phase 6 — assessments owned by this school (null-school = platform). */
-  assessments Assessment[]
-  /** Phase 7 — assignments are ALWAYS school-owned. */
-  assignments Assignment[]
-  /** Phase 8 — certificates are ALWAYS school-owned (never platform). */
-  certificates Certificate[]
-  /** Phase 9 — surveys and follow-ups are ALWAYS school-owned. */
-  surveys   Survey[]
-  followUps FollowUp[]
+  /**
+   * Phase 6 — assessments owned by this school (null-school = platform).
+   */
+  assessments   Assessment[]
+  /**
+   * Phase 7 — assignments are ALWAYS school-owned.
+   */
+  assignments   Assignment[]
+  /**
+   * Phase 8 — certificates are ALWAYS school-owned (never platform).
+   */
+  certificates  Certificate[]
+  /**
+   * Phase 9 — surveys and follow-ups are ALWAYS school-owned.
+   */
+  surveys       Survey[]
+  followUps     FollowUp[]
   archiveEvents ArchiveEvent[]
+
   @@map("schools")
 }
 
@@ -86,7 +98,6 @@ model School {
  * A branch belonging to exactly one school. Educational stage is stored
  * as a canonical key ("primary" | "intermediate" | "secondary") and
  * validated with Zod on every write — SQLite has no native enum type.
- *
  * Duplicate branch names inside the same school are prevented by a
  * unique constraint on the normalized name (nameNorm: trimmed, collapsed
  * whitespace, lowercased) — see src/lib/validation/schools.ts.
@@ -108,6 +119,7 @@ model Branch {
   users                 User[]
   supervisorAssignments SupervisorAssignment[]
   deputyGrants          DeputyGrant[]
+
   /// Branch names must be unique within the same school (normalized).
   @@unique([schoolId, nameNorm])
   @@index([schoolId])
@@ -120,109 +132,148 @@ model Branch {
  * "EDUCATIONAL_SUPERVISOR" | "TEACHER") and validated with Zod on every
  * write — SQLite has no native enum type. Role-specific authorization
  * lives centrally in src/lib/auth (never scattered across call-sites).
- *
  * SUPER_ADMIN is a platform-level actor: schoolId stays null.
  * Email is stored normalized (trimmed, lowercased) and unique at the DB
  * level as the final duplicate-prevention guarantee.
- *
  * tokenVersion is bumped on security-sensitive changes (password reset,
  * logout-everywhere): session JWTs embed it and older sessions become
  * invalid immediately — no server-side session table needed.
  */
 model User {
-  id             String    @id @default(cuid())
-  name           String
+  id                String    @id @default(cuid())
+  name              String
   /// Normalized email address (trimmed + lowercased) — unique.
-  email          String    @unique
+  email             String    @unique
   /// bcrypt hash — plaintext passwords are never stored or logged.
-  passwordHash   String
-  role           String
-  /** Owning school tenant. Null for SUPER_ADMIN (platform-level). */
-  schoolId       String?
-  /** Home branch for branch-scoped roles (e.g. a teacher's branch). */
-  branchId       String?
-  isActive       Boolean   @default(true)
+  passwordHash      String
+  role              String
+  /**
+   * Owning school tenant. Null for SUPER_ADMIN (platform-level).
+   */
+  schoolId          String?
+  /**
+   * Home branch for branch-scoped roles (e.g. a teacher's branch).
+   */
+  branchId          String?
+  isActive          Boolean   @default(true)
   /// Null until the email-verification flow completes (teachers).
-  emailVerifiedAt DateTime?
+  emailVerifiedAt   DateTime?
   /// Set on every successful credential sign-in (server-side only).
   /// Null means the account has never signed in — displayed honestly.
-  lastLoginAt    DateTime?
+  lastLoginAt       DateTime?
   /// Batch 2 — professional growth classification (canonical T0..T5).
-  growthLevel     String    @default("T0")
+  growthLevel       String    @default("T0")
   /// Batch 2 — professional record fields (HTML: المرحلة / التخصص).
-  stage           String?
-  subject         String?
+  stage             String?
+  subject           String?
   /// Batch 2 — audit anchor for administrative password resets.
   passwordUpdatedAt DateTime?
-  tokenVersion   Int       @default(0)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime @updatedAt
+  tokenVersion      Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  school               School?                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  branch               Branch?                @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  school School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   supervisorAssignments SupervisorAssignment[] @relation("SupervisorUser")
   deputyGrants          DeputyGrant[]          @relation("DeputyUser")
 
-  verificationTokens   EmailVerificationToken[]
-  passwordResetTokens  PasswordResetToken[]
+  /// Set when the account was created through a school self-registration
+  /// link (/register/{token}) — the durable registration-source anchor
+  /// used for per-link and per-school statistics. Null for provisioned
+  /// and imported accounts.
+  registrationLinkId String?
+  registrationLink   RegistrationLink? @relation(fields: [registrationLinkId], references: [id], onDelete: SetNull)
 
-  /** This user's CURRENT supervisor (null = none) — one row per teacher. */
-  teacherSupervision    TeacherSupervisorAssignment? @relation("TeacherSupervisionTeacher")
-  /** Teachers explicitly assigned to this supervisor. */
-  supervisedTeachers    TeacherSupervisorAssignment[] @relation("TeacherSupervisionSupervisor")
+  verificationTokens  EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
 
-  /** Phase 5 — training academy authorship & participation. */
-  createdPrograms      TrainingProgram[]  @relation("ProgramCreator")
-  createdCourses       Course[]           @relation("CourseCreator")
-  instructedCourses    Course[]           @relation("CourseInstructor")
-  uploadedAttachments  Attachment[]       @relation("AttachmentUploader")
-  enrollments          CourseEnrollment[] @relation("Enrollments")
+  /**
+   * This user's CURRENT supervisor (null = none) — one row per teacher.
+   */
+  teacherSupervision TeacherSupervisorAssignment?  @relation("TeacherSupervisionTeacher")
+  /**
+   * Teachers explicitly assigned to this supervisor.
+   */
+  supervisedTeachers TeacherSupervisorAssignment[] @relation("TeacherSupervisionSupervisor")
 
-  /** Phase 6 — assessment authorship, attempts and manual reviews. */
-  createdAssessments Assessment[]         @relation("AssessmentCreator")
-  assessmentAttempts AssessmentAttempt[]  @relation("AttemptOwner")
-  reviewedAttempts   AssessmentAttempt[]  @relation("AttemptReviewer")
-  /** Phase 7 — assignments, submissions and review audit. */
-  createdAssignments    Assignment[]           @relation("CreatedAssignments")
-  assignmentSubmissions AssignmentSubmission[] @relation("AssignmentSubmissions")
-  reviewedSubmissions   AssignmentSubmission[] @relation("ReviewedSubmissions")
-  /** Phase 8 — certificate ownership, issuance/revocation audit. */
-  certificates       Certificate[]      @relation("CertificateOwner")
-  issuedCertificates Certificate[]      @relation("CertificateIssuer")
-  revokedCertificates Certificate[]     @relation("CertificateRevoker")
-  certificateEvents  CertificateEvent[] @relation("CertificateEventActor")
-  /** Phase 9 — survey authorship, responses and audit. */
-  ownedSurveys     Survey[]         @relation("SurveyOwner")
-  surveyResponses  SurveyResponse[] @relation("SurveyRespondent")
-  surveyEventActor SurveyEvent[]    @relation("SurveyEventActor")
-  /** Phase 9 — follow-up responsibilities and audit. */
-  followUpsAsTeacher     FollowUp[]      @relation("FollowUpTeacher")
-  followUpsAsSupervisor  FollowUp[]      @relation("FollowUpSupervisor")
-  followUpsAsCreator     FollowUp[]      @relation("FollowUpCreator")
-  followUpEventActor     FollowUpEvent[] @relation("FollowUpEventActor")
-  /** Phase 10 — archive operations audit. */
-  archivedFollowUps FollowUp[]      @relation("FollowUpArchiver")
-  archiveEventActor ArchiveEvent[]  @relation("ArchiveEventActor")
-  /** Phase 11 — in-app notifications, preferences and email audit. */
-  notifications          Notification[]          @relation("NotificationOwner")
-  notificationPreference NotificationPreference?
-  emailDeliveries        EmailDelivery[]         @relation("EmailDeliveryOwner")
-  /** Batch 2 — growth history, messages, archives and deputy mapping. */
-  growthEvents       GrowthEvent[]      @relation("GrowthEventUser")
-  growthEventActor   GrowthEvent[]      @relation("GrowthEventActor")
-  messagesSent       TeacherMessage[]   @relation("MessageSender")
-  messagesReceived   TeacherMessage[]   @relation("MessageRecipient")
-  trainingArchives   TrainingArchive[]  @relation("TrainingArchiveActor")
-  deputyAssignments  TeacherSupervisorAssignment[] @relation("TeacherSupervisionDeputy")
-  /** Batch 1 — learning progress, completions and course comments. */
-  lessonProgress      CourseLessonProgress[] @relation("LessonProgressOwner")
-  watchStates         LessonWatchState[]     @relation("LessonWatchOwner")
-  courseCompletions   CourseCompletion[]     @relation("CourseCompletionOwner")
-  courseComments      CourseComment[]        @relation("CourseCommentAuthor")
-  certifiedCompletions CourseCompletion[]    @relation("CourseCompletionCertifier")
+  /**
+   * Phase 5 — training academy authorship & participation.
+   */
+  createdPrograms     TrainingProgram[]  @relation("ProgramCreator")
+  createdCourses      Course[]           @relation("CourseCreator")
+  instructedCourses   Course[]           @relation("CourseInstructor")
+  uploadedAttachments Attachment[]       @relation("AttachmentUploader")
+  enrollments         CourseEnrollment[] @relation("Enrollments")
+
+  /**
+   * Phase 6 — assessment authorship, attempts and manual reviews.
+   */
+  createdAssessments         Assessment[]                  @relation("AssessmentCreator")
+  assessmentAttempts         AssessmentAttempt[]           @relation("AttemptOwner")
+  reviewedAttempts           AssessmentAttempt[]           @relation("AttemptReviewer")
+  /**
+   * Phase 7 — assignments, submissions and review audit.
+   */
+  createdAssignments         Assignment[]                  @relation("CreatedAssignments")
+  assignmentSubmissions      AssignmentSubmission[]        @relation("AssignmentSubmissions")
+  reviewedSubmissions        AssignmentSubmission[]        @relation("ReviewedSubmissions")
+  /**
+   * Phase 8 — certificate ownership, issuance/revocation audit.
+   */
+  certificates               Certificate[]                 @relation("CertificateOwner")
+  issuedCertificates         Certificate[]                 @relation("CertificateIssuer")
+  revokedCertificates        Certificate[]                 @relation("CertificateRevoker")
+  certificateEvents          CertificateEvent[]            @relation("CertificateEventActor")
+  /**
+   * Phase 9 — survey authorship, responses and audit.
+   */
+  ownedSurveys               Survey[]                      @relation("SurveyOwner")
+  surveyResponses            SurveyResponse[]              @relation("SurveyRespondent")
+  surveyEventActor           SurveyEvent[]                 @relation("SurveyEventActor")
+  /**
+   * Phase 9 — follow-up responsibilities and audit.
+   */
+  followUpsAsTeacher         FollowUp[]                    @relation("FollowUpTeacher")
+  followUpsAsSupervisor      FollowUp[]                    @relation("FollowUpSupervisor")
+  followUpsAsCreator         FollowUp[]                    @relation("FollowUpCreator")
+  followUpEventActor         FollowUpEvent[]               @relation("FollowUpEventActor")
+  /**
+   * Phase 10 — archive operations audit.
+   */
+  archivedFollowUps          FollowUp[]                    @relation("FollowUpArchiver")
+  archiveEventActor          ArchiveEvent[]                @relation("ArchiveEventActor")
+  /**
+   * Phase 11 — in-app notifications, preferences and email audit.
+   */
+  notifications              Notification[]                @relation("NotificationOwner")
+  notificationPreference     NotificationPreference?
+  emailDeliveries            EmailDelivery[]               @relation("EmailDeliveryOwner")
+  /**
+   * Batch 2 — growth history, messages, archives and deputy mapping.
+   */
+  growthEvents               GrowthEvent[]                 @relation("GrowthEventUser")
+  growthEventActor           GrowthEvent[]                 @relation("GrowthEventActor")
+  messagesSent               TeacherMessage[]              @relation("MessageSender")
+  messagesReceived           TeacherMessage[]              @relation("MessageRecipient")
+  trainingArchives           TrainingArchive[]             @relation("TrainingArchiveActor")
+  deputyAssignments          TeacherSupervisorAssignment[] @relation("TeacherSupervisionDeputy")
+  /**
+   * IT assignment audit — coordinator/admin who wrote the assignment.
+   */
+  assignedSupervisionChanges TeacherSupervisorAssignment[] @relation("TeacherSupervisionAssignedBy")
+  /**
+   * Batch 1 — learning progress, completions and course comments.
+   */
+  lessonProgress             CourseLessonProgress[]        @relation("LessonProgressOwner")
+  watchStates                LessonWatchState[]            @relation("LessonWatchOwner")
+  courseCompletions          CourseCompletion[]            @relation("CourseCompletionOwner")
+  courseComments             CourseComment[]               @relation("CourseCommentAuthor")
+  certifiedCompletions       CourseCompletion[]            @relation("CourseCompletionCertifier")
+
   @@index([schoolId])
   @@index([role])
+  @@index([registrationLinkId])
   @@map("users")
 }
 
@@ -238,9 +289,9 @@ model SupervisorAssignment {
   branchId     String
   createdAt    DateTime @default(now())
 
-  supervisor User     @relation("SupervisorUser", fields: [supervisorId], references: [id], onDelete: Cascade)
-  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  supervisor User   @relation("SupervisorUser", fields: [supervisorId], references: [id], onDelete: Cascade)
+  school     School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  branch     Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@unique([supervisorId, branchId])
   @@index([supervisorId])
@@ -270,7 +321,6 @@ model DeputyGrant {
 
 /**
  * Explicit teacher -> supervisor assignment inside ONE school.
- *
  * A teacher has at most ONE current supervisor (@@unique on teacherId),
  * so "changing the supervisor" is a single-row replace: the former
  * supervisor loses access automatically unless ANOTHER valid grant
@@ -293,13 +343,52 @@ model TeacherSupervisorAssignment {
 
   teacher    User   @relation("TeacherSupervisionTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
   supervisor User   @relation("TeacherSupervisionSupervisor", fields: [supervisorId], references: [id], onDelete: Cascade)
-  deputy     User?   @relation("TeacherSupervisionDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
+  deputy     User?  @relation("TeacherSupervisionDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
   school     School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// Audit anchor — the IT coordinator / admin who performed this
+  /// assignment (null for legacy/imported rows; never null for writes
+  /// through the IT workspace).
+  assignedById String?
+  assignedBy   User?   @relation("TeacherSupervisionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@index([supervisorId])
   @@index([deputyId])
+  @@index([assignedById])
   @@index([schoolId])
   @@map("teacher_supervisor_assignments")
+}
+
+/**
+ * A school-specific teacher self-registration link. The manager-facing
+ * URL carries the RAW token (/register/{token}); the database stores
+ * only its SHA-256 hash (same hash-at-rest policy as the one-time
+ * tokens), so a database leak cannot mint registrations.
+ * Exactly ONE active link per school is enforced by the service layer
+ * (create/regenerate run in a transaction that deactivates the rest).
+ * Revocation is permanent for that link; previously registered teachers
+ * are never affected. Per-link statistics derive from User.
+ * registrationLinkId — no duplicated counters.
+ */
+model RegistrationLink {
+  id        String    @id @default(cuid())
+  schoolId  String
+  tokenHash String    @unique
+  /// Revocation flag — false rejects every new registration attempt.
+  isActive  Boolean   @default(true)
+  /// Optional expiry (null = valid until revoked).
+  expiresAt DateTime?
+  revokedAt DateTime?
+  /// Audit — the manager who generated the link.
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  users  User[]
+
+  @@index([schoolId])
+  @@map("registration_links")
 }
 
 /**
@@ -340,15 +429,32 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
-/* ------------------------------------------------------------------ */
-/* Phase 5 — training academy                                           */
-/*                                                                      */
-/* Tenancy: schoolId null means PLATFORM-WIDE (shared with every        */
-/* school). Only SUPER_ADMIN may create/manage platform-wide records —  */
-/* enforced in the service layer, never trusted from the client.        */
-/* SQLite has no native enums: status/type/category columns are         */
-/* canonical English keys validated with Zod on every write.            */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Phase 5 — training academy
+ */
+/**
+ */
+/**
+ * Tenancy: schoolId null means PLATFORM-WIDE (shared with every
+ */
+/**
+ * school). Only SUPER_ADMIN may create/manage platform-wide records —
+ */
+/**
+ * enforced in the service layer, never trusted from the client.
+ */
+/**
+ * SQLite has no native enums: status/type/category columns are
+ */
+/**
+ * canonical English keys validated with Zod on every write.
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 /**
  * A training program grouping related courses. DRAFT -> PUBLISHED ->
@@ -356,37 +462,41 @@ model PasswordResetToken {
  * reference them (archiving preserves history).
  */
 model TrainingProgram {
-  id            String   @id @default(cuid())
+  id                String   @id @default(cuid())
   /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
-  schoolId      String?
-  nameAr        String
-  nameEn        String?
+  schoolId          String?
+  nameAr            String
+  nameEn            String?
   /// Normalized name for duplicate prevention within the same scope.
-  nameNorm      String
-  descriptionAr String
-  descriptionEn String?
+  nameNorm          String
+  descriptionAr     String
+  descriptionEn     String?
   /// Cover image attachment (optional).
-  coverAttachmentId String? @unique
+  coverAttachmentId String?  @unique
   /// Canonical category key — validated against src/config/training.ts.
-  category      String
+  category          String
   /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
-  status        String   @default("DRAFT")
-  createdById   String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  status            String   @default("DRAFT")
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  school    School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  createdBy User    @relation("ProgramCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  school    School?     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  createdBy User        @relation("ProgramCreator", fields: [createdById], references: [id], onDelete: Restrict)
   cover     Attachment? @relation("ProgramCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
 
   courses      Course[]
   assignments  Assignment[]
-  attachments  Attachment[] @relation("ProgramFiles")
-  /** Phase 8 — certificates issued for completing this program. */
+  attachments  Attachment[]  @relation("ProgramFiles")
+  /**
+   * Phase 8 — certificates issued for completing this program.
+   */
   certificates Certificate[]
-  /** Phase 9 — impact surveys and follow-ups linked to this program. */
-  surveys   Survey[]
-  followUps FollowUp[]
+  /**
+   * Phase 9 — impact surveys and follow-ups linked to this program.
+   */
+  surveys      Survey[]
+  followUps    FollowUp[]
 
   @@index([schoolId])
   @@index([status])
@@ -399,55 +509,55 @@ model TrainingProgram {
  * workflow that requires at least one section and one lesson.
  */
 model Course {
-  id            String   @id @default(cuid())
+  id                        String    @id @default(cuid())
   /// Optional parent program.
-  programId     String?
+  programId                 String?
   /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
-  schoolId      String?
-  titleAr       String
-  titleEn       String?
-  descriptionAr String
-  descriptionEn String?
+  schoolId                  String?
+  titleAr                   String
+  titleEn                   String?
+  descriptionAr             String
+  descriptionEn             String?
   /// Cover image attachment (optional).
-  coverAttachmentId String? @unique
+  coverAttachmentId         String?   @unique
   /// Canonical category key — validated against src/config/training.ts.
-  category      String
+  category                  String
   /// BEGINNER | INTERMEDIATE | ADVANCED — optional difficulty level.
-  level         String?
+  level                     String?
   /// Estimated effort in hours (display only).
-  estimatedHours Int?
+  estimatedHours            Int?
   /// Unified creation page — canonical delivery type:
   /// VIRTUAL_LIVE | RECORDED | IN_PERSON | OTHER.
   /// Null = legacy course created before the unified page (no badge).
-  trainingType  String?
+  trainingType              String?
   /// Unified creation page — subcategory label (Arabic, validated
   /// against the fixed list in src/lib/supervision/training.ts).
   /// Null = not configured.
-  subcategory   String?
+  subcategory               String?
   /// Unified creation page — scheduled training date (null = unscheduled).
-  scheduledAt   DateTime?
+  scheduledAt               DateTime?
   /// Zoom / Google Meet link for live trainings (https, server-validated).
-  meetingUrl    String?
+  meetingUrl                String?
   /// YouTube link accompanying the training (https YouTube host,
   /// server-validated). Displayed to enrolled teachers on the hub.
-  youtubeUrl    String?
+  youtubeUrl                String?
   /// Supervisor's message / instructions to teachers — rendered on the
   /// learning hub above the lessons (null = none).
-  supervisorInstructionsAr String?
+  supervisorInstructionsAr  String?
   /// Mandatory-learning policy: sequential lesson unlocking (on by default).
-  requireSequentialLessons Boolean @default(true)
+  requireSequentialLessons  Boolean   @default(true)
   /// Watched-percentage threshold (50..100) that completes a VIDEO lesson.
-  lessonCompletionThreshold Int @default(95)
+  lessonCompletionThreshold Int       @default(95)
   /// Instructor / responsible user (optional, must belong to the
   /// course's school when set — service-layer enforced).
-  instructorId  String?
+  instructorId              String?
   /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
-  status        String   @default("DRAFT")
+  status                    String    @default("DRAFT")
   /// Set on the first successful publish; kept while archived.
-  publishedAt   DateTime?
-  createdById   String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  publishedAt               DateTime?
+  createdById               String
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   program    TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
   school     School?          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
@@ -455,22 +565,31 @@ model Course {
   createdBy  User             @relation("CourseCreator", fields: [createdById], references: [id], onDelete: Restrict)
   cover      Attachment?      @relation("CourseCover", fields: [coverAttachmentId], references: [id], onDelete: SetNull)
 
-  watchStates LessonWatchState[]
-  sections    CourseSection[]
-  attachments Attachment[]       @relation("CourseFiles")
-  enrollments CourseEnrollment[]
-  /** Batch 1 — learning progress, completions and course comments. */
+  watchStates    LessonWatchState[]
+  sections       CourseSection[]
+  attachments    Attachment[]           @relation("CourseFiles")
+  enrollments    CourseEnrollment[]
+  /**
+   * Batch 1 — learning progress, completions and course comments.
+   */
   lessonProgress CourseLessonProgress[]
   completions    CourseCompletion[]
   comments       CourseComment[]
-  assignments Assignment[]
-  /** Phase 6 — assessments bound to this course (optional binding). */
-  assessments Assessment[]
-  /** Phase 8 — certificates issued for completing this course. */
-  certificates Certificate[]
-  /** Phase 9 — impact surveys and follow-ups linked to this course. */
-  surveys   Survey[]
-  followUps FollowUp[]
+  assignments    Assignment[]
+  /**
+   * Phase 6 — assessments bound to this course (optional binding).
+   */
+  assessments    Assessment[]
+  /**
+   * Phase 8 — certificates issued for completing this course.
+   */
+  certificates   Certificate[]
+  /**
+   * Phase 9 — impact surveys and follow-ups linked to this course.
+   */
+  surveys        Survey[]
+  followUps      FollowUp[]
+
   @@index([schoolId])
   @@index([status])
   @@index([programId])
@@ -492,11 +611,15 @@ model CourseSection {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  course  Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessons CourseLesson[]
-  /** Phase 7 — assignments linked to this section. */
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     CourseLesson[]
+  /**
+   * Phase 7 — assignments linked to this section.
+   */
   assignments Assignment[]
-  /** Phase 9 — surveys linked to lessons of this section (no direct link). */
+  /**
+   * Phase 9 — surveys linked to lessons of this section (no direct link).
+   */
 
   @@index([courseId])
   @@map("course_sections")
@@ -504,44 +627,50 @@ model CourseSection {
 
 /**
  * A lesson inside one section. Types:
- *   TEXT          — plain-text body rendered safely (never HTML)
- *   VIDEO         — uploaded video file (Attachment reference)
- *   EXTERNAL_VIDEO — https URL to an allow-listed external host
- *   RESOURCE      — downloadable file (Attachment reference)
+ * TEXT          — plain-text body rendered safely (never HTML)
+ * VIDEO         — uploaded video file (Attachment reference)
+ * EXTERNAL_VIDEO — https URL to an allow-listed external host
+ * RESOURCE      — downloadable file (Attachment reference)
  */
 model CourseLesson {
-  id          String   @id @default(cuid())
-  sectionId   String
-  titleAr     String
-  description String?
+  id              String   @id @default(cuid())
+  sectionId       String
+  titleAr         String
+  description     String?
   /// TEXT | VIDEO | EXTERNAL_VIDEO | RESOURCE — validated with Zod.
-  type        String
+  type            String
   /// Plain-text body for TEXT lessons (safe rendering, no HTML).
-  content     String?
+  content         String?
   /// External video URL for EXTERNAL_VIDEO lessons (validated https).
-  videoUrl    String?
+  videoUrl        String?
   /// Primary media attachment for VIDEO / RESOURCE lessons (one-to-one).
-  attachmentId String? @unique
-  orderIndex  Int
+  attachmentId    String?  @unique
+  orderIndex      Int
   /// Draft lessons stay invisible to teachers even in published courses.
-  isPublished Boolean  @default(false)
+  isPublished     Boolean  @default(false)
   /// Media duration in seconds — captured from the instructor's browser
   /// when the lesson is saved. Powers the server-validated watch
   /// threshold; null = unknown (threshold falls back to client metadata).
   durationSeconds Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   watchStates LessonWatchState[]
-  section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  attachment  Attachment?   @relation("LessonPrimaryAttachment", fields: [attachmentId], references: [id], onDelete: SetNull)
-  attachments Attachment[]  @relation("LessonFiles")
-  /** Batch 1 — per-teacher completion of this lesson. */
-  progress CourseLessonProgress[]
-  /** Phase 7 — assignments linked to this lesson. */
+  section     CourseSection          @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  attachment  Attachment?            @relation("LessonPrimaryAttachment", fields: [attachmentId], references: [id], onDelete: SetNull)
+  attachments Attachment[]           @relation("LessonFiles")
+  /**
+   * Batch 1 — per-teacher completion of this lesson.
+   */
+  progress    CourseLessonProgress[]
+  /**
+   * Phase 7 — assignments linked to this lesson.
+   */
   assignments Assignment[]
-  /** Phase 9 — surveys linked to this lesson. */
-  surveys Survey[]
+  /**
+   * Phase 9 — surveys linked to this lesson.
+   */
+  surveys     Survey[]
 
   @@index([sectionId])
   @@map("course_lessons")
@@ -576,16 +705,16 @@ model Attachment {
   uploadedById String
   createdAt    DateTime @default(now())
 
-  course   Course?          @relation("CourseFiles", fields: [courseId], references: [id], onDelete: Cascade)
-  lesson   CourseLesson?    @relation("LessonFiles", fields: [lessonId], references: [id], onDelete: Cascade)
-  program  TrainingProgram? @relation("ProgramFiles", fields: [programId], references: [id], onDelete: Cascade)
+  course           Course?          @relation("CourseFiles", fields: [courseId], references: [id], onDelete: Cascade)
+  lesson           CourseLesson?    @relation("LessonFiles", fields: [lessonId], references: [id], onDelete: Cascade)
+  program          TrainingProgram? @relation("ProgramFiles", fields: [programId], references: [id], onDelete: Cascade)
   /// Reverse links for cover references (no FK — the FK lives on the
   /// cover owner side).
-  courseCoverFor Course? @relation("CourseCover")
-  programCoverFor TrainingProgram? @relation("ProgramCover")
+  courseCoverFor   Course?          @relation("CourseCover")
+  programCoverFor  TrainingProgram? @relation("ProgramCover")
   /// Reverse link for the lesson primary-media reference.
-  primaryForLesson CourseLesson? @relation("LessonPrimaryAttachment")
-  uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  primaryForLesson CourseLesson?    @relation("LessonPrimaryAttachment")
+  uploadedBy       User             @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
 
   @@index([courseId])
   @@index([lessonId])
@@ -615,19 +744,43 @@ model CourseEnrollment {
   @@map("course_enrollments")
 }
 
-/* ------------------------------------------------------------------ */
-/* Phase 6 — exam engine, assessments & learning progress               */
-/*                                                                      */
-/* Tenancy mirrors the training academy: schoolId null means            */
-/* PLATFORM-WIDE (visible to every school); only SUPER_ADMIN may        */
-/* create platform-wide assessments. SQLite has no native enums:        */
-/* status/type columns are canonical English keys validated with Zod    */
-/* on every write (src/lib/validation/assessment.ts).                   */
-/*                                                                      */
-/* SECURITY: the answer key lives ONLY in AssessmentQuestion rows and   */
-/* never crosses the RSC boundary before a submission is finalized —    */
-/* the service layer strips it from every teacher-facing projection.    */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Phase 6 — exam engine, assessments & learning progress
+ */
+/**
+ */
+/**
+ * Tenancy mirrors the training academy: schoolId null means
+ */
+/**
+ * PLATFORM-WIDE (visible to every school); only SUPER_ADMIN may
+ */
+/**
+ * create platform-wide assessments. SQLite has no native enums:
+ */
+/**
+ * status/type columns are canonical English keys validated with Zod
+ */
+/**
+ * on every write (src/lib/validation/assessment.ts).
+ */
+/**
+ */
+/**
+ * SECURITY: the answer key lives ONLY in AssessmentQuestion rows and
+ */
+/**
+ * never crosses the RSC boundary before a submission is finalized —
+ */
+/**
+ * the service layer strips it from every teacher-facing projection.
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 /**
  * An assessment (quiz/exam) optionally bound to one training course.
@@ -636,37 +789,37 @@ model CourseEnrollment {
  * fits the total points (service-layer guard on every publish).
  */
 model Assessment {
-  id             String   @id @default(cuid())
+  id               String    @id @default(cuid())
   /// Owning school tenant. Null = platform-wide (SUPER_ADMIN only).
-  schoolId       String?
+  schoolId         String?
   /// Optional binding to a published training course (same tenant).
-  courseId       String?
-  titleAr        String
-  titleEn        String?
-  instructionsAr String
-  instructionsEn String?
+  courseId         String?
+  titleAr          String
+  titleEn          String?
+  instructionsAr   String
+  instructionsEn   String?
   /// DRAFT | PUBLISHED | ARCHIVED — validated with Zod on write.
-  status         String   @default("DRAFT")
+  status           String    @default("DRAFT")
   /// Points required to pass (validated <= total question points).
-  passingScore   Int
+  passingScore     Int
   /// Unified creation page — the supervisor-chosen PASS PERCENTAGE
   /// (20..100, default 60). When set, publishing recomputes passingScore
   /// from it (ceil(maxScore × pct / 100)) so the threshold follows the
   /// question set. Null = legacy points-based configuration (untouched).
-  passingPercent Int?
+  passingPercent   Int?
   /// Time limit in minutes (null = untimed). Server-enforced deadline.
   timeLimitMinutes Int?
   /// Maximum attempts per teacher (null = unlimited).
-  attemptLimit   Int?
+  attemptLimit     Int?
   /// Availability window (null bounds = always available).
-  availableFrom  DateTime?
-  availableUntil DateTime?
+  availableFrom    DateTime?
+  availableUntil   DateTime?
   /// Denormalized sum of question points — recomputed by the service
   /// layer inside the same transaction as every question mutation.
-  maxScore       Int      @default(0)
-  createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  maxScore         Int       @default(0)
+  createdById      String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   school    School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
@@ -685,32 +838,32 @@ model Assessment {
  * One question inside an assessment. Options and the correct-answer key
  * are stored as JSON strings (SQLite has no native JSON type) and are
  * always written through the Zod-validated service layer:
- *   SINGLE_CHOICE   options + answerKey {optionId}
- *   MULTIPLE_CHOICE options + answerKey {optionIds: [...]}
- *   TRUE_FALSE      no options + answerKey {value: boolean}
- *   SHORT_ANSWER    no auto grading — model answer helps the reviewer;
- *                   the attempt lands in NEEDS_REVIEW until reviewed.
+ * SINGLE_CHOICE   options + answerKey {optionId}
+ * MULTIPLE_CHOICE options + answerKey {optionIds: [...]}
+ * TRUE_FALSE      no options + answerKey {value: boolean}
+ * SHORT_ANSWER    no auto grading — model answer helps the reviewer;
+ * the attempt lands in NEEDS_REVIEW until reviewed.
  */
 model AssessmentQuestion {
-  id           String  @id @default(cuid())
-  assessmentId String
+  id            String   @id @default(cuid())
+  assessmentId  String
   /// SINGLE_CHOICE | MULTIPLE_CHOICE | TRUE_FALSE | SHORT_ANSWER
-  type         String
-  textAr       String
-  textEn       String?
-  orderIndex   Int
+  type          String
+  textAr        String
+  textEn        String?
+  orderIndex    Int
   /// Points awarded for a fully correct answer (1..100).
-  points       Int
-  isRequired   Boolean @default(true)
+  points        Int
+  isRequired    Boolean  @default(true)
   /// JSON [{id, textAr}] — choice types only.
-  optionsJson  String?
+  optionsJson   String?
   /// SERVER-ONLY answer key JSON — never serialized to the client
   /// before the attempt is finalized.
   answerKeyJson String?
   /// Optional feedback shown after submission.
-  explanation  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  explanation   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
@@ -720,46 +873,45 @@ model AssessmentQuestion {
 
 /**
  * One teacher attempt. Lifecycle:
- *   IN_PROGRESS (answers draft autosaved) -> EXPIRED (deadline passed,
- *   never submitted — no invented grade) -> on submit either
- *   NEEDS_REVIEW (contains short-answer questions) or graded atomically
- *   into PASSED / FAILED. Finalized rows are immutable (service guard).
- *
+ * IN_PROGRESS (answers draft autosaved) -> EXPIRED (deadline passed,
+ * never submitted — no invented grade) -> on submit either
+ * NEEDS_REVIEW (contains short-answer questions) or graded atomically
+ * into PASSED / FAILED. Finalized rows are immutable (service guard).
  * Concurrency: submission flips the row with a conditional
  * updateMany(status = IN_PROGRESS) inside a transaction, so double
  * submissions cannot double-grade; attempt limits are re-checked inside
  * the start/submit transactions (SQLite serializes writers).
  */
 model AssessmentAttempt {
-  id           String    @id @default(cuid())
-  assessmentId String
-  userId       String
+  id               String    @id @default(cuid())
+  assessmentId     String
+  userId           String
   /// IN_PROGRESS | EXPIRED | NEEDS_REVIEW | PASSED | FAILED
-  status       String    @default("IN_PROGRESS")
-  startedAt    DateTime  @default(now())
+  status           String    @default("IN_PROGRESS")
+  startedAt        DateTime  @default(now())
   /// Server-side deadline for timed assessments (startedAt + limit).
-  deadlineAt   DateTime?
-  submittedAt  DateTime?
+  deadlineAt       DateTime?
+  submittedAt      DateTime?
   /// JSON [{questionId, choice?/bool?/text?}] — autosaved draft, then
   /// the graded submission snapshot.
-  answersJson  String?
+  answersJson      String?
   /// Points earned on auto-gradable questions (set at submission).
-  objectiveScore Int     @default(0)
+  objectiveScore   Int       @default(0)
   /// Final score after any manual review (null until finalized).
-  earnedScore  Int?
+  earnedScore      Int?
   /// Snapshot of the graded question set's total points (set at submit).
-  maxScore     Int?
+  maxScore         Int?
   /// 0..100 rounded integer (set when finalized).
-  percentage   Int?
-  passed       Boolean?
+  percentage       Int?
+  passed           Boolean?
   /// Manual review audit (short-answer grading).
-  reviewedById String?
-  reviewedAt   DateTime?
+  reviewedById     String?
+  reviewedAt       DateTime?
   /// JSON [{questionId, points}] — per-question manual review scores
   /// (audit trail + per-question feedback after review).
   reviewScoresJson String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   user       User       @relation("AttemptOwner", fields: [userId], references: [id], onDelete: Restrict)
@@ -779,23 +931,23 @@ model AssessmentAttempt {
 // ─────────────────────────────────────────────────────────────────
 
 model Assignment {
-  id            String   @id @default(cuid())
-  schoolId      String
-  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   // Optional content binding — every linked row must belong to the
   // same school and must not be archived (validated in the service).
-  programId     String?
-  program       TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
-  courseId      String?
-  course        Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  sectionId     String?
-  section       CourseSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  lessonId      String?
-  lesson        CourseLesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  programId String?
+  program   TrainingProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courseId  String?
+  course    Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  sectionId String?
+  section   CourseSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  lessonId  String?
+  lesson    CourseLesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
 
-  createdById   String
-  createdBy     User     @relation("CreatedAssignments", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("CreatedAssignments", fields: [createdById], references: [id])
 
   titleAr       String
   titleEn       String?
@@ -803,7 +955,7 @@ model Assignment {
   descriptionEn String?
 
   // DRAFT | PUBLISHED | CLOSED | ARCHIVED (ARCHIVED is terminal)
-  status        String   @default("DRAFT")
+  status String @default("DRAFT")
 
   // Audience targeting — ids validated server-side, always in-school.
   // ALL_TEACHERS | BRANCHES | TEACHERS
@@ -813,22 +965,24 @@ model Assignment {
 
   // Deadlines and late policy. Server-side only; the client is never
   // trusted for any date decision.
-  dueAt     DateTime
+  dueAt       DateTime
   publishedAt DateTime?
-  allowLate Boolean   @default(false)
-  lateUntil DateTime?
+  allowLate   Boolean   @default(false)
+  lateUntil   DateTime?
 
   // Sum of rubric criterion maxPoints — recomputed on every rubric edit.
-  totalPoints Int      @default(0)
+  totalPoints Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   criteria    AssignmentRubricCriterion[]
   submissions AssignmentSubmission[]
-  /** Phase 9 — surveys and follow-ups linked to this assignment. */
-  surveys   Survey[]
-  followUps FollowUp[]
+  /**
+   * Phase 9 — surveys and follow-ups linked to this assignment.
+   */
+  surveys     Survey[]
+  followUps   FollowUp[]
 
   @@index([schoolId, status])
   @@index([dueAt])
@@ -859,7 +1013,7 @@ model AssignmentSubmission {
   schoolId     String
 
   // DRAFT | SUBMITTED | UNDER_REVIEW | RETURNED | GRADED
-  status       String @default("DRAFT")
+  status String @default("DRAFT")
 
   responseText String?
 
@@ -891,25 +1045,25 @@ model SubmissionFile {
   submissionId String
   submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   // Server-generated key (UUID under dated folders) — never user input.
-  storageKey   String @unique
+  storageKey   String               @unique
   fileName     String
   mimeType     String
   sizeBytes    Int
-  createdAt    DateTime @default(now())
+  createdAt    DateTime             @default(now())
 
   @@map("submission_files")
 }
 
 model SubmissionRevision {
-  id           String               @id @default(cuid())
-  submissionId String
-  submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  id            String               @id @default(cuid())
+  submissionId  String
+  submission    AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   revisionIndex Int
   // Snapshot of the PREVIOUS version taken at resubmit time.
-  responseText String?
+  responseText  String?
   fileNamesJson String?
-  note         String?
-  createdAt    DateTime @default(now())
+  note          String?
+  createdAt     DateTime             @default(now())
 
   @@unique([submissionId, revisionIndex])
   @@map("submission_revisions")
@@ -922,8 +1076,8 @@ model RubricScore {
   criterionId  String
   criterion    AssignmentRubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
   points       Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
 
   @@unique([submissionId, criterionId])
   @@map("rubric_scores")
@@ -963,7 +1117,7 @@ model Certificate {
   certificateNumber String @unique
   /// Public verification code (16-char Crockford base32, stored
   /// WITHOUT dashes) — unique, collision-resistant, safe to print.
-  verificationCode String @unique
+  verificationCode  String @unique
 
   titleAr       String
   titleEn       String?
@@ -999,21 +1153,24 @@ model Certificate {
   /// server-side at issuance (audit of WHAT qualified the teacher).
   criteriaSnapshotJson String?
 
-
   /// School-signatory snapshot captured at ISSUANCE time from the active
   /// SCHOOL_MANAGER user of the issuing school (server-resolved via
   /// src/lib/certificates/signatory.ts — never client input, never
   /// hardcoded). Null = legacy certificate or no manager existed then.
   schoolSignatoryName  String?
   schoolSignatoryTitle String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  events CertificateEvent[]
-  /** Phase 9 — impact surveys linked to this certificate. */
-  surveys Survey[]
-  /** Batch 1 — the course completion this certificate was auto-issued for. */
-  completionRecord CourseCompletion? @relation("CourseCompletionCertificate")
+  events           CertificateEvent[]
+  /**
+   * Phase 9 — impact surveys linked to this certificate.
+   */
+  surveys          Survey[]
+  /**
+   * Batch 1 — the course completion this certificate was auto-issued for.
+   */
+  completionRecord CourseCompletion?  @relation("CourseCompletionCertificate")
 
   /// One completion certificate per teacher per qualifying content.
   @@unique([teacherId, courseId])
@@ -1033,34 +1190,63 @@ model CertificateEvent {
   certificateId String
   certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
   /// ISSUED | REVOKED — canonical key, validated on write.
-  type String
+  type          String
   /// Actor that performed the action (null = system).
-  actorId   String?
-  actor     User?   @relation("CertificateEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId       String?
+  actor         User?       @relation("CertificateEventActor", fields: [actorId], references: [id], onDelete: SetNull)
   /// Role key snapshot at event time.
-  actorRole String?
+  actorRole     String?
   /// Free-text note (the revocation reason is duplicated here).
-  note      String?
-  createdAt DateTime @default(now())
+  note          String?
+  createdAt     DateTime    @default(now())
 
   @@index([certificateId])
   @@map("certificate_events")
 }
-/* ------------------------------------------------------------------ */
-/* Phase 9 — impact surveys, follow-up & outcome measurement             */
-/*                                                                        */
-/* Tenancy: surveys and follow-ups are ALWAYS school-owned (schoolId     */
-/* NOT NULL) — SUPER_ADMIN has no operational write path, mirroring      */
-/* the Phase 7/8 rule. Statuses/audience modes are canonical English     */
-/* keys validated with Zod on every write (SQLite has no native enums).  */
-/*                                                                        */
-/* PRIVACY: anonymous surveys NEVER persist respondent identity — the    */
-/* respondentId stays null for the whole row lifetime, individual        */
-/* responses are never exposed, and small-group aggregates (fewer than   */
-/* the configured threshold) are suppressed. Where pre/post linking is   */
-/* explicitly enabled, only a pseudonymous SHA-256 key is stored — it    */
-/* cannot be reversed to a user identity from the database alone.        */
-/* ------------------------------------------------------------------ */
+
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Phase 9 — impact surveys, follow-up & outcome measurement
+ */
+/**
+ */
+/**
+ * Tenancy: surveys and follow-ups are ALWAYS school-owned (schoolId
+ */
+/**
+ * NOT NULL) — SUPER_ADMIN has no operational write path, mirroring
+ */
+/**
+ * the Phase 7/8 rule. Statuses/audience modes are canonical English
+ */
+/**
+ * keys validated with Zod on every write (SQLite has no native enums).
+ */
+/**
+ */
+/**
+ * PRIVACY: anonymous surveys NEVER persist respondent identity — the
+ */
+/**
+ * respondentId stays null for the whole row lifetime, individual
+ */
+/**
+ * responses are never exposed, and small-group aggregates (fewer than
+ */
+/**
+ * the configured threshold) are suppressed. Where pre/post linking is
+ */
+/**
+ * explicitly enabled, only a pseudonymous SHA-256 key is stored — it
+ */
+/**
+ * cannot be reversed to a user identity from the database alone.
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 /**
  * An impact survey (questionnaire). DRAFT -> PUBLISHED -> CLOSED ->
@@ -1105,7 +1291,7 @@ model Survey {
 
   /// PRE_TRAINING | AFTER_TRAINING | APPLICATION_FOLLOWUP | null
   /// (null = a general survey with no impact-evaluation stage).
-  stage String?
+  stage        String?
   /// Shared pairing code joining a pre-training survey with its
   /// after-training twin (e.g. "P9-PAIR-007"). Required for stage
   /// comparisons; never secret — it only names the pair.
@@ -1120,7 +1306,7 @@ model Survey {
   /// Anonymous surveys store NO respondent identity (respondentId stays
   /// null forever). Individual responses and drafts are unavailable —
   /// the create form explains this trade-off before enabling it.
-  anonymous Boolean @default(false)
+  anonymous              Boolean @default(false)
   /// Allow more than one submission from the same respondent (identified
   /// surveys only; anonymous duplicates cannot technically be prevented
   /// without identity — surfaced as an explicit limitation in the UI).
@@ -1129,18 +1315,18 @@ model Survey {
   /// SHA-256 respondentKey derived from linkPairCode + user id. The key
   /// never appears in UI payloads and cannot be reversed without both
   /// the database and the source pepper.
-  linkResponsesEnabled Boolean @default(false)
+  linkResponsesEnabled   Boolean @default(false)
 
   // DRAFT | PUBLISHED | CLOSED | ARCHIVED (ARCHIVED is terminal)
   status String @default("DRAFT")
 
   /// Response window — null opensAt = open on publish, null closesAt
   /// = open until manually closed. Server-enforced on every submission.
-  opensAt  DateTime?
-  closesAt DateTime?
+  opensAt     DateTime?
+  closesAt    DateTime?
   publishedAt DateTime?
-  closedAt   DateTime?
-  archivedAt DateTime?
+  closedAt    DateTime?
+  archivedAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1148,7 +1334,9 @@ model Survey {
   questions SurveyQuestion[]
   responses SurveyResponse[]
   events    SurveyEvent[]
-  /** Phase 9 — follow-ups that reference this survey. */
+  /**
+   * Phase 9 — follow-ups that reference this survey.
+   */
   followUps FollowUp[]
 
   @@index([schoolId, status])
@@ -1177,15 +1365,15 @@ model SurveyQuestion {
 
   /// SINGLE_CHOICE | MULTI_CHOICE | RATING | LIKERT | SHORT_TEXT |
   /// LONG_TEXT | YES_NO — validated with Zod on every write.
-  type String
+  type     String
   /// Required questions must carry an answer at submission time.
   required Boolean @default(false)
 
   /// JSON string[] — 2..10 options for SINGLE_CHOICE / MULTI_CHOICE.
   optionsJson String?
   /// RATING scale bounds (1..10); defaults to 1..5 when null.
-  minScore Int?
-  maxScore Int?
+  minScore    Int?
+  maxScore    Int?
 
   answers SurveyAnswer[]
 
@@ -1198,7 +1386,7 @@ model SurveyQuestion {
  * only) save progress; SUBMITTED rows are immutable (no edit path —
  * re-submission only when the survey explicitly allows multiple
  * responses). For anonymous surveys respondentId is null FOREVER — the
- /// row is created directly in SUBMITTED state.
+ * /// row is created directly in SUBMITTED state.
  */
 model SurveyResponse {
   id       String @id @default(cuid())
@@ -1217,7 +1405,7 @@ model SurveyResponse {
   respondentKey String?
 
   /// DRAFT | SUBMITTED
-  status      String  @default("DRAFT")
+  status      String    @default("DRAFT")
   submittedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -1240,11 +1428,11 @@ model SurveyResponse {
  * against its question definition (type, scale bounds, option set).
  */
 model SurveyAnswer {
-  id         String          @id @default(cuid())
+  id         String         @id @default(cuid())
   responseId String
-  response   SurveyResponse  @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
   questionId String
-  question   SurveyQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question   SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   valueNumber         Int?
   valueText           String?
@@ -1266,10 +1454,10 @@ model SurveyEvent {
   survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
 
   /// CREATED | UPDATED | PUBLISHED | CLOSED | ARCHIVED
-  type String
+  type      String
   /// Actor that performed the action (null = system).
   actorId   String?
-  actor     User?   @relation("SurveyEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actor     User?    @relation("SurveyEventActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorRole String?
   note      String?
   createdAt DateTime @default(now())
@@ -1303,10 +1491,10 @@ model FollowUp {
   createdById String
   createdBy   User   @relation("FollowUpCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
-  titleAr    String
-  purposeAr  String?
+  titleAr        String
+  purposeAr      String?
   /// The follow-up session date.
-  followUpDate DateTime
+  followUpDate   DateTime
   /// Scheduled next follow-up (date-based workflow, optional).
   nextFollowUpAt DateTime?
 
@@ -1324,25 +1512,27 @@ model FollowUp {
   assignment   Assignment?      @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
   // Internal supervisor notes — never exposed to TEACHER role.
-  observationAr  String?
-  progressAr     String?
-  challengesAr   String?
-  supportNeedsAr String?
+  observationAr     String?
+  progressAr        String?
+  challengesAr      String?
+  supportNeedsAr    String?
   /// Included in the teacher-shared view (explicitly shared content).
   recommendationsAr String?
   /// Master switch: teacher can see the shared subset of this record.
   sharedWithTeacher Boolean @default(false)
 
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  /** Phase 10 — soft-archive timestamp (null = active workflow). The
+  /**
+   * Phase 10 — soft-archive timestamp (null = active workflow). The
    * record's status is never altered by archiving; active lists filter
-   * on archivedAt: null so archived history stays out of live queues. */
+   * on archivedAt: null so archived history stays out of live queues.
+   */
   archivedAt   DateTime?
   archivedById String?
-  archiver     User?   @relation("FollowUpArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
+  archiver     User?     @relation("FollowUpArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
 
   events FollowUpEvent[]
 
@@ -1365,7 +1555,7 @@ model FollowUp {
  * assessments, assignments) rely on this table as their archive audit.
  */
 model ArchiveEvent {
-  id String @id @default(cuid())
+  id       String  @id @default(cuid())
   /// Owning school tenant. Null = platform-wide content (schoolId null
   /// programs/courses/assessments) touched by SUPER_ADMIN.
   schoolId String?
@@ -1375,11 +1565,11 @@ model ArchiveEvent {
   entityType String
   entityId   String
   /// ARCHIVED | RESTORED
-  action String
+  action     String
 
-  actorId   String?
-  actor     User?   @relation("ArchiveEventActor", fields: [actorId], references: [id], onDelete: SetNull)
-  actorRole String?
+  actorId     String?
+  actor       User?    @relation("ArchiveEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole   String?
   /// Human-readable record title snapshot at event time.
   entityTitle String?
   note        String?
@@ -1401,9 +1591,9 @@ model FollowUpEvent {
   followUp   FollowUp @relation(fields: [followUpId], references: [id], onDelete: Cascade)
 
   /// CREATED | UPDATED | STATUS_CHANGED | SHARING_CHANGED
-  type String
+  type      String
   actorId   String?
-  actor     User?   @relation("FollowUpEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actor     User?    @relation("FollowUpEventActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorRole String?
   note      String?
   createdAt DateTime @default(now())
@@ -1440,26 +1630,26 @@ model FollowUpEvent {
  * in the service layer and API routes).
  */
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation("NotificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("NotificationOwner", fields: [userId], references: [id], onDelete: Cascade)
 
   /// Canonical event key (e.g. ASSIGNMENT_PUBLISHED) — see
   /// src/config/notifications.ts for the full list.
-  type      String
+  type     String
   /// ASSIGNMENTS | ASSESSMENTS | COURSES | SURVEYS | FOLLOWUPS |
   /// CERTIFICATES | ACCOUNT | PLATFORM — drives preference filtering.
-  category  String
+  category String
 
-  titleAr   String
-  bodyAr    String
-  titleEn   String?
-  bodyEn    String?
+  titleAr String
+  bodyAr  String
+  titleEn String?
+  bodyEn  String?
 
   /// Related resource discriminator (e.g. "Assignment") + id — used for
   /// dedupe context and future deep-links; never trusted for access.
-  resourceType String?
-  resourceId   String?
+  resourceType   String?
+  resourceId     String?
   /// Validated INTERNAL destination (starts with "/") or null.
   destinationUrl String?
 
@@ -1468,10 +1658,10 @@ model Notification {
   emailStatus String?
 
   /// Stable event identifier for idempotency (unique per recipient).
-  eventId   String?
+  eventId String?
 
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@unique([userId, eventId])
   @@index([userId, createdAt])
@@ -1497,13 +1687,13 @@ model NotificationPreference {
   emailEnabled Boolean @default(false)
 
   /// Per-category toggles (in-app + optional email together).
-  assignments Boolean @default(true)
-  assessments Boolean @default(true)
-  courses     Boolean @default(true)
-  surveys     Boolean @default(true)
-  followups   Boolean @default(true)
+  assignments  Boolean @default(true)
+  assessments  Boolean @default(true)
+  courses      Boolean @default(true)
+  surveys      Boolean @default(true)
+  followups    Boolean @default(true)
   certificates Boolean @default(true)
-  platform    Boolean @default(true)
+  platform     Boolean @default(true)
 
   updatedAt DateTime @updatedAt
 
@@ -1512,40 +1702,39 @@ model NotificationPreference {
 
 /**
  * Queue + audit row for ONE outbound email. Lifecycle:
- *   QUEUED -> PROCESSING -> SENT | FAILED
+ * QUEUED -> PROCESSING -> SENT | FAILED
  * with bounded retries (attemptCount/maxAttempts + nextAttemptAt
  * backoff) and optimistic claiming (conditional updateMany on status)
  * so concurrent workers can never double-send the same row.
- *
  * Privacy: subject/template/category are operational metadata; raw
  * message bodies, verification tokens and provider secrets are never
  * stored. Recipient emails are masked on every read path exposed to
  * the UI (local-part asterisked).
  */
 model EmailDelivery {
-  id         String   @id @default(cuid())
-  toEmail    String
-  toUserId   String?
-  user       User?    @relation("EmailDeliveryOwner", fields: [toUserId], references: [id], onDelete: SetNull)
+  id       String  @id @default(cuid())
+  toEmail  String
+  toUserId String?
+  user     User?   @relation("EmailDeliveryOwner", fields: [toUserId], references: [id], onDelete: SetNull)
 
-  subject    String
+  subject        String
   /// Template key (e.g. "assignment-published") — see templates.ts.
-  template   String
+  template       String
   /// ACCOUNT (security/account mail) or a Notification category.
-  category   String   @default("ACCOUNT")
+  category       String  @default("ACCOUNT")
   /// Owning school tenant when the mail is school-scoped (null =
   /// platform/account mail). Used for school-scoped delivery health.
-  schoolId   String?
+  schoolId       String?
   notificationId String?
 
   /// QUEUED | PROCESSING | SENT | FAILED
-  status     String   @default("QUEUED")
-  provider   String?
+  status            String  @default("QUEUED")
+  provider          String?
   providerMessageId String?
 
-  attemptCount  Int      @default(0)
-  maxAttempts   Int      @default(4)
-  nextAttemptAt DateTime @default(now())
+  attemptCount  Int       @default(0)
+  maxAttempts   Int       @default(4)
+  nextAttemptAt DateTime  @default(now())
   lockedAt      DateTime?
   lockedBy      String?
 
@@ -1558,10 +1747,10 @@ model EmailDelivery {
 
   /// Stable idempotency key — unique at the DB level so the same
   /// logical email can never be queued twice.
-  dedupeKey  String?  @unique
+  dedupeKey String? @unique
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, nextAttemptAt])
   @@index([schoolId, createdAt])
@@ -1619,34 +1808,34 @@ model CourseLessonProgress {
  * rewrite history.
  */
 model CourseCompletion {
-  id             String   @id @default(cuid())
-  courseId       String
-  userId         String
+  id               String   @id @default(cuid())
+  courseId         String
+  userId           String
   /// Tenant snapshot of the course at completion time (null = platform).
-  courseSchoolId String?
+  courseSchoolId   String?
   /// Published-lesson totals at completion time.
   totalLessons     Int
   completedLessons Int
   /// Best percentage among PASSED attempts of the course's published
   /// assessments (null when the course has no assessments).
-  bestPercentage Int?
+  bestPercentage   Int?
   /// Snapshot of course.estimatedHours at completion (the hours the
   /// teacher earns — mirrors the original HTML completion.hours).
-  hours          Float?
-  completedAt    DateTime @default(now())
+  hours            Float?
+  completedAt      DateTime @default(now())
   /// Batch 2 — academic year this completion is counted in (1448هـ style).
-  academicYear   String?
+  academicYear     String?
   /// The certificate auto-issued at completion (null = issuance was
   /// blocked, e.g. no active school manager — it can be issued manually).
-  certificateId String? @unique
+  certificateId    String?  @unique
 
-  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user        User         @relation("CourseCompletionOwner", fields: [userId], references: [id], onDelete: Cascade)
-  certificate Certificate? @relation("CourseCompletionCertificate", fields: [certificateId], references: [id], onDelete: SetNull)
+  course        Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user          User         @relation("CourseCompletionOwner", fields: [userId], references: [id], onDelete: Cascade)
+  certificate   Certificate? @relation("CourseCompletionCertificate", fields: [certificateId], references: [id], onDelete: SetNull)
   /// Reviewer who finalized a NEEDS_REVIEW attempt that completed the
   /// course (null for auto-graded completions) — audit anchor.
   certifiedById String?
-  certifiedBy   User?      @relation("CourseCompletionCertifier", fields: [certifiedById], references: [id], onDelete: SetNull)
+  certifiedBy   User?        @relation("CourseCompletionCertifier", fields: [certifiedById], references: [id], onDelete: SetNull)
 
   @@unique([courseId, userId])
   @@index([userId])
@@ -1678,14 +1867,29 @@ model CourseComment {
   @@map("course_comments")
 }
 
-/* ------------------------------------------------------------------ */
-/* Batch 2 — professional growth ladder, supervisor messaging,          */
-/* yearly training archives and platform settings.                      */
-/*                                                                      */
-/* Level ids are the canonical strings "T0".."T5" (no SQLite enums);    */
-/* promotion rules live in src/config/growth.ts and are enforced by     */
-/* src/lib/growth/service.ts on every write.                            */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Batch 2 — professional growth ladder, supervisor messaging,
+ */
+/**
+ * yearly training archives and platform settings.
+ */
+/**
+ */
+/**
+ * Level ids are the canonical strings "T0".."T5" (no SQLite enums);
+ */
+/**
+ * promotion rules live in src/config/growth.ts and are enforced by
+ */
+/**
+ * src/lib/growth/service.ts on every write.
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 /**
  * One entry of the professional growth ladder. Every classification or
@@ -1779,33 +1983,32 @@ model SystemSetting {
 /**
  * Mandatory video playback state for one teacher and one published
  * lesson — the anti-cheat ledger behind sequential learning.
- *
  * Written ONLY by the server heartbeat (reportWatchProgressAction):
- *   - watchSeconds grows at most with wall-clock time (1x speed is
- *     enforced server-side by capping each delta at the elapsed real
- *     seconds between heartbeats + small network grace),
- *   - maxPositionSeconds can never outrun watchSeconds,
- *   - completion is decided by the SERVER against the course's
- *     lessonCompletionThreshold — the client can never POST "done".
+ * - watchSeconds grows at most with wall-clock time (1x speed is
+ * enforced server-side by capping each delta at the elapsed real
+ * seconds between heartbeats + small network grace),
+ * - maxPositionSeconds can never outrun watchSeconds,
+ * - completion is decided by the SERVER against the course's
+ * lessonCompletionThreshold — the client can never POST "done".
  */
 model LessonWatchState {
-  id          String   @id @default(cuid())
+  id                      String   @id @default(cuid())
   /// Denormalized owning course for fast gating queries.
-  courseId    String
-  lessonId    String
-  userId      String
+  courseId                String
+  lessonId                String
+  userId                  String
   /// Wall-clock-validated watched seconds (monotonic, clamped to media length).
-  watchSeconds          Float @default(0)
+  watchSeconds            Float    @default(0)
   /// Highest legitimately reached position (resume ceiling while watching).
-  maxPositionSeconds    Float @default(0)
+  maxPositionSeconds      Float    @default(0)
   /// Last reported position — the resume point after a refresh.
-  lastPositionSeconds   Float @default(0)
+  lastPositionSeconds     Float    @default(0)
   /// Client-reported media length, used ONLY when the lesson has no
   /// instructor-captured durationSeconds (best-effort fallback).
   reportedDurationSeconds Float?
-  lastHeartbeatAt DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  lastHeartbeatAt         DateTime @default(now())
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   lesson CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)

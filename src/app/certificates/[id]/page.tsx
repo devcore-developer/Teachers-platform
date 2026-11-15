@@ -19,7 +19,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 
-import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import { roleLabel } from "@/lib/auth/roles";
 import { getCertificateView } from "@/lib/certificates/service";
@@ -54,14 +53,6 @@ export default async function CertificateViewPage({
   const result = await getCertificateView(user, id);
   if (!result.ok) return <AccessDenied hint={result.message} />;
   const view = result.data;
-
-  // Training hours snapshot (course.estimatedHours) — read-only extra
-  // fact for the sheet; programs and legacy rows simply show none.
-  const hoursRow = await db.certificate.findUnique({
-    where: { id },
-    select: { course: { select: { estimatedHours: true } } },
-  });
-  const trainingHours = hoursRow?.course?.estimatedHours ?? null;
 
   // Verification URL for the QR code + printed footer (host from
   // request headers; no internal ids beyond the route the viewer is
@@ -128,12 +119,7 @@ export default async function CertificateViewPage({
 
       {/* printable sheet — the ONLY element kept in the print flow */}
       <section id="certificate-print-section">
-        <CertificateSheet
-          view={view}
-          qrDataUrl={qr}
-          verifyUrl={verifyUrl}
-          trainingHours={trainingHours}
-        />
+        <CertificateSheet view={view} qrDataUrl={qr} verifyUrl={verifyUrl} />
       </section>
 
       {/* dedicated print stylesheet — scoped to this page. Removes the
@@ -158,8 +144,6 @@ export default async function CertificateViewPage({
             max-width: none !important;
             width: 100% !important;
           }
-          /* the sheet occupies EXACTLY the printable box (281×194mm at
-             8mm page margins) and can never grow past it — one page. */
           /* shell wrappers may carry min-height:100vh — that alone
              re-creates a second page in print; collapse them. */
           body > div, body > div > div { min-height: 0 !important; height: auto !important; }
@@ -172,29 +156,34 @@ export default async function CertificateViewPage({
             border-radius: 0 !important;
             margin: 0 !important;
           }
-          #certificate-print-area > div:first-child { height: 100% !important; }
+          #certificate-print-area > .cert-frame-outer,
+          #certificate-print-area > .cert-frame-outer > .cert-frame-gold {
+            height: 100% !important;
+          }
           .cert-frame-inner {
             height: 100% !important;
             padding: 10px 26px 8px !important;
             display: flex !important;
             flex-direction: column !important;
           }
-          .cert-head { padding-bottom: 8px !important; gap: 12px !important; }
-          .cert-head img, .cert-head .cert-logo-fallback { height: 44px !important; width: 44px !important; }
-          .cert-title { margin-top: 6px !important; font-size: 30px !important; line-height: 1.25 !important; }
+          .cert-head { padding-bottom: 8px !important; gap: 10px !important; }
+          .cert-head img, .cert-head .cert-logo-fallback { height: 42px !important; width: 42px !important; }
+          .cert-title { font-size: 30px !important; line-height: 1.25 !important; }
           .cert-subtitle-en { margin-top: 2px !important; }
-          .cert-grant { margin-top: 14px !important; }
-          .cert-name { margin-top: 4px !important; font-size: 34px !important; line-height: 1.3 !important; }
-          .cert-underline { margin-top: 8px !important; }
-          /* balance: the free vertical space splits evenly between the
-     statement block and the footer rail (classic certificate rhythm) */
-  .cert-statement { margin-top: auto !important; padding-top: 10px !important; }
-          .cert-desc { margin-top: 4px !important; }
-          .cert-info-grid { margin-top: auto !important; padding-top: 10px !important; gap: 20px !important; }
-          .cert-qr { height: 66px !important; width: 66px !important; }
-          .cert-seal-wrap { bottom: 12px !important; left: 14px !important; }
-          .cert-seal-wrap svg { height: 80px !important; width: 80px !important; }
-          .cert-footline { margin-top: 10px !important; }
+          .cert-grant { margin-top: 10px !important; }
+          .cert-name-box { margin-top: 5px !important; padding-top: 5px !important; padding-bottom: 5px !important; }
+          .cert-name { font-size: 31px !important; line-height: 1.3 !important; }
+          /* balance: free vertical space splits evenly between the
+             statement block, the info strip and the bottom rail */
+          .cert-statement { margin-top: auto !important; padding-top: 8px !important; }
+          .cert-desc { margin-top: 3px !important; }
+          .cert-info-grid { margin-top: auto !important; }
+          .cert-bottom { margin-top: auto !important; padding-top: 10px !important; }
+          .cert-sign-line { margin-top: 6px !important; }
+          .cert-qr { height: 64px !important; width: 64px !important; }
+          .cert-seal { height: 86px !important; width: 86px !important; }
+          .cert-seal img, .cert-seal > div:last-child { height: 32px !important; width: 32px !important; }
+          .cert-footline { margin-top: 6px !important; }
         }
         @page { size: A4 landscape; margin: 8mm; }
       `}</style>
@@ -229,10 +218,16 @@ export default async function CertificateViewPage({
                 {view.verificationCodeGrouped}
               </dd>
             </div>
-            {trainingHours !== null ? (
+            {view.trainingHours !== null ? (
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">الساعات التدريبية</dt>
-                <dd className="font-medium text-slate-700">{trainingHours}</dd>
+                <dd className="font-medium text-slate-700">{view.trainingHours}</dd>
+              </div>
+            ) : null}
+            {view.supervisorName ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">المشرف التربوي الحالي</dt>
+                <dd className="font-medium text-slate-700">{view.supervisorName}</dd>
               </div>
             ) : null}
             <div className="flex justify-between gap-4">

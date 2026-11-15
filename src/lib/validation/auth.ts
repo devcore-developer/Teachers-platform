@@ -49,8 +49,15 @@ export type LoginInput = z.infer<typeof loginSchema>;
 
 export const teacherRegistrationSchema = z
   .object({
-    /** The registration link's school slug — re-validated on the server. */
-    slug: z.string().trim().min(1, "رابط التسجيل غير صالح"),
+    /**
+     * The raw registration-link token — the school association is
+     * resolved SERVER-SIDE from this token (never from client input).
+     */
+    token: z
+      .string({ message: "رابط التسجيل غير صالح" })
+      .trim()
+      .min(1, "رابط التسجيل غير صالح")
+      .max(128, "رابط التسجيل غير صالح"),
     name: nameField,
     email: emailField,
     password: passwordField,
@@ -60,6 +67,20 @@ export const teacherRegistrationSchema = z
       .string()
       .trim()
       .max(64)
+      .optional()
+      .transform((v) => (v && v.length > 0 ? v : undefined)),
+    /** Optional professional record fields (same columns the Excel
+     * import fills) — free text, bounded. */
+    stage: z
+      .string()
+      .trim()
+      .max(80, "المرحلة التعليمية طويلة جدًا")
+      .optional()
+      .transform((v) => (v && v.length > 0 ? v : undefined)),
+    subject: z
+      .string()
+      .trim()
+      .max(80, "التخصص طويل جدًا")
       .optional()
       .transform((v) => (v && v.length > 0 ? v : undefined)),
   })
@@ -103,6 +124,35 @@ export const createOfficeManagerSchema = z.object({
 });
 
 export type CreateOfficeManagerInput = z.infer<typeof createOfficeManagerSchema>;
+
+/**
+ * School-manager provisioning schema (SUPER_ADMIN only). The role is
+ * intentionally ABSENT from the input — the service layer forces it to
+ * SCHOOL_MANAGER, and enforces «one active school manager per school».
+ */
+export const createSchoolManagerSchema = z.object({
+  name: nameField,
+  email: emailField,
+  password: passwordField,
+  schoolId: z.string().trim().min(1, "يجب اختيار المدرسة"),
+});
+
+export type CreateSchoolManagerInput = z.infer<typeof createSchoolManagerSchema>;
+
+/**
+ * IT-coordinator provisioning schema (SUPER_ADMIN only). The role is
+ * intentionally ABSENT from the input — the service layer forces it to
+ * IT_COORDINATOR. The coordinator's two capabilities are scoped to the
+ * selected school.
+ */
+export const createItCoordinatorSchema = z.object({
+  name: nameField,
+  email: emailField,
+  password: passwordField,
+  schoolId: z.string().trim().min(1, "يجب اختيار المدرسة"),
+});
+
+export type CreateItCoordinatorInput = z.infer<typeof createItCoordinatorSchema>;
 
 /* --------------------------- Result helper ------------------------ */
 

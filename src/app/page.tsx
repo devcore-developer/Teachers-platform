@@ -1,9 +1,11 @@
 import { SchoolsMetricsSection } from "@/components/dashboard/schools-metrics";
 import { UsersMetricsSection } from "@/components/dashboard/users-metrics";
+import { RegistrationMetricsSection } from "@/components/dashboard/registration-metrics";
 import { AcademyMetricsSection } from "@/components/dashboard/academy-metrics";
 import { AssessmentMetricsSection } from "@/components/dashboard/assessment-metrics";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { RoleDashboard } from "@/components/dashboard/role-dashboard";
+import { ItCoordinatorDashboard } from "@/components/dashboard/it-coordinator-dashboard";
 import { requireUser } from "@/lib/auth/session";
 import { SupervisorDashboardSection } from "@/app/supervision/dashboard/section";
 
@@ -26,6 +28,9 @@ export const metadata = {
  *                                 pending follow-ups, completions and
  *                                 notifications — now live HERE, and
  *                                 /supervision/dashboard redirects here.
+ *   IT_COORDINATOR             -> the coordinator dashboard (real
+ *                                 school-scoped counters + the two
+ *                                 server-enforced capabilities)
  *   every other role           -> scoped role dashboard (RoleDashboard)
  *
  * Phase 1 mock sections keep their honest "بيانات تجريبية" labels.
@@ -39,6 +44,7 @@ export default async function HomePage() {
         schoolsSlot={
           <div className="space-y-6">
             <SchoolsMetricsSection />
+            <RegistrationMetricsSection />
             <UsersMetricsSection />
             <AcademyMetricsSection />
             <AssessmentMetricsSection />
@@ -57,6 +63,7 @@ export default async function HomePage() {
       <DashboardView
         schoolsSlot={
           <div className="space-y-6">
+            <RegistrationMetricsSection schoolId={user.schoolId} />
             <SchoolsMetricsSection schoolId={user.schoolId} />
             <UsersMetricsSection schoolId={user.schoolId} />
             <AcademyMetricsSection schoolId={user.schoolId} />
@@ -69,6 +76,13 @@ export default async function HomePage() {
 
   if (user.role === "EDUCATIONAL_SUPERVISOR") {
     return <SupervisorDashboardSection />;
+  }
+
+  // IT coordinator — the coordinator's own dashboard (previously this
+  // role fell through to the teacher-style RoleDashboard and the only
+  // way to reach /it/* was typing the URL manually).
+  if (user.role === "IT_COORDINATOR" && user.schoolId) {
+    return <ItCoordinatorDashboard name={user.name} schoolId={user.schoolId} />;
   }
 
   return <RoleDashboard user={user} />;

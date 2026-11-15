@@ -108,12 +108,14 @@ export async function registerAction(
 ): Promise<AuthFormState> {
   const result = await registerTeacher(
     {
-      slug: String(formData.get("slug") ?? ""),
+      token: String(formData.get("token") ?? ""),
       name: String(formData.get("name") ?? ""),
       email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
       confirmPassword: String(formData.get("confirmPassword") ?? ""),
       branchId: String(formData.get("branchId") ?? ""),
+      stage: String(formData.get("stage") ?? ""),
+      subject: String(formData.get("subject") ?? ""),
     },
     { appBaseUrl: await appBaseUrl() }
   );

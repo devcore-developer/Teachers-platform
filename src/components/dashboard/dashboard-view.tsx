@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 
@@ -24,12 +25,17 @@ interface DashboardViewProps {
   schoolsSlot?: React.ReactNode;
 }
 
-const todayLabel = new Intl.DateTimeFormat("ar-EG", {
+/**
+ * The formatter is created once at module scope (no `new Date()` here),
+ * so server and client never produce different text. The label itself
+ * is computed on the client after mount to avoid hydration mismatch.
+ */
+const todayFormatter = new Intl.DateTimeFormat("ar-EG", {
   weekday: "long",
   day: "numeric",
   month: "long",
   year: "numeric",
-}).format(new Date());
+});
 
 /**
  * The dashboard: overview statistics, training progress visualization,
@@ -41,6 +47,13 @@ const todayLabel = new Intl.DateTimeFormat("ar-EG", {
 export function DashboardView({ schoolsSlot }: DashboardViewProps) {
   const router = useRouter();
   const homeModule = getNavItemId("home") as NavItem;
+
+  // Computed on the client after mount only — keeps hydration deterministic.
+  const [todayLabel, setTodayLabel] = useState("");
+
+  useEffect(() => {
+    setTodayLabel(todayFormatter.format(new Date()));
+  }, []);
 
   function handleModuleNavigation(moduleId: string) {
     router.push(getNavItemId(moduleId)?.href ?? "/");
@@ -54,10 +67,12 @@ export function DashboardView({ schoolsSlot }: DashboardViewProps) {
         description="تابع حالة التنمية المهنية في مساحة عمل مدرستك: المعلمون، البرامج التدريبية، والمتابعات التربوية."
         meta={
           <>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-border">
-              <CalendarDays className="size-3.5 text-brand-600" aria-hidden="true" />
-              {todayLabel}
-            </span>
+            {todayLabel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-border">
+                <CalendarDays className="size-3.5 text-brand-600" aria-hidden="true" />
+                {todayLabel}
+              </span>
+            ) : null}
             <StatusBadge tone="info" withDot={false}>
               بيانات تجريبية للمرحلة الأولى
             </StatusBadge>

@@ -3,25 +3,39 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-import { requireItCoordinatorContext } from "@/lib/auth/dev-admin";
 import {
-  assignTeacherSupervisorByIt,
-  removeTeacherSupervisorByIt,
-  requestTeacherRecoveryByIt,
-} from "@/lib/users/directory";
+  requireItCoordinatorContext,
+  type ItCoordinatorContext,
+} from "@/lib/auth/dev-admin";
+import {
+  assignItTeacher,
+  issueItRecoveryLink,
+  removeItTeacherSupervisor,
+} from "@/lib/it/service";
 
 /* ------------------------------------------------------------------ */
-/* IT coordinator server actions — thin wrappers. The context comes     */
-/* from the session through requireItCoordinatorContext(); every rule   */
-/* (same-school, role, rate limit) is enforced in the service layer.    */
+/* IT_COORDINATOR server actions — thin session-backed wrappers around  */
+/* src/lib/it/service.ts. The context (identity + own school) comes     */
+/* exclusively from the session; every tenant check happens in the      */
+/* service layer on top of it.                                          */
 /* ------------------------------------------------------------------ */
 
 export interface ItActionState {
   ok: boolean;
   message?: string;
+  code?: string;
+  /** Recovery only — honest delivery flag + masked address. */
+  emailSent?: boolean;
+  maskedEmail?: string;
+  /** Assignment only — ids of the affected pair. */
+  teacherId?: string;
+  supervisorId?: string;
 }
 
-/** Derive the absolute app base URL from request headers. */
+async function actor(): Promise<ItCoordinatorContext> {
+  return requireItCoordinatorContext();
+}
+
 async function appBaseUrl(): Promise<string> {
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
@@ -29,64 +43,76 @@ async function appBaseUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-export async function assignTeacherSupervisorItAction(
-  _prev: ItActionState | null,
+export async function assignItTeacherAction(
+  _prevState: ItActionState | null,
   formData: FormData
 ): Promise<ItActionState> {
-  const ctx = await requireItCoordinatorContext();
+  const ctx = await actor();
 
-  const result = await assignTeacherSupervisorByIt(
-    {
-      teacherId: String(formData.get("teacherId") ?? ""),
-      supervisorId: String(formData.get("supervisorId") ?? ""),
-    },
-    ctx
-  );
+  const result = await assignItTeacher(ctx, {
+    teacherId: String(formData.get("teacherId") ?? ""),
+    supervisorId: String(formData.get("supervisorId") ?? ""),
+  });
 
-  if (result.ok) {
-    revalidatePath("/it");
-    revalidatePath("/");
+  if (!result.ok) {
+    return { ok: false, message: result.message, code: result.code };
   }
+
+  revalidatePath("/it/assignments");
+
   return {
-    ok: result.ok,
-    message: result.ok ? "تم إسناد المعلم إلى المشرف" : result.message,
+    ok: true,
+    message: "تم إسناد المعلم إلى المشرف التربوي بنجاح",
+    teacherId: result.data.teacherId,
+    supervisorId: result.data.supervisorId,
   };
 }
 
-export async function removeTeacherSupervisorItAction(
-  teacherId: string
+export async function removeItTeacherSupervisorAction(
+  _prevState: ItActionState | null,
+  formData: FormData
 ): Promise<ItActionState> {
-  const ctx = await requireItCoordinatorContext();
+  const ctx = await actor();
 
-  const result = await removeTeacherSupervisorByIt({ teacherId }, ctx);
-  if (result.ok) {
-    revalidatePath("/it");
-    revalidatePath("/");
+  const result = await removeItTeacherSupervisor(ctx, {
+    teacherId: String(formData.get("teacherId") ?? ""),
+  });
+
+  if (!result.ok) {
+    return { ok: false, message: result.message, code: result.code };
   }
+
+  revalidatePath("/it/assignments");
+
   return {
-    ok: result.ok,
-    message: result.ok ? "تم إلغاء إسناد المشرف" : result.message,
+    ok: true,
+    message: "تمت إزالة الإسناد — المعلم الآن ضمن قائمة غير المُسنَدين",
+    teacherId: result.data.teacherId,
   };
 }
 
-export async function requestTeacherRecoveryItAction(
-  _prev: ItActionState | null,
+export async function issueRecoveryLinkAction(
+  _prevState: ItActionState | null,
   formData: FormData
 ): Promise<ItActionState> {
-  const ctx = await requireItCoordinatorContext();
+  const ctx = await actor();
 
-  const result = await requestTeacherRecoveryByIt(
-    { teacherEmail: String(formData.get("teacherEmail") ?? "") },
+  const result = await issueItRecoveryLink(
     ctx,
+    { teacherId: String(formData.get("teacherId") ?? "") },
     { appBaseUrl: await appBaseUrl() }
   );
 
+  if (!result.ok) {
+    return { ok: false, message: result.message, code: result.code };
+  }
+
   return {
-    ok: result.ok,
-    message: result.ok
-      ? result.data.emailSent
-        ? `تم إرسال رابط استعادة كلمة المرور إلى بريد المعلم ${result.data.teacherName}`
-        : `تم إنشاء رابط الاستعادة، لكن تعذر إرسال البريد الآن — أعد المحاولة عند توفر مزود البريد`
-      : result.message,
+    ok: true,
+    message: result.data.emailSent
+      ? "أُرسل رابط إعادة تعيين كلمة المرور إلى بريد المعلم (يُستخدم مرة واحدة وينتهي بعد ساعة)"
+      : "تعذر الإرسال عبر مزوّد البريد حاليًا — لم يُصدر الرابط. حاول مجددًا لاحقًا",
+    emailSent: result.data.emailSent,
+    maskedEmail: result.data.maskedEmail,
   };
 }

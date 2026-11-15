@@ -117,14 +117,12 @@ export function FieldError({ message }: { message?: string }) {
 export function SectionCard({
   icon,
   title,
-  description,
   optional,
   anchorId,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
-  description: string;
   optional?: boolean;
   /** Optional DOM id so OTHER pages can deep-link straight into this
    *  section (Academy cards link #training-info to jump directly to
@@ -151,9 +149,6 @@ export function SectionCard({
               </span>
             )}
           </h2>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-            {description}
-          </p>
         </div>
       </div>
       <div className="p-4">{children}</div>
@@ -289,7 +284,6 @@ export function UnifiedTrainingEditor({
         anchorId="training-info"
         icon={<Save className="size-4" aria-hidden="true" />}
         title="معلومات التدريب"
-        description="البيانات الأساسية والتصنيف والجدول والروابط ورسالتك للمعلمين — تُحفظ معًا."
       >
         <form onSubmit={handleMetaSave} className="space-y-4" noValidate>
           <div className="grid gap-3 md:grid-cols-2">
@@ -334,10 +328,6 @@ export function UnifiedTrainingEditor({
                   </option>
                 ))}
               </select>
-              <span className="mt-1 block text-[11px] text-muted-foreground">
-                «افتراضي مباشر» يُظهر رابط الاجتماع للمعلمين؛ المسجّل والحضوري لا
-                يتطلبان رابط اجتماع.
-              </span>
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-bold text-foreground">
@@ -590,7 +580,6 @@ function TrainingAttachmentsSection({
     <SectionCard
       icon={<FileUp className="size-4" aria-hidden="true" />}
       title="مرفقات التدريب"
-      description="ملفات PDF وWord وExcel وPowerPoint وصوت وصور — يراها المعلمون قابلة للتنزيل بعد النشر."
       optional
     >
       {workspace.attachments.length === 0 ? (
@@ -678,11 +667,6 @@ function TrainingEnrollmentSection({ workspace }: { workspace: TrainingWorkspace
     <SectionCard
       icon={<GraduationCap className="size-4" aria-hidden="true" />}
       title="إسناد المعلمين"
-      description={
-        published
-          ? "أسند التدريب لمعلميك المسندَين إليك — أو يسجلون بأنفسهم من الأكاديمية."
-          : "انشر التدريب أولًا لتتمكن من إسناده إلى معلميك."
-      }
     >
       {feedback && (
         <div className="mb-3">

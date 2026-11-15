@@ -109,12 +109,6 @@ export async function AcademySupervisorTrainings({
               {trainings.length}
             </span>
           </h2>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            كل تدريب أنشأته في مكان واحد وبمرة واحدة فقط: افتح أي تدريب
-            للوصول إلى مساحة إدارته الكاملة — المحتوى والفيديوهات والمرفقات
-            والاختبار وقياس الأثر وإسناد المعلمين والنتائج والشهادات
-            والنشر — أو حرّره أو احذفه مباشرة من البطاقة.
-          </p>
         </div>
         <Link
           href="/supervision/training/new"

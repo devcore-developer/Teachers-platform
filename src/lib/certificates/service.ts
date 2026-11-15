@@ -168,8 +168,15 @@ export interface Paginated<T> {
 
 export interface CertificateSchoolInfo {
   nameAr: string;
+  /** English school name (may be unconfigured). */
+  nameEn: string | null;
   logoUrl: string | null;
   brandColor: string;
+  brandColorSecondary: string | null;
+  brandColorAccent: string | null;
+  brandColorNeutral: string | null;
+  /** School slogan / tagline (may be unconfigured). */
+  brandTagline: string | null;
 }
 
 export interface CertificateAuditEvent {
@@ -198,6 +205,10 @@ export interface CertificateView {
   school: CertificateSchoolInfo;
   contentTitle: string | null;
   contentSubtitle: string | null;
+  /** Course training hours (course.estimatedHours) — null for programs. */
+  trainingHours: number | null;
+  /** The teacher's CURRENT explicit supervisor (live read). */
+  supervisorName: string | null;
   issuerName: string | null;
   issuerRoleLabel: string | null;
   /** Signatory snapshot at issuance (school manager) — never recomputed. */
@@ -1069,11 +1080,30 @@ export async function getCertificateView(
   const row = await db.certificate.findUnique({
     where: { id: certificateId },
     include: {
-      teacher: { select: { id: true, name: true } },
-      school: {
-        select: { nameAr: true, logoUrl: true, brandColor: true },
+      teacher: {
+        select: {
+          id: true,
+          name: true,
+          // Current explicit supervisor (unique per teacher) — used by
+          // the premium sheet's signature column; never a fabricated name.
+          teacherSupervision: {
+            include: { supervisor: { select: { id: true, name: true } } },
+          },
+        },
       },
-      course: { select: { titleAr: true, titleEn: true } },
+      school: {
+        select: {
+          nameAr: true,
+          nameEn: true,
+          logoUrl: true,
+          brandColor: true,
+          brandColorSecondary: true,
+          brandColorAccent: true,
+          brandColorNeutral: true,
+          brandTagline: true,
+        },
+      },
+      course: { select: { titleAr: true, titleEn: true, estimatedHours: true } },
       program: { select: { nameAr: true, nameEn: true } },
       issuedBy: { select: { name: true } },
       revokedBy: { select: { name: true } },
@@ -1140,8 +1170,13 @@ export async function getCertificateView(
       teacherName: row.teacher.name,
       school: {
         nameAr: row.school.nameAr,
+        nameEn: row.school.nameEn,
         logoUrl: row.school.logoUrl,
         brandColor: row.school.brandColor,
+        brandColorSecondary: row.school.brandColorSecondary,
+        brandColorAccent: row.school.brandColorAccent,
+        brandColorNeutral: row.school.brandColorNeutral,
+        brandTagline: row.school.brandTagline,
       },
       contentTitle: row.course?.titleAr ?? row.program?.nameAr ?? null,
       contentSubtitle:
@@ -1150,6 +1185,8 @@ export async function getCertificateView(
           : row.programId !== null
             ? CERT_CONTENT_TYPE_LABELS.PROGRAM
             : null,
+      trainingHours: row.course?.estimatedHours ?? null,
+      supervisorName: row.teacher.teacherSupervision?.supervisor?.name ?? null,
       issuerName: row.issuedBy?.name ?? null,
       issuerRoleLabel: row.issuerRoleLabel,
       schoolSignatoryName: row.schoolSignatoryName,
