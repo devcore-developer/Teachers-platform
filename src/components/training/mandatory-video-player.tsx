@@ -105,9 +105,22 @@ const FORWARD_KEYS = new Set([
 function useWatchHeartbeat(
   courseId: string,
   lessonId: string,
-  durationSeconds: number | null,
+  /**
+   * MEASURED duration provider — the live metadata length from the
+   * player itself (YouTube getDuration() / <video>.duration), falling
+   * back to the instructor-captured prop. The player must REPORT the
+   * duration it plays: YouTube lessons have no DB-captured length, and
+   * without this report the server can never evaluate the completion
+   * threshold (the old player sent a hardcoded null here — the root
+   * cause of YouTube lessons never completing). The server keeps its
+   * own hierarchy: instructor DB value wins, client metadata is only a
+   * clamped, position-floored, sticky fallback — never trusted for
+   * storage when an authoritative value exists.
+   */
+  getDurationSeconds: () => number | null,
   onSnapshot: (data: {
     watchSeconds?: number;
+    watchedPercent?: number;
     completed?: boolean;
     justCompleted?: boolean;
   }) => void
@@ -116,18 +129,41 @@ function useWatchHeartbeat(
   React.useEffect(() => {
     onSnapshotRef.current = onSnapshot;
   });
+  const getDurationRef = React.useRef(getDurationSeconds);
+  React.useEffect(() => {
+    getDurationRef.current = getDurationSeconds;
+  });
   const beatInFlightRef = React.useRef(false);
+  /**
+   * Latest-wins slot — a beat that fires while another request is still
+   * in flight is QUEUED here (never silently dropped) and re-sent as
+   * soon as the in-flight one settles. This is what makes the
+   * finalize-beat path lossless: ENDED / pause / tab-hide can land a
+   * moment after a periodic beat, and the old drop-on-in-flight
+   * behavior discarded exactly those final reports — after ENDED the
+   * periodic interval stops, so the dropped position was never sent
+   * again and short lessons froze below the threshold.
+   */
+  const pendingBeatRef = React.useRef<{
+    positionSeconds: number;
+    ended: boolean;
+  } | null>(null);
+
   const sendHeartbeat = React.useCallback(
     async (positionSeconds: number, ended = false) => {
-      if (beatInFlightRef.current) return;
+      if (beatInFlightRef.current) {
+        // Coalesce, latest wins: the finalize beat supersedes whatever
+        // periodic report is still on the wire.
+        pendingBeatRef.current = { positionSeconds, ended };
+        return;
+      }
       beatInFlightRef.current = true;
       try {
         const result = await reportWatchProgressAction({
           courseId,
           lessonId,
           positionSeconds,
-          durationSeconds:
-            durationSeconds ?? null,
+          durationSeconds: getDurationRef.current(),
           ended,
         });
         if (result.ok && result.data) {
@@ -143,9 +179,14 @@ function useWatchHeartbeat(
         // Transient network issues are fine — the next beat re-syncs.
       } finally {
         beatInFlightRef.current = false;
+        const pending = pendingBeatRef.current;
+        if (pending) {
+          pendingBeatRef.current = null;
+          void sendHeartbeat(pending.positionSeconds, pending.ended);
+        }
       }
     },
-    [courseId, lessonId, durationSeconds]
+    [courseId, lessonId]
   );
   return sendHeartbeat;
 }
@@ -301,14 +342,26 @@ function NativeGovernedPlayer({
   const [notice, setNotice] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [justCompleted, setJustCompleted] = React.useState(false);
+  /** Server-verified percent (from the heartbeat ack) once known. */
+  const [serverPercent, setServerPercent] = React.useState(0);
 
   const sendHeartbeat = useWatchHeartbeat(
     courseId,
     lessonId,
-    durationSeconds,
+    // MEASURED duration from the element itself (falls back to the
+    // instructor-captured prop before metadata loads).
+    () => {
+      const video = videoRef.current;
+      return video && Number.isFinite(video.duration) && video.duration > 0
+        ? video.duration
+        : (durationSeconds ?? null);
+    },
     (data) => {
       if (typeof data.watchSeconds === "number") {
         setWatchSeconds(data.watchSeconds);
+      }
+      if (typeof data.watchedPercent === "number" && data.watchedPercent > 0) {
+        setServerPercent(data.watchedPercent);
       }
       if (data.completed) setCompleted(true);
       if (data.justCompleted) setJustCompleted(true);
@@ -508,8 +561,14 @@ function NativeGovernedPlayer({
     else void node.requestFullscreen?.();
   }
 
-  const watchedPercent =
+  // Prefer the SERVER-verified percent (watch ledger ÷ server-resolved
+  // duration) over the local watchSeconds ÷ player-duration division —
+  // the completion verdict is computed against the server numbers, so
+  // the strip must display exactly what the server validated.
+  const localWatchedPercent =
     duration > 0 ? Math.min(100, Math.round((watchSeconds / duration) * 100)) : 0;
+  const watchedPercent =
+    serverPercent > 0 ? Math.min(100, serverPercent) : localWatchedPercent;
 
   return (
     <div className="space-y-2" dir="rtl">
@@ -789,6 +848,8 @@ function YouTubeGovernedPlayer({
   const [notice, setNotice] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [justCompleted, setJustCompleted] = React.useState(false);
+  /** Server-verified percent (from the heartbeat ack) once known. */
+  const [serverPercent, setServerPercent] = React.useState(0);
 
   React.useEffect(() => {
     completedRef.current = completed;
@@ -800,10 +861,26 @@ function YouTubeGovernedPlayer({
   const sendHeartbeat = useWatchHeartbeat(
     courseId,
     lessonId,
-    durationSeconds,
+    // MEASURED duration straight from the IFrame API. This is THE fix
+    // for YouTube completion: the ledger previously never received any
+    // duration for YouTube lessons (no DB capture, hardcoded-null prop),
+    // so the server could never evaluate the 95% threshold. The server
+    // keeps its hierarchy — an instructor-captured DB duration always
+    // wins; this value only fills the gap, clamped and floored.
+    () => {
+      const player = playerRef.current;
+      if (player) {
+        const measured = player.getDuration();
+        if (Number.isFinite(measured) && measured > 0) return measured;
+      }
+      return durationSeconds ?? null;
+    },
     (data) => {
       if (typeof data.watchSeconds === "number") {
         setWatchSeconds(data.watchSeconds);
+      }
+      if (typeof data.watchedPercent === "number" && data.watchedPercent > 0) {
+        setServerPercent(data.watchedPercent);
       }
       if (data.completed) setCompleted(true);
       if (data.justCompleted) setJustCompleted(true);
@@ -880,8 +957,24 @@ function YouTubeGovernedPlayer({
                 void sendHeartbeat(event.target.getCurrentTime());
               } else if (state === YT.PlayerState.ENDED) {
                 setPlaying(false);
-                const d = event.target.getDuration();
-                void sendHeartbeat(d > 0 ? d : event.target.getCurrentTime(), true);
+                // Finalize: capture the ACTUAL final playback position
+                // and the real metadata duration, then persist the final
+                // beat (ended=true). The latest-wins queue guarantees it
+                // lands even if a periodic beat is still on the wire —
+                // after ENDED the periodic interval stops, so a dropped
+                // final beat used to freeze the lesson below threshold.
+                const finalPosition = Math.max(event.target.getCurrentTime(), 0);
+                const measured = event.target.getDuration();
+                void sendHeartbeat(
+                  finalPosition > 0
+                    ? finalPosition
+                    : measured > 0
+                      ? measured
+                      : 0,
+                  true
+                );
+                if (Number.isFinite(measured) && measured > 0) setDuration(measured);
+                setCurrent(measured > 0 ? measured : finalPosition);
               }
             },
             onError: (event) => {
@@ -1080,8 +1173,13 @@ function YouTubeGovernedPlayer({
     }
   }
 
-  const watchedPercent =
+  // Same verified-percent rule as the native branch: the strip shows the
+  // SERVER's watch-ledger percent (what completion is judged against),
+  // falling back to the local division only before the first ack.
+  const localWatchedPercent =
     duration > 0 ? Math.min(100, Math.round((watchSeconds / duration) * 100)) : 0;
+  const watchedPercent =
+    serverPercent > 0 ? Math.min(100, serverPercent) : localWatchedPercent;
 
   return (
     <div className="space-y-2" dir="rtl">

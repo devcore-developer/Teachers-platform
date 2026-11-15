@@ -112,7 +112,11 @@ export default async function CourseLearnPage({
       content: lesson.content,
       videoUrl: lesson.videoUrl,
       attachmentName: lesson.attachmentName,
-      durationSeconds: null,
+      // The instructor-captured length (DB) — the player reports it with
+      // every heartbeat as a fallback duration so YouTube lessons (whose
+      // length can NOT be captured at save time) still reach a server-
+      // verified completion threshold.
+      durationSeconds: lesson.durationSeconds,
       locked: lock?.locked ?? false,
       lockedByTitle: lock?.lockedByTitle ?? null,
       current: lock?.current ?? false,

@@ -61,13 +61,15 @@ export interface ViewerLesson {
   id: string;
   titleAr: string;
   type: string;
-  /** Instructor-captured media length — drives the watch threshold. */
-  durationSeconds: number | null;
   description: string | null;
   content: string | null;
   videoUrl: string | null;
   attachmentId: string | null;
   attachmentName: string | null;
+  /** Instructor-captured media length (seconds) — null when never
+   * captured (typical for YouTube-URL lessons). The learning page
+   * forwards it to the mandatory player as the heartbeat fallback. */
+  durationSeconds: number | null;
   orderIndex: number;
 }
 
@@ -920,12 +922,12 @@ export async function getCourseForViewer(
       id: lesson.id,
       titleAr: lesson.titleAr,
       type: lesson.type,
-      durationSeconds: lesson.durationSeconds,
       description: lesson.description,
       content: lesson.content,
       videoUrl: lesson.videoUrl,
       attachmentId: lesson.attachmentId,
       attachmentName: lesson.attachment?.originalName ?? null,
+      durationSeconds: lesson.durationSeconds,
       orderIndex: lesson.orderIndex,
     })),
   }));
