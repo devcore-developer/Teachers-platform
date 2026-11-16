@@ -6,7 +6,7 @@
  *   - secure temporary-password reset (shown ONCE to the admin)
  *   - secure email change (uniqueness + re-verification)
  * The actor is resolved from the session; school scope is enforced
- * server-side (office managers never leave their own school).
+ * server-side (office/school managers never leave their own school).
  */
 import { revalidatePath } from "next/cache";
 
@@ -50,7 +50,11 @@ type AdminActor = {
 async function adminActor(): Promise<AdminActor | null> {
   const user = await getCurrentUser();
   if (!user) return null;
-  if (user.role !== "SUPER_ADMIN" && user.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    user.role !== "SUPER_ADMIN" &&
+    user.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    user.role !== "SCHOOL_MANAGER"
+  ) {
     return null;
   }
   return { id: user.id, name: user.name, role: user.role, schoolId: user.schoolId };
@@ -110,7 +114,7 @@ export async function updateTeacherProfileAction(
       return failure("المعلم غير موجود", "NOT_FOUND");
     }
     if (
-      actorContext.role === "DEVELOPMENT_OFFICE_MANAGER" &&
+      actorContext.role !== "SUPER_ADMIN" &&
       teacher.schoolId !== actorContext.schoolId
     ) {
       return failure("هذا المعلم خارج نطاق مدرستك", "FORBIDDEN");

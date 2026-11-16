@@ -257,11 +257,6 @@ export function UnifiedTrainingEditor({
             <h1 className="text-xl font-black text-foreground">
               {isPlaceholderTitle ? "إنشاء تدريب احترافي جديد" : course.titleAr}
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              كل الأقسام متاحة فورًا وفي أي ترتيب — لكل قسم زر حفظ خاص به،
-              وحفظ قسم لا يمس تعديلات قسم آخر. عند الجاهزية اضغط «نشر
-              التدريب» في أسفل الصفحة.
-            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span className={`rounded-full border px-3 py-1 text-[11px] font-bold ${statusMeta(status).className}`}>
@@ -460,9 +455,6 @@ export function UnifiedTrainingEditor({
                 className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none transition-colors focus:border-brand-600"
                 maxLength={4000}
               />
-              <span className="mt-1 block text-[11px] text-muted-foreground">
-                تظهر للمعلمين في أعلى صفحة التدريب.
-              </span>
               <FieldError message={metaErrors.supervisorInstructionsAr} />
             </label>
           </div>

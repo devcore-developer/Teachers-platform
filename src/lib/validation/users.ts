@@ -226,7 +226,6 @@ export type UsersServiceResult<T> =
         | "NOT_FOUND"
         | "RELATION_ERROR"
         | "DUPLICATE_EMAIL"
-        /** Rate-limit cap hit (e.g. IT recovery issuance caps). */
         | "RATE_LIMITED";
     };
 

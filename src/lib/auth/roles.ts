@@ -140,6 +140,9 @@ const NAV_ROLES: Record<string, Role[]> = {
   // service re-checks the role server-side, this only shapes navigation.
   "it-assignments": ["IT_COORDINATOR"],
   "it-recovery": ["IT_COORDINATOR"],
+  // The IT workspace hub (/it): real school-scoped counters + quick
+  // entries to the two IT capabilities.
+  it: ["IT_COORDINATOR"],
   // Phase 4 — supervisor workspace (assigned teachers only)
   supervision: ["EDUCATIONAL_SUPERVISOR"],
   // Phase 4 — deputy read-only scope overview
@@ -188,9 +191,8 @@ const NAV_ROLES: Record<string, Role[]> = {
     "SCHOOL_MANAGER",
     "EDUCATIONAL_SUPERVISOR",
   ],
-  // Reports — real data exports for the administrative and educational
-  // roles. IT_COORDINATOR deliberately excluded (unauthorized for the
-  // role; the stale sidebar link used to 404).
+  // IT interface cleanup: no reports entry for the IT coordinator —
+  // every other role keeps the module exactly as before.
   reports: [
     "SUPER_ADMIN",
     "DEVELOPMENT_OFFICE_MANAGER",

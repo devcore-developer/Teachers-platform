@@ -248,7 +248,10 @@ async function supervisorOwnsTeacher(
 
 function adminOwnsTeacher(actor: GrowthActor, teacherSchoolId: string | null): boolean {
   if (actor.role === "SUPER_ADMIN") return true;
-  if (actor.role === "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    actor.role === "DEVELOPMENT_OFFICE_MANAGER" ||
+    actor.role === "SCHOOL_MANAGER"
+  ) {
     return Boolean(actor.schoolId) && teacherSchoolId === actor.schoolId;
   }
   return false;
@@ -338,18 +341,26 @@ export async function supervisorGrowthBoard(
 
 /**
  * The administrative teachers board (/teachers): all teachers of the
- * actor's school (office) or the whole platform (super admin).
+ * actor's school (office/school managers) or the whole platform
+ * (super admin). SCHOOL_MANAGER mirrors DEVELOPMENT_OFFICE_MANAGER —
+ * same school fence, same page.
  */
 export async function adminGrowthBoard(
   actor: GrowthActor
 ): Promise<GrowthServiceResult<GrowthTeacherRow[]>> {
-  if (actor.role !== "SUPER_ADMIN" && actor.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    actor.role !== "SUPER_ADMIN" &&
+    actor.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    actor.role !== "SCHOOL_MANAGER"
+  ) {
     return { ok: false, message: "هذه الصفحة متاحة للإدارة فقط", code: "FORBIDDEN" };
   }
   const teachers = await db.user.findMany({
     where: {
       role: "TEACHER",
-      ...(actor.role === "DEVELOPMENT_OFFICE_MANAGER" ? { schoolId: actor.schoolId } : {}),
+      ...(actor.role !== "SUPER_ADMIN" && actor.schoolId
+        ? { schoolId: actor.schoolId }
+        : {}),
     },
     select: growthTeacherSelect,
     orderBy: { name: "asc" },

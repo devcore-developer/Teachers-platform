@@ -58,10 +58,7 @@ export default async function TeacherAdminPage({
   });
 
   if (!teacher || teacher.role !== "TEACHER") notFound();
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    teacher.schoolId !== actor.schoolId
-  ) {
+  if (actor.role !== "SUPER_ADMIN" && teacher.schoolId !== actor.schoolId) {
     redirect("/forbidden");
   }
 

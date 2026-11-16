@@ -2,22 +2,11 @@
 
 import * as React from "react";
 import { useFormStatus } from "react-dom";
-import { Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { registerAction, type AuthFormState } from "@/app/actions/auth";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-
-interface RegisterFormProps {
-  /** The raw registration-link token — submitted hidden, never editable. */
-  token: string;
-  /** Resolved server-side from the token (display + branch list caption). */
-  schoolName: string;
-  /** Active branches OF THE REGISTRATION SCHOOL only (server-resolved). */
-  branches: { id: string; nameAr: string }[];
-}
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -27,248 +16,255 @@ function SubmitButton() {
       disabled={pending}
       className="h-11 w-full rounded-xl bg-gradient-to-l from-brand-600 to-brand-500 text-[15px] font-bold shadow-lg shadow-brand-600/25 transition-all hover:shadow-xl hover:shadow-brand-600/30 hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      {pending ? (
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-      ) : (
-        <UserPlus className="size-4" aria-hidden="true" />
-      )}
-      {pending ? "جارٍ إنشاء الحساب…" : "إنشاء الحساب"}
+      {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+      {pending ? "جارٍ إنشاء الحساب…" : "إنشاء حسابي"}
     </Button>
   );
 }
 
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null;
+/** Password field with an inline show/hide toggle (gate-screen style). */
+function PasswordField({
+  id,
+  label,
+  name,
+  autoComplete,
+  placeholder,
+  errorId,
+  error,
+}: {
+  id: string;
+  label: string;
+  name: string;
+  autoComplete: string;
+  placeholder: string;
+  errorId: string;
+  error?: string;
+}) {
+  const [show, setShow] = React.useState(false);
   return (
-    <p id={id} className="text-xs font-semibold text-destructive">
-      {message}
-    </p>
+    <div className="space-y-2">
+      <label htmlFor={id} className="text-[13px] font-semibold">
+        {label}
+      </label>
+      <div className="relative">
+        <Input
+          id={id}
+          name={name}
+          type={show ? "text" : "password"}
+          dir="ltr"
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          required
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          className="h-11 w-full rounded-xl bg-background pe-10 text-[15px] aria-[invalid=true]:border-destructive"
+        />
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          aria-label={show ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+          aria-pressed={show}
+          className="absolute right-1.5 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {show ? (
+            <EyeOff className="size-4" aria-hidden="true" />
+          ) : (
+            <Eye className="size-4" aria-hidden="true" />
+          )}
+        </button>
+      </div>
+      {error && (
+        <p id={errorId} className="text-xs font-semibold text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
+const formatDate = (d: Date) =>
+  d.toLocaleDateString("ar-EG", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
 /**
- * Arabic RTL teacher registration form — all validation, tenant
- * resolution and rate rules run on the SERVER (registerAction →
- * registerTeacher). The school association is carried exclusively by
- * the hidden token; the form offers only the branches of the link's
- * school, so a teacher can never register into another school.
+ * Teacher self-registration form. The school association rides ONLY on
+ * the hidden token — `registerAction` → `registerTeacher` re-resolves
+ * it server-side and re-validates every field, so nothing here is
+ * trusted. On success the server action redirects to the
+ * pending-verification screen; the client only renders field-level
+ * errors meanwhile.
  */
-export function RegisterForm({ token, schoolName, branches }: RegisterFormProps) {
+export function RegisterForm({
+  token,
+  branches,
+  expiresAt,
+}: {
+  token: string;
+  branches: { id: string; nameAr: string }[];
+  expiresAt: Date | null;
+}) {
   const [state, formAction] = React.useActionState<AuthFormState | null, FormData>(
     registerAction,
     null
   );
-  const [showPassword, setShowPassword] = React.useState(false);
-  const [showConfirm, setShowConfirm] = React.useState(false);
 
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form action={formAction} className="space-y-4" noValidate>
       <input type="hidden" name="token" value={token} />
 
       {state && !state.ok && state.message && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
+        <p
+          role="alert"
+          className="rounded-xl border border-error/30 bg-error-soft px-4 py-3 text-sm font-semibold text-error"
+        >
+          {state.message}
+        </p>
+      )}
+
+      {expiresAt && (
+        <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+          هذا الرابط سارٍ حتى {formatDate(expiresAt)} — أكمل التسجيل قبل انتهاء
+          صلاحيته.
+        </p>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="name" className="text-[13px]">
+        <label htmlFor="register-name" className="text-[13px] font-semibold">
           الاسم الكامل
-        </Label>
+        </label>
         <Input
-          id="name"
+          id="register-name"
           name="name"
           type="text"
           autoComplete="name"
-          placeholder="الاسم الرباعي كما في ملفك الوظيفي"
+          placeholder="الاسم كما يظهر في وثائق المدرسة"
           required
           aria-invalid={Boolean(state?.fieldErrors?.name)}
           aria-describedby={
             state?.fieldErrors?.name ? "register-name-error" : undefined
           }
-          className="h-11 w-full rounded-xl bg-background"
+          className="h-11 w-full rounded-xl bg-background text-[15px] aria-[invalid=true]:border-destructive"
         />
-        <FieldError id="register-name-error" message={state?.fieldErrors?.name} />
+        {state?.fieldErrors?.name && (
+          <p id="register-name-error" className="text-xs font-semibold text-destructive">
+            {state.fieldErrors.name}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="email" className="text-[13px]">
+        <label htmlFor="register-email" className="text-[13px] font-semibold">
           البريد الإلكتروني
-        </Label>
+        </label>
         <Input
-          id="email"
+          id="register-email"
           name="email"
           type="email"
           dir="ltr"
           autoComplete="email"
-          placeholder="name@school.edu"
+          placeholder="name@example.com"
           required
           aria-invalid={Boolean(state?.fieldErrors?.email)}
           aria-describedby={
             state?.fieldErrors?.email ? "register-email-error" : undefined
           }
-          className="h-11 w-full rounded-xl bg-background"
+          className="h-11 w-full rounded-xl bg-background text-[15px] aria-[invalid=true]:border-destructive"
         />
-        <FieldError id="register-email-error" message={state?.fieldErrors?.email} />
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          ستصلك رسالة تأكيد على هذا البريد — تأكد من صحته فهو معرّف حسابك.
-        </p>
+        {state?.fieldErrors?.email && (
+          <p id="register-email-error" className="text-xs font-semibold text-destructive">
+            {state.fieldErrors.email}
+          </p>
+        )}
       </div>
+
+      <PasswordField
+        id="register-password"
+        label="كلمة المرور"
+        name="password"
+        autoComplete="new-password"
+        placeholder="8 أحرف على الأقل مع حرف ورقم"
+        errorId="register-password-error"
+        error={state?.fieldErrors?.password}
+      />
+      <PasswordField
+        id="register-confirm-password"
+        label="تأكيد كلمة المرور"
+        name="confirmPassword"
+        autoComplete="new-password"
+        placeholder="أعد إدخال كلمة المرور"
+        errorId="register-confirm-error"
+        error={state?.fieldErrors?.confirmPassword}
+      />
 
       {branches.length > 0 && (
         <div className="space-y-2">
-          <Label htmlFor="branchId" className="text-[13px]">
-            الفرع{" "}
-            <span className="text-[11px] font-normal text-muted-foreground">
-              (اختياري)
-            </span>
-          </Label>
+          <label htmlFor="register-branch" className="text-[13px] font-semibold">
+            الفرع — بيتك المدرسي
+          </label>
           <select
-            id="branchId"
+            id="register-branch"
             name="branchId"
             defaultValue=""
-            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            aria-invalid={Boolean(state?.fieldErrors?.branchId)}
+            aria-describedby={
+              state?.fieldErrors?.branchId ? "register-branch-error" : undefined
+            }
+            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-[15px] aria-[invalid=true]:border-destructive"
           >
-            <option value="">— اختر الفرع (إن وجد) —</option>
+            <option value="">اختر الفرع (اختياري)</option>
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.nameAr}
               </option>
             ))}
           </select>
-          <FieldError
-            id="register-branch-error"
-            message={state?.fieldErrors?.branchId}
-          />
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            قائمة فروع {schoolName} — يُتحقق من انتماء الفرع على الخادم.
-          </p>
+          {state?.fieldErrors?.branchId && (
+            <p id="register-branch-error" className="text-xs font-semibold text-destructive">
+              {state.fieldErrors.branchId}
+            </p>
+          )}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="stage" className="text-[13px]">
-            المرحلة{" "}
-            <span className="text-[11px] font-normal text-muted-foreground">
-              (اختياري)
-            </span>
-          </Label>
+          <label htmlFor="register-stage" className="text-[13px] font-semibold">
+            المرحلة التعليمية{" "}
+            <span className="font-normal text-muted-foreground">(اختياري)</span>
+          </label>
           <Input
-            id="stage"
+            id="register-stage"
             name="stage"
             type="text"
             placeholder="مثال: المرحلة الابتدائية"
-            className="h-11 w-full rounded-xl bg-background"
+            className="h-11 w-full rounded-xl bg-background text-[15px]"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="subject" className="text-[13px]">
+          <label htmlFor="register-subject" className="text-[13px] font-semibold">
             التخصص{" "}
-            <span className="text-[11px] font-normal text-muted-foreground">
-              (اختياري)
-            </span>
-          </Label>
+            <span className="font-normal text-muted-foreground">(اختياري)</span>
+          </label>
           <Input
-            id="subject"
+            id="register-subject"
             name="subject"
             type="text"
             placeholder="مثال: الرياضيات"
-            className="h-11 w-full rounded-xl bg-background"
+            className="h-11 w-full rounded-xl bg-background text-[15px]"
           />
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="password" className="text-[13px]">
-          كلمة المرور
-        </Label>
-        <div className="relative">
-          <Input
-            id="password"
-            name="password"
-            type={showPassword ? "text" : "password"}
-            dir="ltr"
-            autoComplete="new-password"
-            placeholder="••••••••"
-            required
-            aria-invalid={Boolean(state?.fieldErrors?.password)}
-            aria-describedby={
-              state?.fieldErrors?.password ? "register-password-error" : undefined
-            }
-            className="h-11 w-full rounded-xl bg-background pe-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-            aria-pressed={showPassword}
-            className="absolute right-1.5 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            {showPassword ? (
-              <EyeOff className="size-4" aria-hidden="true" />
-            ) : (
-              <Eye className="size-4" aria-hidden="true" />
-            )}
-          </button>
-        </div>
-        <FieldError id="register-password-error" message={state?.fieldErrors?.password} />
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          8 أحرف على الأقل، وتحتوي على حرف واحد ورقم واحد على الأقل.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="confirmPassword" className="text-[13px]">
-          تأكيد كلمة المرور
-        </Label>
-        <div className="relative">
-          <Input
-            id="confirmPassword"
-            name="confirmPassword"
-            type={showConfirm ? "text" : "password"}
-            dir="ltr"
-            autoComplete="new-password"
-            placeholder="••••••••"
-            required
-            aria-invalid={Boolean(state?.fieldErrors?.confirmPassword)}
-            aria-describedby={
-              state?.fieldErrors?.confirmPassword
-                ? "register-confirm-error"
-                : undefined
-            }
-            className="h-11 w-full rounded-xl bg-background pe-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirm((v) => !v)}
-            aria-label={showConfirm ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-            aria-pressed={showConfirm}
-            className="absolute right-1.5 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            {showConfirm ? (
-              <EyeOff className="size-4" aria-hidden="true" />
-            ) : (
-              <Eye className="size-4" aria-hidden="true" />
-            )}
-          </button>
-        </div>
-        <FieldError
-          id="register-confirm-error"
-          message={state?.fieldErrors?.confirmPassword}
-        />
-      </div>
+      <p className="rounded-xl border bg-muted/40 px-3.5 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+        بعد إنشاء الحساب سنرسل رسالة إلى بريدك لتوثيقه — التوثيق شرط تفعيل
+        الدخول، ولا يلزم أي موافقة مسبقة. وبعد التوثيق يُسندك مشرفك التربوي من
+        تقنية المعلومات لتصبح مؤهلًا لاستخدام المنصة.
+      </p>
 
       <SubmitButton />
-
-      <ol className="space-y-1 rounded-xl border border-border/60 bg-muted/40 p-4 text-xs leading-6 text-muted-foreground">
-        <li>1. إنشاء الحساب عبر هذا النموذج.</li>
-        <li>2. تأكيد البريد الإلكتروني من رسالة التفعيل (شرط الدخول).</li>
-        <li>
-          3. إسنادك إلى مشرف تربوي — خطوة لاحقة يتمتها مكتب التطوير في{" "}
-          {schoolName}.
-        </li>
-      </ol>
     </form>
   );
 }

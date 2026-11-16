@@ -10,6 +10,7 @@ import {
   KeyRound,
   Landmark,
   LayoutDashboard,
+  Link2,
   MessageSquare,
   MonitorPlay,
   Palette,
@@ -19,6 +20,7 @@ import {
   UserCheck,
   UserRound,
   Users,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,9 +39,10 @@ import type { NavItem } from "@/lib/types";
  * "الرئيسية" — and /supervision/dashboard now redirects there, so the
  * dashboard lives in exactly one place.
  *
- * IT_COORDINATOR workspace items (it-assignments / it-recovery) resolve
- * to their real server-guarded pages; NAV_ROLES already restricted them
- * to the IT role, so no other role ever receives them from the server.
+ * IT_COORDINATOR workspace items (it / it-assignments / it-recovery)
+ * resolve to their real server-guarded pages; NAV_ROLES already
+ * restricted them to the IT role, so no other role ever receives them
+ * from the server.
  */
 export const navItems: NavItem[] = [
   {
@@ -91,6 +94,15 @@ export const navItems: NavItem[] = [
     description:
       "عرض للقراءة فقط: معلمو المدرسة والمشرفون وأدوارهم داخل نطاق الاطلاع الممنوح لك.",
     icon: Users,
+    plannedFeatures: [],
+  },
+  {
+    id: "registration-links",
+    label: "روابط تسجيل المعلمين",
+    href: "/registration-links",
+    description:
+      "ولّد رابط تسجيل ذاتي لمعلمي مدرستك وانسخه وشاركه، وأدر الروابط النشطة مع متابعة من سجّل عبرها.",
+    icon: Link2,
     plannedFeatures: [],
   },
   {
@@ -210,6 +222,15 @@ export const navItems: NavItem[] = [
     plannedFeatures: [],
   },
   {
+    id: "it",
+    label: "لوحة تقنية المعلومات",
+    href: "/it",
+    description:
+      "مركز منسق تقنية المعلومات: مؤشرات مدرستك الفعلية ومدخل سريع لإسناد المعلمين واستعادة حساباتهم.",
+    icon: Wrench,
+    plannedFeatures: [],
+  },
+  {
     id: "it-assignments",
     label: "إسناد المشرفين",
     href: "/it/assignments",
@@ -294,7 +315,8 @@ export function activeNavItemId(pathname: string, items: NavItem[]): string | nu
 /* Three profiles (deterministic, data-driven, role-invisible):         */
 /*   • IT_COORDINATOR — selected whenever the role-filtered set         */
 /*     contains "it-assignments" (IT-only module): the coordinator's    */
-/*     two server-enforced capabilities + communication/account group.  */
+/*     hub (/it) plus its two server-enforced capabilities + the        */
+/*     communication/account group.                                     */
 /*   • SUPERVISOR — the approved supervisor information architecture    */
 /*     (الرئيسية / التدريب والتطوير / المتابعة والنتائج / التواصل       */
 /*     والحساب). Selected whenever the set contains "supervisor-        */
@@ -323,6 +345,7 @@ const DEFAULT_NAV_GROUPS: NavGroupDef[] = [
       "school-branding",
       "users",
       "school-users",
+      "registration-links",
       "supervision",
       "deputy-overview",
     ],
@@ -367,7 +390,7 @@ const SUPERVISOR_NAV_GROUPS: NavGroupDef[] = [
 /**
  * IT coordinator profile — ONLY the modules the role actually owns.
  * No academy, no reports, no training-management entries: the
- * coordinator's workspace is the dashboard plus its exactly-two
+ * coordinator's workspace is its hub (/it) plus the exactly-two
  * server-enforced capabilities and the shared communication/account
  * group (messages / my-profile / account-security are already granted
  * to every role in NAV_ROLES).
@@ -379,7 +402,7 @@ const IT_NAV_GROUPS: NavGroupDef[] = [
   },
   {
     label: "صلاحيات تقنية المعلومات",
-    members: ["it-assignments", "it-recovery"],
+    members: ["it", "it-assignments", "it-recovery"],
   },
   {
     label: "التواصل والحساب",

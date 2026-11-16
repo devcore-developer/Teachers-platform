@@ -2,69 +2,54 @@
 
 import * as React from "react";
 import { useFormStatus } from "react-dom";
-import { Loader2, MailCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-import { resendVerificationAction, type AuthFormState } from "@/app/actions/auth";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  resendVerificationAction,
+  type AuthFormState,
+} from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <Button
       type="submit"
-      variant="outline"
       disabled={pending}
-      className="h-11 w-full rounded-xl"
+      className="h-10 w-full rounded-xl border border-brand-200 bg-brand-50 text-sm font-bold text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-60"
     >
-      {pending ? (
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-      ) : (
-        <MailCheck className="size-4" aria-hidden="true" />
-      )}
-      {pending ? "جارٍ إعادة الإرسال…" : "إعادة إرسال رسالة التفعيل"}
+      {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+      {pending ? "جارٍ الإرسال…" : "إعادة إرسال رسالة التوثيق"}
     </Button>
   );
 }
 
 /**
- * Generic resend form — the server action's response is intentionally
- * identical whether or not the address has an unverified teacher
- * account, so no account-existence information is ever disclosed.
+ * Resend trigger for the pending-verification screen. The server action
+ * answers with the same generic message regardless of whether the
+ * address belongs to an account — no existence disclosure.
  */
-export function ResendVerificationForm({ initialEmail }: { initialEmail: string }) {
+export function ResendVerificationForm({ email }: { email: string }) {
   const [state, formAction] = React.useActionState<AuthFormState | null, FormData>(
     resendVerificationAction,
     null
   );
 
   return (
-    <form action={formAction} className="space-y-3" noValidate>
+    <form action={formAction} className="space-y-2">
+      <input type="hidden" name="email" value={email} />
       {state?.message && (
-        <Alert role="status">
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
+        <p
+          role={state.ok ? "status" : "alert"}
+          className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+            state.ok
+              ? "border-success/30 bg-success-soft text-success"
+              : "border-error/30 bg-error-soft text-error"
+          }`}
+        >
+          {state.message}
+        </p>
       )}
-
-      <div className="space-y-2">
-        <Label htmlFor="pending-email" className="text-[13px]">
-          بريدك الإلكتروني
-        </Label>
-        <Input
-          id="pending-email"
-          name="email"
-          type="email"
-          dir="ltr"
-          autoComplete="email"
-          defaultValue={initialEmail}
-          placeholder="name@school.edu"
-          required
-          className="h-11 w-full rounded-xl bg-background"
-        />
-      </div>
-
       <SubmitButton />
     </form>
   );

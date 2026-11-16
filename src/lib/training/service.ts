@@ -950,7 +950,7 @@ export async function getCourseForViewer(
     createdById: course.createdById,
     createdBy: course.createdBy,
   });
-  if (supervisorGate) return supervisorGate;
+  if (supervisorGate) return fail(supervisorGate.message, "FORBIDDEN");
 
   const sections: ViewerSection[] = course.sections.map((section) => ({
     id: section.id,
@@ -1098,7 +1098,7 @@ export async function enrollTeacher(
     createdById: course.createdById,
     createdBy: course.createdBy,
   });
-  if (supervisorGate) return supervisorGate;
+  if (supervisorGate) return fail(supervisorGate.message, "FORBIDDEN");
 
   const existing = await db.courseEnrollment.findUnique({
     where: { courseId_userId: { courseId: course.id, userId: viewer.id } },

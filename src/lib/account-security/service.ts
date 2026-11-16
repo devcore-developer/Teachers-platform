@@ -129,7 +129,7 @@ export async function changeOwnEmail(
 ): Promise<SecurityServiceResult<ChangeEmailOutcome>> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, passwordHash: true, email: true, isActive: true },
+    select: { passwordHash: true, email: true, isActive: true },
   });
   if (!user || !user.isActive) {
     return { ok: false, message: "الحساب غير متاح", code: "NOT_FOUND" };
@@ -223,7 +223,11 @@ export async function adminSetTemporaryPassword(
   actor: { id: string; name: string; role: string; schoolId: string | null },
   targetUserId: string
 ): Promise<SecurityServiceResult<AdminResetOutcome>> {
-  if (actor.role !== "SUPER_ADMIN" && actor.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    actor.role !== "SUPER_ADMIN" &&
+    actor.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    actor.role !== "SCHOOL_MANAGER"
+  ) {
     return { ok: false, message: "إعادة التعيين متاحة للإدارة فقط", code: "FORBIDDEN" };
   }
   const target = await db.user.findUnique({
@@ -233,10 +237,7 @@ export async function adminSetTemporaryPassword(
   if (!target) {
     return { ok: false, message: "الحساب غير موجود", code: "NOT_FOUND" };
   }
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    target.schoolId !== actor.schoolId
-  ) {
+  if (actor.role !== "SUPER_ADMIN" && target.schoolId !== actor.schoolId) {
     return { ok: false, message: "هذا الحساب خارج نطاق مدرستك", code: "FORBIDDEN" };
   }
 
@@ -269,7 +270,11 @@ export async function adminUpdateEmail(
   targetUserId: string,
   newEmail: string
 ): Promise<SecurityServiceResult<ChangeEmailOutcome>> {
-  if (actor.role !== "SUPER_ADMIN" && actor.role !== "DEVELOPMENT_OFFICE_MANAGER") {
+  if (
+    actor.role !== "SUPER_ADMIN" &&
+    actor.role !== "DEVELOPMENT_OFFICE_MANAGER" &&
+    actor.role !== "SCHOOL_MANAGER"
+  ) {
     return { ok: false, message: "تحديث البريد متاح للإدارة فقط", code: "FORBIDDEN" };
   }
   const target = await db.user.findUnique({
@@ -279,10 +284,7 @@ export async function adminUpdateEmail(
   if (!target) {
     return { ok: false, message: "الحساب غير موجود", code: "NOT_FOUND" };
   }
-  if (
-    actor.role === "DEVELOPMENT_OFFICE_MANAGER" &&
-    target.schoolId !== actor.schoolId
-  ) {
+  if (actor.role !== "SUPER_ADMIN" && target.schoolId !== actor.schoolId) {
     return { ok: false, message: "هذا الحساب خارج نطاق مدرستك", code: "FORBIDDEN" };
   }
 
