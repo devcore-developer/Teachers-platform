@@ -31,9 +31,8 @@ interface SchoolFormProps {
 
 const PLATFORM_DEFAULT_COLOR = "#1D5BD6";
 
-/** أقصى حجم مسموح به لملف الشعار — 200KB */
-const MAX_LOGO_BYTES = 200 * 1024;
-
+/** أقصى حجم مسموح به لملف الشعار — 2MB */
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const ACCEPTED_LOGO_TYPES = [
   "image/png",
   "image/jpeg",
@@ -306,7 +305,7 @@ export function SchoolForm({ mode, initial }: SchoolFormProps) {
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              PNG / JPG / WebP / SVG / GIF — الحد الأقصى 200KB. تُحفظ الصورة مع بيانات المدرسة عند الضغط على الحفظ.
+              PNG / JPG / WebP / SVG / GIF — الحد الأقصى 2MB. تُحفظ الصورة مع بيانات المدرسة عند الضغط على الحفظ.
             </p>
           )}
           <FieldError message={fieldErrors?.logoUrl} />
