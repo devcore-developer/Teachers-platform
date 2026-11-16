@@ -1,3 +1,4 @@
+
 import { SchoolsMetricsSection } from "@/components/dashboard/schools-metrics";
 import { UsersMetricsSection } from "@/components/dashboard/users-metrics";
 import { RegistrationMetricsSection } from "@/components/dashboard/registration-metrics";
@@ -78,11 +79,13 @@ export default async function HomePage() {
     return <SupervisorDashboardSection />;
   }
 
-  // IT coordinator — the coordinator's own dashboard (previously this
-  // role fell through to the teacher-style RoleDashboard and the only
-  // way to reach /it/* was typing the URL manually).
   if (user.role === "IT_COORDINATOR" && user.schoolId) {
-    return <ItCoordinatorDashboard name={user.name} schoolId={user.schoolId} />;
+    return (
+      <ItCoordinatorDashboard
+        name={user.name}
+        schoolId={user.schoolId}
+      />
+    );
   }
 
   return <RoleDashboard user={user} />;
