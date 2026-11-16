@@ -1,7 +1,7 @@
 
-import { SchoolsMetricsSection } from "@/components/dashboard/schools-metrics";
-import { UsersMetricsSection } from "@/components/dashboard/users-metrics";
-import { RegistrationMetricsSection } from "@/components/dashboard/registration-metrics";
+import { SchoolsMetrics } from "@/components/dashboard/schools-metrics";
+import { UsersMetrics } from "@/components/dashboard/users-metrics";
+import { RegistrationMetrics } from "@/components/dashboard/registration-metrics";
 import { AcademyMetricsSection } from "@/components/dashboard/academy-metrics";
 import { AssessmentMetricsSection } from "@/components/dashboard/assessment-metrics";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
@@ -14,28 +14,6 @@ export const metadata = {
   title: "لوحة المعلومات",
 };
 
-/**
- * Role-aware dashboard (server component). The session user comes from
- * the DB — never from the client:
- *   SUPER_ADMIN                -> platform dashboard + schools + users + academy metrics
- *   DEVELOPMENT_OFFICE_MANAGER -> same shell + THEIR school's metrics
- *                                 (schoolId from the session only)
- *   SCHOOL_MANAGER             -> office-manager-equivalent dashboard,
- *                                 pinned to THEIR school's metrics
- *   EDUCATIONAL_SUPERVISOR     -> the merged supervisor dashboard
- *                                 (SupervisorDashboardSection): the
- *                                 former "لوحة المشرف" widgets — live
- *                                 DB KPIs, assigned teachers & branches,
- *                                 pending follow-ups, completions and
- *                                 notifications — now live HERE, and
- *                                 /supervision/dashboard redirects here.
- *   IT_COORDINATOR             -> the coordinator dashboard (real
- *                                 school-scoped counters + the two
- *                                 server-enforced capabilities)
- *   every other role           -> scoped role dashboard (RoleDashboard)
- *
- * Phase 1 mock sections keep their honest "بيانات تجريبية" labels.
- */
 export default async function HomePage() {
   const user = await requireUser();
 
@@ -44,9 +22,9 @@ export default async function HomePage() {
       <DashboardView
         schoolsSlot={
           <div className="space-y-6">
-            <SchoolsMetricsSection />
-            <RegistrationMetricsSection />
-            <UsersMetricsSection />
+            <SchoolsMetrics schoolId={null} />
+            <RegistrationMetrics schoolId={null} />
+            <UsersMetrics schoolId={null} />
             <AcademyMetricsSection />
             <AssessmentMetricsSection />
           </div>
@@ -64,9 +42,9 @@ export default async function HomePage() {
       <DashboardView
         schoolsSlot={
           <div className="space-y-6">
-            <RegistrationMetricsSection schoolId={user.schoolId} />
-            <SchoolsMetricsSection schoolId={user.schoolId} />
-            <UsersMetricsSection schoolId={user.schoolId} />
+            <RegistrationMetrics schoolId={user.schoolId} />
+            <SchoolsMetrics schoolId={user.schoolId} />
+            <UsersMetrics schoolId={user.schoolId} />
             <AcademyMetricsSection schoolId={user.schoolId} />
             <AssessmentMetricsSection schoolId={user.schoolId} />
           </div>
