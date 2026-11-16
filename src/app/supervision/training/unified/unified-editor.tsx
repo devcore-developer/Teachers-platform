@@ -61,9 +61,9 @@ import { TrainingVideosSection } from "./unified-content";
 /*   9. متابعة المعلمين والنتائج (التقدم + الاختبار + التصحيح + الشهادات) */
 /*  10. شريط النشر (نشر التدريب) في أسفل الصفحة                          */
 /*                                                                      */
-/* Each section saves ITSELF through its own action and never touches    */
-/* another section's fields — saving one never overwrites unsaved        */
-/* edits elsewhere.                                                      */
+/* Each section saves ITSELF through its own action and never touches   */
+/* another section's fields — saving one never overwrites unsaved       */
+/* edits elsewhere.                                                     */
 /*                                                                      */
 /* Every mutation re-verified server-side (requireSupervisorContext +   */
 /* tenant fence); the form never sends a schoolId.                      */
@@ -114,6 +114,55 @@ export function FieldError({ message }: { message?: string }) {
   );
 }
 
+/** Required-field marker — one consistent destructive asterisk with an
+ *  accessible label. Purely visual: it mirrors the REAL validation rules
+ *  (titleAr / category / descriptionAr) and never changes them. */
+function RequiredMark() {
+  return (
+    <>
+      <span className="text-destructive" aria-hidden="true">
+        *
+      </span>
+      <span className="sr-only">(مطلوب)</span>
+    </>
+  );
+}
+
+/** Optional-field chip — same visual language as the section-level
+ *  «اختياري» badge, so every non-required field carries exactly one
+ *  consistent indicator instead of mixed «(اختياري)» wording. */
+function OptionalMark() {
+  return (
+    <>
+      <span className="sr-only">(اختياري)</span>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+        اختياري
+      </span>
+    </>
+  );
+}
+
+/** FieldLabel — one consistent label row for every field: the label
+ *  text followed by exactly one required/optional indicator. */
+function FieldLabel({ text, required }: { text: string; required?: boolean }) {
+  return (
+    <span className="mb-1 flex flex-wrap items-center gap-1.5 text-xs font-bold text-foreground">
+      <span className="min-w-0">{text}</span>
+      {required ? <RequiredMark /> : <OptionalMark />}
+    </span>
+  );
+}
+
+/** FieldHint — persistent one-line helper text under a field. Always
+ *  visible, unlike placeholders which disappear while typing. */
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
 export function SectionCard({
   icon,
   title,
@@ -158,12 +207,20 @@ export function SectionCard({
 
 function statusMeta(status: string): { label: string; className: string } {
   if (status === "PUBLISHED") {
-    return { label: "منشور لمعلمي المدرسة", className: "text-success" };
+    // Brand-tinted chip — echoes the sidebar's active-item accent so the
+    // page header feels part of the same design system.
+    return {
+      label: "منشور لمعلمي المدرسة",
+      className: "border-brand-600/40 bg-brand-600/10 text-brand-700",
+    };
   }
   if (status === "ARCHIVED") {
-    return { label: "مؤرشف", className: "text-muted-foreground" };
+    return {
+      label: "مؤرشف",
+      className: "border-transparent bg-muted text-muted-foreground",
+    };
   }
-  return { label: "مسودة", className: "text-amber-600" };
+  return { label: "مسودة", className: "border-amber-200 bg-amber-50 text-amber-700" };
 }
 
 /* ----------------------------- Editor ------------------------------ */
@@ -243,7 +300,7 @@ export function UnifiedTrainingEditor({
   const isPlaceholderTitle = course.titleAr === "تدريب بدون عنوان";
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5">
+    <div className="mx-auto w-full max-w-4xl space-y-4">
       {/* Header */}
       <header className="rounded-xl border bg-card p-4">
         <Link
@@ -281,11 +338,9 @@ export function UnifiedTrainingEditor({
         title="معلومات التدريب"
       >
         <form onSubmit={handleMetaSave} className="space-y-4" noValidate>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                عنوان التدريب *
-              </span>
+              <FieldLabel text="العنوان" required />
               <input
                 name="titleAr"
                 defaultValue={course?.titleAr ?? ""}
@@ -296,9 +351,7 @@ export function UnifiedTrainingEditor({
               <FieldError message={metaErrors.titleAr} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                العنوان بالإنجليزية (اختياري)
-              </span>
+              <FieldLabel text="العنوان بالإنجليزية" />
               <input
                 name="titleEn"
                 defaultValue={course?.titleEn ?? ""}
@@ -309,9 +362,7 @@ export function UnifiedTrainingEditor({
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                نوع التدريب *
-              </span>
+              <FieldLabel text="النوع" />
               <select
                 name="trainingType"
                 defaultValue={course?.trainingType ?? "VIRTUAL_LIVE"}
@@ -325,9 +376,7 @@ export function UnifiedTrainingEditor({
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                المجال الرئيسي *
-              </span>
+              <FieldLabel text="المجال" required />
               <select name="category" defaultValue={course?.category ?? ""} className={inputClass} required>
                 <option value="" disabled>
                   — اختر المجال —
@@ -346,9 +395,7 @@ export function UnifiedTrainingEditor({
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                التصنيف الفرعي
-              </span>
+              <FieldLabel text="التصنيف الفرعي" />
               <select
                 name="subcategory"
                 defaultValue={course?.subcategory ?? "عام"}
@@ -363,9 +410,7 @@ export function UnifiedTrainingEditor({
               <FieldError message={metaErrors.subcategory} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                المستوى
-              </span>
+              <FieldLabel text="المستوى" />
               <select name="level" defaultValue={course?.level ?? ""} className={inputClass}>
                 <option value="">— بدون —</option>
                 <option value="BEGINNER">مبتدئ</option>
@@ -375,9 +420,7 @@ export function UnifiedTrainingEditor({
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                الساعات التدريبية
-              </span>
+              <FieldLabel text="عدد الساعات" />
               <input
                 name="estimatedHours"
                 type="number"
@@ -386,24 +429,25 @@ export function UnifiedTrainingEditor({
                 defaultValue={course?.estimatedHours ?? ""}
                 className={inputClass}
               />
+              <FieldHint>تقدير فقط — رقم صحيح من 1 إلى 200.</FieldHint>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                تاريخ التدريب
-              </span>
+              <FieldLabel text="التاريخ" />
               <input
                 name="scheduledAt"
                 type="date"
+                dir="ltr"
                 defaultValue={course?.scheduledAt ? course.scheduledAt.slice(0, 10) : ""}
                 className={inputClass}
               />
+              <FieldHint>
+                ميلادي — يُحفظ بصيغة سنة/شهر/يوم مثل 2026-08-15.
+              </FieldHint>
               <FieldError message={metaErrors.scheduledAt} />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                رابط الاجتماع (Zoom / Google Meet)
-              </span>
+              <FieldLabel text="رابط الاجتماع" />
               <input
                 name="meetingUrl"
                 type="url"
@@ -412,12 +456,11 @@ export function UnifiedTrainingEditor({
                 placeholder="https://zoom.us/j/…"
                 className={inputClass}
               />
+              <FieldHint>Zoom أو Google Meet — يجب أن يبدأ بـ https://</FieldHint>
               <FieldError message={metaErrors.meetingUrl} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                رابط يوتيوب (اختياري)
-              </span>
+              <FieldLabel text="رابط يوتيوب" />
               <input
                 name="youtubeUrl"
                 type="url"
@@ -426,35 +469,35 @@ export function UnifiedTrainingEditor({
                 placeholder="https://www.youtube.com/watch?v=…"
                 className={inputClass}
               />
+              <FieldHint>youtube.com أو youtu.be — يبدأ بـ https://</FieldHint>
               <FieldError message={metaErrors.youtubeUrl} />
             </label>
 
             <label className="block md:col-span-2">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                وصف التدريب *
-              </span>
+              <FieldLabel text="الوصف" required />
               <textarea
                 name="descriptionAr"
                 rows={3}
                 defaultValue={course?.descriptionAr ?? ""}
+                placeholder="اكتب وصفًا موجزًا لأهداف التدريب ومحاوره…"
                 className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none transition-colors focus:border-brand-600"
                 maxLength={4000}
                 required
               />
+              <FieldHint>يظهر للمعلمين داخل صفحة التدريب — حتى 4000 حرف.</FieldHint>
               <FieldError message={metaErrors.descriptionAr} />
             </label>
             <label className="block md:col-span-2">
-              <span className="mb-1 block text-xs font-bold text-foreground">
-                رسالة المشرف وتعليماته للمعلمين
-              </span>
+              <FieldLabel text="رسالة المشرف للمعلمين" />
               <textarea
                 name="supervisorInstructionsAr"
                 rows={2}
                 defaultValue={course?.supervisorInstructionsAr ?? ""}
-                placeholder="مثال: يرجى مشاهدة جميع الفيديوهات بالكامل قبل الاختبار، وتحميل المرفقات ومراجعتها."
+                placeholder="مثال: أكمل الفيديوهات والمرفقات قبل الاختبار."
                 className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none transition-colors focus:border-brand-600"
                 maxLength={4000}
               />
+              <FieldHint>تظهر للمعلمين المسجلين — حتى 4000 حرف.</FieldHint>
               <FieldError message={metaErrors.supervisorInstructionsAr} />
             </label>
           </div>
@@ -485,14 +528,19 @@ export function UnifiedTrainingEditor({
             <button
               type="submit"
               disabled={metaPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-sm font-bold text-white shadow-sm shadow-brand-600/30 transition-colors hover:bg-brand-700 active:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               {metaPending ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  جارٍ الحفظ…
+                </>
               ) : (
-                <Save className="size-4" aria-hidden="true" />
+                <>
+                  <Save className="size-4" aria-hidden="true" />
+                  حفظ بيانات التدريب
+                </>
               )}
-              حفظ بيانات التدريب
             </button>
             {metaFeedback && <Feedback {...metaFeedback} />}
           </div>
@@ -518,16 +566,17 @@ export function UnifiedTrainingEditor({
            certificates and impact responses — all in one place. */}
       <TrainingProgressSection courseId={courseId} workspace={workspace} progress={progress ?? null} />
 
-      {/* 10 — publish bar */}
-      <PublishBar courseId={courseId} status={status} lessonsCount={countLessons(workspace)} />
-
-      {isLiveType && course?.meetingUrl === null && status === "PUBLISHED" && (
-        <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] leading-relaxed text-amber-800">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          التدريب من نوع «افتراضي مباشر» ولم تُضف رابط اجتماع بعد — أضف رابط
-          Zoom أو Google Meet أعلاه ليصل المعلمون إلى الاجتماع.
-        </p>
-      )}
+      {/* 10 — publish bar (also hosts the live-meeting warning so the
+           page always ends on the publish card — no stray trailing block,
+           no dead space below it). */}
+      <PublishBar
+        courseId={courseId}
+        status={status}
+        lessonsCount={countLessons(workspace)}
+        liveNeedsMeeting={
+          isLiveType && course?.meetingUrl === null && status === "PUBLISHED"
+        }
+      />
     </div>
   );
 }
@@ -737,10 +786,14 @@ function PublishBar({
   courseId,
   status,
   lessonsCount,
+  liveNeedsMeeting,
 }: {
   courseId: string;
   status: string;
   lessonsCount: number;
+  /** Live-type training published without a meeting link — surfaced here
+   *  so the publish card is the final element of the page. */
+  liveNeedsMeeting?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
@@ -841,6 +894,14 @@ function PublishBar({
           )}
         </div>
       </div>
+      {liveNeedsMeeting && (
+        <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-800">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          التدريب من نوع «افتراضي مباشر» ولم يُضف رابط اجتماع بعد — أضف رابط
+          Zoom أو Google Meet في قسم معلومات التدريب أعلاه ليصل المعلمون إلى
+          الاجتماع.
+        </p>
+      )}
       {feedback && (
         <div className="mt-3">
           <Feedback {...feedback} />
