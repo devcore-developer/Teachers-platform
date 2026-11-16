@@ -4,7 +4,14 @@ import * as React from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { useActionState } from "react";
-import { AlertCircle, CheckCircle2, ImageIcon, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ImageIcon,
+  Loader2,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 
 import { createSchoolAction, updateSchoolAction } from "@/app/actions/schools";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -23,6 +30,17 @@ interface SchoolFormProps {
 }
 
 const PLATFORM_DEFAULT_COLOR = "#1D5BD6";
+
+/** أقصى حجم مسموح به لملف الشعار — 200KB */
+const MAX_LOGO_BYTES = 200 * 1024;
+
+const ACCEPTED_LOGO_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+  "image/gif",
+];
 
 function SubmitButton({ mode }: { mode: SchoolFormProps["mode"] }) {
   const { pending } = useFormStatus();
@@ -46,6 +64,11 @@ function FieldError({ message }: { message?: string }) {
 /**
  * Create/edit school form. All validation runs again on the server
  * (server action + Zod); field errors below mirror the server result.
+ *
+ * الشعار: رفع ملف حقيقي من الجهاز — الصورة تُقرأ في المتصفح وتتحول إلى
+ * data URL وتُحفظ في حقل logoUrl الموجود بالفعل، بدون أي نظام تخزين
+ * خارجي وبدون أي تغيير في الـ schema. معاينة فورية + استبدال + إزالة
+ * + حالات تحميل وخطأ ونجاح، ويعمل في الإنشاء والتعديل.
  */
 export function SchoolForm({ mode, initial }: SchoolFormProps) {
   const { toast } = useToast();
@@ -55,8 +78,13 @@ export function SchoolForm({ mode, initial }: SchoolFormProps) {
   const [nameEn, setNameEn] = React.useState(initial?.nameEn ?? "");
   const [slug, setSlug] = React.useState(initial?.slug ?? "");
   const [slugEdited, setSlugEdited] = React.useState(mode === "edit");
-  const [logoUrl, setLogoUrl] = React.useState(initial?.logoUrl ?? "");
+  const [logoValue, setLogoValue] = React.useState(initial?.logoUrl ?? "");
+  const [logoPreview, setLogoPreview] = React.useState<string | null>(
+    initial?.logoUrl ?? null
+  );
   const [logoBroken, setLogoBroken] = React.useState(false);
+  const [logoError, setLogoError] = React.useState<string | null>(null);
+  const [logoLoading, setLogoLoading] = React.useState(false);
   const [brandColor, setBrandColor] = React.useState(
     initial?.brandColor ?? PLATFORM_DEFAULT_COLOR
   );
@@ -72,8 +100,57 @@ export function SchoolForm({ mode, initial }: SchoolFormProps) {
     }
   }, [state, toast]);
 
-  const fieldErrors = state && "fieldErrors" in state ? state.fieldErrors : undefined;
-  const formMessage = state && "message" in state && !state.ok ? state.message : undefined;
+  const fieldErrors =
+    state && "fieldErrors" in state ? state.fieldErrors : undefined;
+  const formMessage =
+    state && "message" in state && !state.ok ? state.message : undefined;
+
+  async function handleLogoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // تصفير الحقل يسمح بإعادة اختيار نفس الملف بعد الإزالة أو الاستبدال
+    event.target.value = "";
+    setLogoError(null);
+    setLogoBroken(false);
+    if (!file) return;
+
+    if (!ACCEPTED_LOGO_TYPES.includes(file.type)) {
+      setLogoError("صيغة غير مدعومة — المسموح: PNG / JPG / WebP / SVG / GIF.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError(
+        `حجم الصورة كبير جداً — الحد الأقصى ${Math.round(MAX_LOGO_BYTES / 1024)}KB.`
+      );
+      return;
+    }
+
+    setLogoLoading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("logo-read-failed"));
+        reader.readAsDataURL(file);
+      });
+      setLogoValue(dataUrl);
+      setLogoPreview(dataUrl);
+      toast({
+        title: "تم اختيار الشعار",
+        description: "سيتم حفظه مع بقية بيانات المدرسة.",
+      });
+    } catch {
+      setLogoError("تعذّر قراءة الملف — جرّب صورة أخرى.");
+    } finally {
+      setLogoLoading(false);
+    }
+  }
+
+  function clearLogo() {
+    setLogoValue("");
+    setLogoPreview(null);
+    setLogoBroken(false);
+    setLogoError(null);
+  }
 
   return (
     <form action={formAction} className="space-y-6">
@@ -153,18 +230,20 @@ export function SchoolForm({ mode, initial }: SchoolFormProps) {
         <FieldError message={fieldErrors?.slug} />
       </div>
 
-      {/* Logo + brand color */}
+      {/* Logo upload + brand color */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="logoUrl">
-            رابط شعار المدرسة
+          <Label>
+            شعار المدرسة
             <span className="ms-1 text-xs font-normal text-muted-foreground">(اختياري)</span>
           </Label>
+          {/* القيمة الفعلية التي تصل إلى السيرفر داخل حقل logoUrl الموجود */}
+          <input type="hidden" name="logoUrl" value={logoValue} />
           <div className="flex items-center gap-3">
-            {/* Preview + fallback */}
-            {logoUrl && !logoBroken ? (
+            {logoPreview && !logoBroken ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={logoUrl}
+                src={logoPreview}
                 alt="معاينة الشعار"
                 className="size-12 shrink-0 rounded-xl border bg-card object-contain p-1"
                 onError={() => setLogoBroken(true)}
@@ -182,26 +261,54 @@ export function SchoolForm({ mode, initial }: SchoolFormProps) {
                 )}
               </span>
             )}
-            <Input
-              id="logoUrl"
-              name="logoUrl"
-              value={logoUrl}
-              onChange={(event) => {
-                setLogoUrl(event.target.value);
-                setLogoBroken(false);
-              }}
-              placeholder="https://example.com/logo.png"
-              dir="ltr"
-              aria-invalid={Boolean(fieldErrors?.logoUrl)}
-              className={cn(
-                "flex-1 text-sm",
-                fieldErrors?.logoUrl && "border-error focus-visible:ring-error/30"
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <label
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-semibold",
+                  logoLoading && "pointer-events-none opacity-60"
+                )}
+              >
+                {logoLoading ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <UploadCloud className="size-4" aria-hidden="true" />
+                )}
+                {logoLoading
+                  ? "جارٍ قراءة الصورة..."
+                  : logoPreview
+                    ? "استبدال الشعار"
+                    : "اختيار صورة الشعار"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                  className="sr-only"
+                  onChange={handleLogoChange}
+                  disabled={logoLoading}
+                />
+              </label>
+              {logoPreview && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearLogo}
+                  disabled={logoLoading}
+                >
+                  <Trash2 className="size-4" aria-hidden="true" />
+                  إزالة
+                </Button>
               )}
-            />
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            الصق رابط صورة الشعار (PNG/SVG). رفع الملفات مباشرة متاح في مرحلة لاحقة عند ربط نظام تخزين الملفات.
-          </p>
+          {logoError ? (
+            <p className="text-xs font-semibold text-error" role="alert">
+              {logoError}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              PNG / JPG / WebP / SVG / GIF — الحد الأقصى 200KB. تُحفظ الصورة مع بيانات المدرسة عند الضغط على الحفظ.
+            </p>
+          )}
           <FieldError message={fieldErrors?.logoUrl} />
         </div>
 

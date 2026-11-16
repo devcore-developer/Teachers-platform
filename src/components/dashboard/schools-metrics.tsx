@@ -1,185 +1,130 @@
-import Link from "next/link";
-import { Building2, ChevronLeft, Landmark, ToggleLeft, Users } from "lucide-react";
+import { db } from "@/lib/db";
 
-import { SectionCard } from "@/components/platform/section-card";
-import { getSchoolMetricsForSchool, getSchoolsMetrics } from "@/lib/schools/service";
+type SchoolsMetricsProps = {
+  schoolId: string | null;
+};
 
-/**
- * Real, persisted schools & branches metrics for the dashboard.
- * Server component — reads straight from the database on every request
- * (Next revalidates these paths after every school mutation).
- *
- * Two scopes, enforced server-side by the caller:
- *   - no schoolId -> platform-wide (SUPER_ADMIN dashboard)
- *   - schoolId    -> ONE school's branches + teachers (office manager;
- *                    the schoolId comes from the session, never client)
- *
- * Mock Phase-1 sections keep their honest "بيانات تجريبية" label; this
- * section is labelled as real persisted data.
- */
-interface SchoolsMetricsSectionProps {
-  /** When set, renders school-scoped metrics for the office manager. */
-  schoolId?: string;
+type SchoolRecord = {
+  nameAr: string;
+  nameEn: string | null;
+  slug: string;
+  isActive: boolean;
+  brandColor: string | null;
+  createdAt: Date;
+};
+
+const cardClassName = "rounded-xl border border-border bg-card p-4";
+
+function MetricCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className={cardClassName}>
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-bold">{value}</p>
+    </div>
+  );
 }
 
-export async function SchoolsMetricsSection({ schoolId }: SchoolsMetricsSectionProps) {
+export async function SchoolsMetrics({ schoolId }: SchoolsMetricsProps) {
   if (schoolId) {
-    const scoped = await getSchoolMetricsForSchool(schoolId);
-    if (!scoped) {
+    let school: SchoolRecord | null = null;
+
+    try {
+      school = await db.school.findUnique({
+        where: { id: schoolId },
+        select: {
+          nameAr: true,
+          nameEn: true,
+          slug: true,
+          isActive: true,
+          brandColor: true,
+          createdAt: true,
+        },
+      });
+    } catch {
+      school = null;
+    }
+
+    if (!school) {
       return (
-        <SectionCard title="بيانات المدرسة" description="لم يتم العثور على بيانات المدرسة.">
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            تعذر تحميل مؤشرات مدرستك — تواصل مع مدير المنصة.
+        <div className={cardClassName}>
+          <p className="text-sm text-muted-foreground">
+            لم يتم العثور على بيانات المدرسة المرتبطة بحسابك.
           </p>
-        </SectionCard>
+        </div>
       );
     }
 
-    const scopedItems = [
-      {
-        id: "total-branches",
-        label: "إجمالي الفروع",
-        value: scoped.totalBranches,
-        icon: Landmark,
-        tileClass: "bg-brand-100 text-brand-700",
-      },
-      {
-        id: "active-branches",
-        label: "فروع نشطة",
-        value: scoped.activeBranches,
-        icon: ToggleLeft,
-        tileClass: "bg-success-soft text-success",
-      },
-      {
-        id: "inactive-branches",
-        label: "فروع موقوفة",
-        value: scoped.inactiveBranches,
-        icon: Building2,
-        tileClass: "bg-warning-soft text-warning",
-      },
-      {
-        id: "teachers",
-        label: "المعلمون المسجلون",
-        value: scoped.teachersCount,
-        icon: Users,
-        tileClass: "bg-info-soft text-info",
-      },
-    ];
+    let usersCount: number | null = null;
+    try {
+      usersCount = await db.user.count({ where: { schoolId } });
+    } catch {
+      usersCount = null;
+    }
+
+    const createdAtLabel = new Intl.DateTimeFormat("ar-EG", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(school.createdAt);
 
     return (
-      <SectionCard
-        title={`مدرستك — ${scoped.schoolName}`}
-        description="مؤشرات حقيقية لمدرستك من قاعدة البيانات — تتحدث مع كل إضافة أو تعديل."
-      >
-        <div
-          className="grid grid-cols-2 gap-3 xl:grid-cols-4"
-          role="list"
-          aria-label="مؤشرات مدرستك"
-        >
-          {scopedItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.id}
-                role="listitem"
-                className="flex items-center gap-3 rounded-xl border bg-background/60 p-3.5"
-              >
-                <span
-                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${item.tileClass}`}
-                  aria-hidden="true"
-                >
-                  <Icon className="size-5" strokeWidth={1.9} />
-                </span>
-                <span className="min-w-0 leading-tight">
-                  <span className="block text-xl font-extrabold tabular-nums text-foreground">
-                    {item.value}
-                  </span>
-                  <span className="block truncate text-xs font-medium text-muted-foreground">
-                    {item.label}
-                  </span>
-                </span>
-              </div>
-            );
-          })}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span
+            className="inline-block h-4 w-4 rounded-full border border-border"
+            style={{ backgroundColor: school.brandColor ?? "#2563eb" }}
+          />
+          <h3 className="text-lg font-bold">{school.nameAr}</h3>
+          <span
+            className={
+              school.isActive
+                ? "rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success"
+                : "rounded-full bg-error/10 px-3 py-1 text-xs font-medium text-error"
+            }
+          >
+            {school.isActive ? "نشطة" : "موقوفة"}
+          </span>
         </div>
-      </SectionCard>
+
+        <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs text-muted-foreground">الاسم بالإنجليزية</dt>
+            <dd className="mt-1 text-sm font-medium" dir="ltr">
+              {school.nameEn ?? "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">المعرّف (Slug)</dt>
+            <dd className="mt-1 text-sm font-medium" dir="ltr">
+              {school.slug}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">عدد المستخدمين المرتبطين</dt>
+            <dd className="mt-1 text-sm font-medium">
+              {usersCount === null ? "—" : usersCount}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">تاريخ الإنشاء</dt>
+            <dd className="mt-1 text-sm font-medium">{createdAtLabel}</dd>
+          </div>
+        </dl>
+      </div>
     );
   }
 
-  const metrics = await getSchoolsMetrics();
-
-  const items = [
-    {
-      id: "total-schools",
-      label: "إجمالي المدارس",
-      value: metrics.totalSchools,
-      icon: Landmark,
-      tileClass: "bg-brand-100 text-brand-700",
-    },
-    {
-      id: "active-schools",
-      label: "مدارس نشطة",
-      value: metrics.activeSchools,
-      icon: ToggleLeft,
-      tileClass: "bg-success-soft text-success",
-    },
-    {
-      id: "inactive-schools",
-      label: "مدارس موقوفة",
-      value: metrics.inactiveSchools,
-      icon: Building2,
-      tileClass: "bg-warning-soft text-warning",
-    },
-    {
-      id: "total-branches",
-      label: "إجمالي الفروع",
-      value: metrics.totalBranches,
-      icon: Users,
-      tileClass: "bg-info-soft text-info",
-    },
-  ];
+  const [totalSchools, activeSchools, inactiveSchools] = await Promise.all([
+    db.school.count(),
+    db.school.count({ where: { isActive: true } }),
+    db.school.count({ where: { isActive: false } }),
+  ]);
 
   return (
-    <SectionCard
-      title="المدارس والفروع"
-      description="مؤشرات حقيقية محفوظة في قاعدة البيانات — تُحدَّث مع كل إضافة أو تعديل."
-      action={
-        <Link
-          href="/schools"
-          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
-        >
-          إدارة المدارس
-          <ChevronLeft className="size-3.5" aria-hidden="true" />
-        </Link>
-      }
-    >
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" role="list" aria-label="مؤشرات المدارس والفروع">
-        {items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.id}
-              role="listitem"
-              className="flex items-center gap-3 rounded-xl border bg-background/60 p-3.5"
-            >
-              <span
-                className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${item.tileClass}`}
-                aria-hidden="true"
-              >
-                <Icon className="size-5" strokeWidth={1.9} />
-              </span>
-              <span className="min-w-0 leading-tight">
-                <span className="block text-xl font-extrabold tabular-nums text-foreground">
-                  {item.value}
-                </span>
-                <span className="block truncate text-xs font-medium text-muted-foreground">
-                  {item.label}
-                </span>
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </SectionCard>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <MetricCard label="إجمالي المدارس" value={totalSchools} />
+      <MetricCard label="مدارس نشطة" value={activeSchools} />
+      <MetricCard label="مدارس موقوفة" value={inactiveSchools} />
+    </div>
   );
 }

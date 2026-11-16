@@ -116,7 +116,7 @@ export const navItems: NavItem[] = [
   },
   {
     id: "supervision",
-    label: "معلموّي",
+    label: "المعلمون",
     href: "/supervision",
     description: "المعلمون المسندون إليك وفروعك المصرّح بها — داخل نطاقك فقط.",
     icon: UserCheck,

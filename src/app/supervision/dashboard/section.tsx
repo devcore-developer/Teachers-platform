@@ -176,7 +176,7 @@ export async function SupervisorDashboardSection() {
               href="/supervision"
               className="text-xs font-bold text-brand-600 hover:underline"
             >
-              معلموّي
+              المعلمون
             </Link>
           }
         >

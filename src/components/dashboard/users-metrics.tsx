@@ -1,138 +1,94 @@
-import Link from "next/link";
-import { ChevronLeft, Eye, ShieldCheck, UserCheck, UserCog, Users } from "lucide-react";
+import { db } from "@/lib/db";
 
-import { SectionCard } from "@/components/platform/section-card";
-import { getPlatformUsersMetrics, getSchoolUsersMetrics } from "@/lib/users/directory";
+type UsersMetricsProps = {
+  schoolId: string | null;
+};
 
-/**
- * Real, persisted USER metrics for the dashboard (Phase 4):
- *   - no schoolId -> platform-wide (SUPER_ADMIN);
- *   - schoolId    -> one school (office manager; the id comes from the
- *     session, never the client). A school-scoped viewer never sees
- *     another school's counts.
- */
-interface UsersMetricsSectionProps {
-  schoolId?: string;
-}
+type RoleGroup = {
+  role: string;
+  _count: {
+    _all: number;
+  };
+};
 
-export async function UsersMetricsSection({ schoolId }: UsersMetricsSectionProps) {
-  const metrics = schoolId
-    ? await getSchoolUsersMetrics(schoolId)
-    : await getPlatformUsersMetrics();
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: "مدير النظام",
+  SCHOOL_MANAGER: "مدير مدرسة",
+  DEVELOPMENT_OFFICE_MANAGER: "مدير مكتب التطوير",
+  EDUCATIONAL_SUPERVISOR: "مشرف تربوي",
+  IT_COORDINATOR: "منسق تقنية المعلومات",
+  TEACHER: "معلم",
+};
 
-  const items = schoolId
-    ? [
-        {
-          id: "school-users",
-          label: "مستخدمو المدرسة",
-          value: metrics.totalUsers,
-          icon: Users,
-          tileClass: "bg-brand-100 text-brand-700",
-        },
-        {
-          id: "school-teachers",
-          label: "المعلمون",
-          value: metrics.teachersCount,
-          icon: UserCheck,
-          tileClass: "bg-info-soft text-info",
-        },
-        {
-          id: "school-supervisors",
-          label: "المشرفون التربويون",
-          value: metrics.supervisorsCount,
-          icon: UserCog,
-          tileClass: "bg-success-soft text-success",
-        },
-        {
-          id: "school-active",
-          label: "حسابات نشطة",
-          value: metrics.activeUsers,
-          icon: ShieldCheck,
-          tileClass: "bg-warning-soft text-warning",
-        },
-      ]
-    : [
-        {
-          id: "platform-users",
-          label: "إجمالي المستخدمين",
-          value: metrics.totalUsers,
-          icon: Users,
-          tileClass: "bg-brand-100 text-brand-700",
-        },
-        {
-          id: "platform-teachers",
-          label: "المعلمون",
-          value: metrics.teachersCount,
-          icon: UserCheck,
-          tileClass: "bg-info-soft text-info",
-        },
-        {
-          id: "platform-managers",
-          label: "مديرو مكاتب التطوير",
-          value: metrics.managersCount,
-          icon: UserCog,
-          tileClass: "bg-success-soft text-success",
-        },
-        {
-          id: "platform-active",
-          label: "حسابات نشطة",
-          value: metrics.activeUsers,
-          icon: ShieldCheck,
-          tileClass: "bg-warning-soft text-warning",
-        },
-      ];
+const cardClassName = "rounded-xl border border-border bg-card p-4";
+
+export async function UsersMetrics({ schoolId }: UsersMetricsProps) {
+  let groups: RoleGroup[] = [];
+  let failed = false;
+
+  try {
+    const result = await db.user.groupBy({
+      by: ["role"],
+      _count: { _all: true },
+      where: schoolId ? { schoolId } : undefined,
+    });
+    groups = result;
+  } catch {
+    failed = true;
+  }
+
+  if (failed) {
+    return (
+      <div className={cardClassName}>
+        <p className="text-sm text-muted-foreground">
+          تعذر تحميل إحصائيات المستخدمين حالياً. حاول تحديث الصفحة.
+        </p>
+      </div>
+    );
+  }
+
+  const total = groups.reduce((sum: number, g) => sum + g._count._all, 0);
+
+  if (groups.length === 0) {
+    return (
+      <div className={cardClassName}>
+        <p className="text-sm text-muted-foreground">
+          لا يوجد مستخدمون {schoolId ? "في هذه المدرسة" : "على المنصة"} بعد.
+        </p>
+      </div>
+    );
+  }
+
+  const countsByRole = new Map<string, number>();
+  for (const g of groups) {
+    countsByRole.set(g.role, g._count._all);
+  }
+
+  const knownRoles = Object.keys(ROLE_LABELS);
+  const extraRoles = groups.map((g) => g.role).filter((role) => !(role in ROLE_LABELS));
 
   return (
-    <SectionCard
-      title={schoolId ? "مستخدمو مدرستك" : "مستخدمو المنصة"}
-      description="مؤشرات حقيقية للحسابات من قاعدة البيانات — تُحدَّث مع كل إضافة أو تعديل."
-      action={
-        <Link
-          href="/users"
-          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
-        >
-          دليل المستخدمين
-          <ChevronLeft className="size-3.5" aria-hidden="true" />
-        </Link>
-      }
-    >
-      <div
-        className="grid grid-cols-2 gap-3 xl:grid-cols-4"
-        role="list"
-        aria-label="مؤشرات المستخدمين"
-      >
-        {items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.id}
-              role="listitem"
-              className="flex items-center gap-3 rounded-xl border bg-background/60 p-3.5"
-            >
-              <span
-                className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${item.tileClass}`}
-                aria-hidden="true"
-              >
-                <Icon className="size-5" strokeWidth={1.9} />
-              </span>
-              <span className="min-w-0 leading-tight">
-                <span className="block text-xl font-extrabold tabular-nums text-foreground">
-                  {item.value}
-                </span>
-                <span className="block truncate text-xs font-medium text-muted-foreground">
-                  {item.label}
-                </span>
-              </span>
-            </div>
-          );
-        })}
+    <div className="space-y-4">
+      <div className={cardClassName}>
+        <p className="text-sm text-muted-foreground">إجمالي المستخدمين</p>
+        <p className="mt-2 text-2xl font-bold">{total}</p>
       </div>
-      {schoolId && metrics.deputiesCount > 0 && (
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Eye className="size-3.5" aria-hidden="true" />
-          ويشمل {metrics.deputiesCount} وكيلًا تعليميًا بصلاحيات اطلاع.
-        </p>
-      )}
-    </SectionCard>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {knownRoles.map((role) => (
+          <div key={role} className={cardClassName}>
+            <p className="text-sm text-muted-foreground">{ROLE_LABELS[role]}</p>
+            <p className="mt-2 text-2xl font-bold">{countsByRole.get(role) ?? 0}</p>
+          </div>
+        ))}
+
+        {extraRoles.map((role) => (
+          <div key={role} className={cardClassName}>
+            <p className="text-sm text-muted-foreground">{role}</p>
+            <p className="mt-2 text-2xl font-bold">{countsByRole.get(role) ?? 0}</p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

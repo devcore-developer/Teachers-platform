@@ -32,9 +32,9 @@ export default async function SupervisionPage() {
   return (
     <div>
       <PageHeader
-        title="معلموّي"
+        title="المعلمون"
         description={`المعلمون داخل نطاقك المصرّح به فقط — ${roleLabel(user.role)}${user.schoolId ? "" : ""}`}
-        breadcrumbs={[{ label: "معلموّي" }]}
+        breadcrumbs={[{ label: "المعلمون" }]}
         meta={
           <>
             <StatusBadge tone="info" withDot={false}>
