@@ -163,55 +163,6 @@ function FieldHint({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ------------------------ Date formatting -------------------------- */
-/* The scheduled date is DISPLAYED in the Egyptian DD/MM/YYYY format and
- * STORED/SENT as ISO YYYY-MM-DD. These three pure helpers own that
- * boundary — the server contract (lib/supervision/training.ts: «ISO date
- * (YYYY-MM-DD) or "" to clear») is untouched by the UI format. */
-
-/** ISO (YYYY-MM-DD) → display (DD/MM/YYYY). Empty/unknown → "". */
-function isoToDmy(iso: string): string {
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
-}
-
-/** Display (DD/MM/YYYY) → ISO (YYYY-MM-DD), or null when the text is not
- *  a REAL calendar date (wrong shape, month > 12, 31/02, …). Mirrors the
- *  server's new Date() parse strictly so nothing new ever reaches it. */
-function dmyToIso(text: string): string | null {
-  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!match) return null;
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-  if (month < 1 || month > 12 || day < 1 || year < 1900 || year > 2100) {
-    return null;
-  }
-  const probe = new Date(Date.UTC(year, month - 1, day));
-  if (
-    probe.getUTCFullYear() !== year ||
-    probe.getUTCMonth() !== month - 1 ||
-    probe.getUTCDate() !== day
-  ) {
-    return null;
-  }
-  return `${match[3]}-${match[2]}-${match[1]}`;
-}
-
-/** Keystroke/paste normalizer for the DD/MM/YYYY field: digits only,
- *  auto-slashed 2-2-4; a pasted ISO date is converted transparently. */
-function normalizeDateTyping(raw: string): string {
-  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (iso) {
-    return isoToDmy(
-      `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`
-    );
-  }
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-  const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)];
-  return parts.filter(Boolean).join("/");
-}
-
 export function SectionCard({
   icon,
   title,
@@ -293,38 +244,16 @@ export function UnifiedTrainingEditor({
 
   const course = workspace.course;
 
-  /** Scheduled date as DISPLAYED to the user: DD/MM/YYYY (Egyptian
-   *  format), initialized from the stored ISO value. Converted back to
-   *  ISO in handleMetaSave — storage and server validation untouched. */
-  const [scheduledDraft, setScheduledDraft] = React.useState(() =>
-    isoToDmy(course?.scheduledAt?.slice(0, 10) ?? "")
-  );
-
   async function handleMetaSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (metaPending) return;
     const form = event.currentTarget;
     const data = new FormData(form);
-
-    // The field DISPLAYS DD/MM/YYYY (Egyptian format) while the server
-    // contract is ISO YYYY-MM-DD — convert here, before anything is sent,
-    // so server validation, storage and retrieval are format-agnostic.
-    const scheduledRaw = String(data.get("scheduledAt") ?? "").trim();
-    const scheduledIso = scheduledRaw ? dmyToIso(scheduledRaw) : "";
-    if (scheduledRaw && scheduledIso === null) {
-      setMetaErrors({
-        scheduledAt: "أدخل تاريخًا صحيحًا بصيغة يوم/شهر/سنة — مثل 15/08/2026.",
-      });
-      setMetaFeedback({
-        bad: true,
-        text: "لم يتم الحفظ — صحّح صيغة التاريخ أولًا (يوم/شهر/سنة).",
-      });
-      return;
-    }
-
     setMetaPending(true);
     setMetaFeedback(null);
     setMetaErrors({});
+
+    const scheduledRaw = String(data.get("scheduledAt") ?? "").trim();
     const result = (await saveSupervisorTrainingAction({
       courseId,
       titleAr: String(data.get("titleAr") ?? ""),
@@ -338,7 +267,7 @@ export function UnifiedTrainingEditor({
       estimatedHours: data.get("estimatedHours")
         ? Number(data.get("estimatedHours"))
         : undefined,
-      scheduledAt: scheduledIso || undefined,
+      scheduledAt: scheduledRaw || undefined,
       meetingUrl: String(data.get("meetingUrl") ?? "").trim() || undefined,
       youtubeUrl: String(data.get("youtubeUrl") ?? "").trim() || undefined,
       supervisorInstructionsAr:
@@ -504,29 +433,15 @@ export function UnifiedTrainingEditor({
             </label>
             <label className="block">
               <FieldLabel text="التاريخ" />
-              {/* Native <input type="date"> renders in the BROWSER's locale
-                  (MM/DD/YYYY on English systems) and cannot be forced to
-                  DD/MM/YYYY — so the display is controlled here instead:
-                  an auto-slashed LTR text field in Egyptian format. The
-                  value is converted to ISO before save (handleMetaSave). */}
               <input
                 name="scheduledAt"
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
+                type="date"
                 dir="ltr"
-                placeholder="15/08/2026"
-                maxLength={10}
-                pattern="\d{2}/\d{2}/\d{4}"
-                title="يوم/شهر/سنة — مثل 15/08/2026"
-                value={scheduledDraft}
-                onChange={(event) =>
-                  setScheduledDraft(normalizeDateTyping(event.target.value))
-                }
+                defaultValue={course?.scheduledAt ? course.scheduledAt.slice(0, 10) : ""}
                 className={inputClass}
               />
               <FieldHint>
-                ميلادي — يوم/شهر/سنة مثل 15/08/2026 (يُخزَّن تلقائيًا 2026-08-15).
+                ميلادي — يُحفظ بصيغة سنة/شهر/يوم مثل 2026-08-15.
               </FieldHint>
               <FieldError message={metaErrors.scheduledAt} />
             </label>
