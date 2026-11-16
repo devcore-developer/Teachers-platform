@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 
 type UsersMetricsProps = {
-  schoolId: string | null;
+  schoolId?: string | null;
 };
 
 type RoleGroup = {
@@ -22,7 +22,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const cardClassName = "rounded-xl border border-border bg-card p-4";
 
-export async function UsersMetrics({ schoolId }: UsersMetricsProps) {
+export async function UsersMetricsSection({ schoolId }: UsersMetricsProps) {
   let groups: RoleGroup[] = [];
   let failed = false;
 

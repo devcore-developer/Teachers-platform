@@ -1,7 +1,7 @@
 
-import { SchoolsMetrics } from "@/components/dashboard/schools-metrics";
-import { UsersMetrics } from "@/components/dashboard/users-metrics";
-import { RegistrationMetrics } from "@/components/dashboard/registration-metrics";
+import { SchoolsMetricsSection } from "@/components/dashboard/schools-metrics";
+import { UsersMetricsSection } from "@/components/dashboard/users-metrics";
+import { RegistrationMetricsSection } from "@/components/dashboard/registration-metrics";
 import { AcademyMetricsSection } from "@/components/dashboard/academy-metrics";
 import { AssessmentMetricsSection } from "@/components/dashboard/assessment-metrics";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
@@ -22,9 +22,9 @@ export default async function HomePage() {
       <DashboardView
         schoolsSlot={
           <div className="space-y-6">
-            <SchoolsMetrics schoolId={null} />
-            <RegistrationMetrics schoolId={null} />
-            <UsersMetrics schoolId={null} />
+            <SchoolsMetricsSection schoolId={null} />
+            <RegistrationMetricsSection schoolId={null} />
+            <UsersMetricsSection schoolId={null} />
             <AcademyMetricsSection />
             <AssessmentMetricsSection />
           </div>
@@ -42,9 +42,9 @@ export default async function HomePage() {
       <DashboardView
         schoolsSlot={
           <div className="space-y-6">
-            <RegistrationMetrics schoolId={user.schoolId} />
-            <SchoolsMetrics schoolId={user.schoolId} />
-            <UsersMetrics schoolId={user.schoolId} />
+            <RegistrationMetricsSection schoolId={user.schoolId} />
+            <SchoolsMetricsSection schoolId={user.schoolId} />
+            <UsersMetricsSection schoolId={user.schoolId} />
             <AcademyMetricsSection schoolId={user.schoolId} />
             <AssessmentMetricsSection schoolId={user.schoolId} />
           </div>

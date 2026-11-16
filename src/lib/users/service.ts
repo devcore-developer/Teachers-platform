@@ -37,6 +37,12 @@ import { resolveRegistrationToken } from "@/lib/registration-links/service";
 /* duplicate-email suppression without existence disclosure, single-use */
 /* tokens, inactive-account handling, and role-escalation guards.       */
 /* Server actions are thin wrappers; UI never enforces security.        */
+/*                                                                      */
+/* IMMEDIATE ACTIVATION POLICY (task 1): email verification is no       */
+/* longer required anywhere in the teacher lifecycle. New self-         */
+/* registrations are created ACTIVE and pre-verified, and legacy        */
+/* accounts created before this change are healed transparently at      */
+/* their next sign-in attempt (see authenticateCredentials).            */
 /* ------------------------------------------------------------------ */
 
 export type SafeAccount = Omit<
@@ -74,7 +80,7 @@ export type RegisterTeacherResult =
   | { ok: false; message: string; fieldErrors?: Record<string, string>; code?: string };
 
 export interface RegisterTeacherDeps {
-  /** Base URL (from request headers) used to build the emailed link. */
+  /** Base URL (from request headers); kept for signature stability. */
   appBaseUrl: string;
   /** Injectable sender for tests; production uses the SMTP mailer. */
   mailer?: MailSender;
@@ -82,8 +88,10 @@ export interface RegisterTeacherDeps {
 
 /**
  * Self-registration for teachers via a school-specific link:
- * no roster matching, no approval gate, never pre-verified, and the
- * role is forced to TEACHER — the input cannot choose a role.
+ * no roster matching, no approval gate, and the role is forced to
+ * TEACHER — the input cannot choose a role. Per the immediate-activation
+ * policy the account is created ACTIVE and PRE-VERIFIED: it signs in
+ * right away, with no confirmation email and no waiting step.
  */
 export async function registerTeacher(
   raw: unknown,
@@ -153,18 +161,13 @@ export async function registerTeacher(
       // per-link registration stats and the IT workspace flag.
       registrationLinkId: resolution.linkId,
       isActive: true,
-      emailVerifiedAt: null,
+      // Immediate activation — no email-verification gate anywhere.
+      emailVerifiedAt: new Date(),
     },
   });
 
-  const rawToken = await issueEmailVerificationToken(user.id);
-  const mailer = deps.mailer ?? defaultMailSender;
-  const sent = await mailer({
-    to: user.email,
-    ...buildVerificationEmail(user.name, verificationUrl(deps.appBaseUrl, rawToken)),
-  });
-
-  return { ok: true, status: "created", emailSent: sent.ok };
+  // No verification email is sent — the account signs in immediately.
+  return { ok: true, status: "created", emailSent: false };
 }
 
 /* ------------------------------------------------------------------ */
@@ -184,6 +187,8 @@ export async function verifyEmailToken(
 /**
  * Resend a verification email. The response is always generic — the
  * caller cannot learn whether the address belongs to an account.
+ * Legacy path: retained so older screens keep compiling; the login
+ * flow no longer depends on verification.
  */
 export async function resendVerificationEmail(
   email: string,
@@ -210,10 +215,7 @@ export async function resendVerificationEmail(
 /* Credentials / login                                                  */
 /* ------------------------------------------------------------------ */
 
-export type AuthFailureCode =
-  | "INVALID_CREDENTIALS"
-  | "INACTIVE"
-  | "EMAIL_NOT_VERIFIED";
+export type AuthFailureCode = "INVALID_CREDENTIALS" | "INACTIVE";
 
 export type AuthenticateResult =
   | { ok: true; userId: string; tokenVersion: number }
@@ -254,14 +256,15 @@ export async function authenticateCredentials(
     };
   }
 
-  // Email-verification enforcement applies to teachers (self-registered
-  // accounts). Provisioned administrative accounts arrive pre-verified.
+  // Immediate-activation policy: email verification is no longer a
+  // login requirement. Self-registered teachers created BEFORE this
+  // change (emailVerifiedAt null) are healed transparently here on
+  // their first successful sign-in — no admin action needed.
   if (user.role === "TEACHER" && !user.emailVerifiedAt) {
-    return {
-      ok: false,
-      code: "EMAIL_NOT_VERIFIED",
-      message: "يجب تأكيد بريدك الإلكتروني قبل تسجيل الدخول — تحقق من صندوق الرسائل",
-    };
+    await db.user.update({
+      where: { id: user.id },
+      data: { emailVerifiedAt: new Date() },
+    });
   }
 
   // Persist the last sign-in time (Phase 4) — displayed in the user

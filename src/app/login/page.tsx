@@ -52,7 +52,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const footer = (
     <span>
       معلم جديد؟ التسجيل يتم عبر رابط مدرستك المخصص — اطلب الرابط من مكتب
-      التطوير في مدرستك ثم افتحه لإنشاء حسابك وتأكيد بريدك.
+      التطوير في مدرستك ثم افتحه لإنشاء حسابك والدخول مباشرة.
     </span>
   );
 

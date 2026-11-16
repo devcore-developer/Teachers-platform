@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 
 type SchoolsMetricsProps = {
-  schoolId: string | null;
+  schoolId?: string | null;
 };
 
 type SchoolRecord = {
@@ -24,7 +24,9 @@ function MetricCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-export async function SchoolsMetrics({ schoolId }: SchoolsMetricsProps) {
+export async function SchoolsMetricsSection({
+  schoolId,
+}: SchoolsMetricsProps) {
   if (schoolId) {
     let school: SchoolRecord | null = null;
 

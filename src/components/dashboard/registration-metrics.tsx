@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { getSchoolRegistrationStats } from "@/lib/registration-links/service";
 
 type RegistrationMetricsProps = {
-  schoolId: string | null;
+  schoolId?: string | null;
 };
 
 type StatsResult = Awaited<ReturnType<typeof getSchoolRegistrationStats>>;
@@ -18,7 +18,9 @@ function MetricCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-export async function RegistrationMetrics({ schoolId }: RegistrationMetricsProps) {
+export async function RegistrationMetricsSection({
+  schoolId,
+}: RegistrationMetricsProps) {
   if (schoolId) {
     let stats: StatsResult | null = null;
 
