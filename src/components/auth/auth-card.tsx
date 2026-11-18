@@ -143,7 +143,7 @@ export function AuthCard({
           {gateBranding.subtitle ? <> — {gateBranding.subtitle}</> : null}
         </p>
         <p className="mt-1 text-xs text-muted-foreground/80">
-          © {year} {gateBranding.productName} — مكتب التطوير التربوي · جميع الحقوق محفوظة
+          © {year} {gateBranding.productName} — بواسطة DevCore· جميع الحقوق محفوظة
         </p>
       </footer>
     </div>
