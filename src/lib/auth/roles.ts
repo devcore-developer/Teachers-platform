@@ -124,8 +124,16 @@ const NAV_ROLES: Record<string, Role[]> = {
     "EDUCATIONAL_SUPERVISOR",
     "TEACHER",
   ],
-  // Platform + school administration
-  schools: ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],
+  // Schools & Branches — the platform-schools directory is a
+  // PLATFORM-OWNER module: the sidebar section is visible exclusively
+  // to SUPER_ADMIN. The restriction is enforced server-side at every
+  // layer: navIdsForRole never emits the id for another role (so the
+  // sidebar/mobile nav cannot render it), the /schools pages redirect
+  // non-platform roles to /forbidden, and the school/branch services
+  // re-check the role on every mutation (platformOnlyError).
+  // School-level administrators keep their own untouched surfaces:
+  // users, teachers, registration-links, school-branding and settings.
+  schools: ["SUPER_ADMIN"],
   // Multi-school branding — school identity management (logo/name/colors)
   "school-branding": ["SUPER_ADMIN", "DEVELOPMENT_OFFICE_MANAGER", "SCHOOL_MANAGER"],
   // Phase 4 — user directory (school-scoped for office/school managers)

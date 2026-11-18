@@ -1,8 +1,8 @@
 import { Prisma } from "@prisma/client";
 
 import {
+  platformOnlyError,
   requireAdminContext,
-  schoolScopeError,
   type AdminContext,
 } from "@/lib/auth/dev-admin";
 import { db } from "@/lib/db";
@@ -233,9 +233,10 @@ export async function updateSchool(
 
 /**
  * Deactivate/activate a school. Permanent deletion is intentionally not
- * offered: schools may own branches (and, in later phases, teachers,
+ * offered here: schools may own branches (and, in later phases, teachers,
  * programs and certificates) — deactivation preserves history and
- * referential integrity.
+ * referential integrity (whole-tenant deletion lives in
+ * src/lib/schools/delete.ts and stays SUPER_ADMIN-only as well).
  */
 export async function setSchoolActive(
   schoolId: string,
@@ -275,6 +276,16 @@ export async function setSchoolActive(
 
 /* ----------------------------- Branches --------------------------- */
 
+/*
+ * The branch management surface is a PLATFORM-OWNER module: the sidebar
+ * section is restricted to SUPER_ADMIN, the /schools pages are
+ * server-guarded, and every branch mutation below re-checks the role
+ * server-side via platformOnlyError (src/lib/auth/dev-admin.ts) — so a
+ * forged payload from a school-level account can never reach a branch
+ * row, and no cross-school (schoolId, branchId) pair can be smuggled
+ * through either.
+ */
+
 /**
  * Create a branch. The school must exist (never trust a client-provided
  * school id) and the branch name must be unique within that school.
@@ -298,8 +309,8 @@ export async function createBranch(
 
   const input = parsed.data;
 
-  // Tenant isolation: office managers may only manage their own school.
-  const scope = schoolScopeError(ctx, input.schoolId);
+  // Platform-owner gate: only SUPER_ADMIN may manage branches.
+  const scope = platformOnlyError(ctx);
   if (scope) return scope;
 
   const school = await db.school.findUnique({ where: { id: input.schoolId } });
@@ -367,9 +378,8 @@ export async function updateBranch(
 
   const input = parsed.data;
 
-  // Tenant isolation: cross-school branch access is rejected here even
-  // if the (schoolId, branchId) pair happens to be consistent.
-  const scope = schoolScopeError(ctx, input.schoolId);
+  // Platform-owner gate: only SUPER_ADMIN may manage branches.
+  const scope = platformOnlyError(ctx);
   if (scope) return scope;
 
   const branch = await db.branch.findUnique({ where: { id: input.branchId } });
@@ -436,7 +446,8 @@ export async function setBranchActive(
     };
   }
 
-  const scope = schoolScopeError(ctx, schoolId);
+  // Platform-owner gate: only SUPER_ADMIN may manage branches.
+  const scope = platformOnlyError(ctx);
   if (scope) return scope;
 
   const branch = await db.branch.findUnique({ where: { id: branchId } });

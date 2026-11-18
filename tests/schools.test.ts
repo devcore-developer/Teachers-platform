@@ -11,7 +11,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
 import path from "node:path";
-
+/* Type-only import — erased at runtime, never loads the module before env setup. */
+import type { AdminContext } from "@/lib/auth/dev-admin";
 const PROJECT_ROOT = path.join(import.meta.dir, "..");
 // Absolute path — the Prisma CLI and the runtime client resolve relative
 // SQLite URLs differently, which would split the test into two files.
@@ -263,5 +264,187 @@ describe("Phase 2 — schools & branches service", () => {
       metrics.totalSchools
     );
     expect(metrics.totalBranches).toBeGreaterThanOrEqual(1);
+  });
+});
+/* ------------------------------------------------------------------ */
+/* Schools & Branches — platform-owner restriction.                     */
+/*                                                                      */
+/* Branch mutations are SUPER_ADMIN-only now: school-level admin        */
+/* contexts (office manager, school manager) are rejected EVEN for      */
+/* their own school, while the platform owner keeps full management.    */
+/* All actor contexts below are explicit AdminContext values — no       */
+/* session/cookie dependency, the gate under test is the service-layer  */
+/* role check itself (platformOnlyError in dev-admin.ts).               */
+/* ------------------------------------------------------------------ */
+describe("Schools & Branches — platform-owner restriction", () => {
+  const SUPER: AdminContext = {
+    id: "ctx-super-rbac",
+    name: "مدير المنصة",
+    role: "SUPER_ADMIN",
+    schoolId: null,
+  };
+
+  let office: AdminContext;
+  let schoolManager: AdminContext;
+  let rbacSchoolId = "";
+  let rbacBranchId = "";
+
+  beforeAll(async () => {
+    const school = await createSchool(
+      {
+        nameAr: "مدرسة اختبار صلاحيات الفروع",
+        slug: "rbac-branches-school",
+        isActive: true,
+      },
+      SUPER
+    );
+    expect(school.ok).toBeTrue();
+    if (school.ok) rbacSchoolId = school.data.id;
+
+    office = {
+      id: "ctx-office-rbac",
+      name: "مدير مكتب التطوير",
+      role: "DEVELOPMENT_OFFICE_MANAGER",
+      schoolId: rbacSchoolId,
+    };
+    schoolManager = {
+      id: "ctx-school-manager-rbac",
+      name: "مدير المدرسة",
+      role: "SCHOOL_MANAGER",
+      schoolId: rbacSchoolId,
+    };
+  });
+
+  test("office manager cannot create or manage branches (own school included)", async () => {
+    const created = await createBranch(
+      {
+        schoolId: rbacSchoolId, // the actor's OWN school — still rejected
+        nameAr: "فرع مدير المكتب",
+        stage: "primary",
+        isActive: true,
+      },
+      office
+    );
+    expect(created.ok).toBeFalse();
+    if (!created.ok) expect(created.code).toBe("FORBIDDEN");
+
+    const updated = await updateBranch(
+      {
+        schoolId: rbacSchoolId,
+        branchId: "any-branch-id",
+        nameAr: "اختراق",
+        stage: "primary",
+      },
+      office
+    );
+    expect(updated.ok).toBeFalse();
+    if (!updated.ok) expect(updated.code).toBe("FORBIDDEN");
+
+    const toggled = await setBranchActive(rbacSchoolId, "any-branch-id", false, office);
+    expect(toggled.ok).toBeFalse();
+    if (!toggled.ok) expect(toggled.code).toBe("FORBIDDEN");
+  });
+
+  test("school manager cannot create or manage branches either", async () => {
+    const created = await createBranch(
+      {
+        schoolId: rbacSchoolId, // the actor's OWN school — still rejected
+        nameAr: "فرع مدير المدرسة",
+        stage: "intermediate",
+        isActive: true,
+      },
+      schoolManager
+    );
+    expect(created.ok).toBeFalse();
+    if (!created.ok) expect(created.code).toBe("FORBIDDEN");
+
+    const updated = await updateBranch(
+      {
+        schoolId: rbacSchoolId,
+        branchId: "any-branch-id",
+        nameAr: "اختراق المدير",
+        stage: "primary",
+      },
+      schoolManager
+    );
+    expect(updated.ok).toBeFalse();
+    if (!updated.ok) expect(updated.code).toBe("FORBIDDEN");
+
+    const toggled = await setBranchActive(rbacSchoolId, "any-branch-id", false, schoolManager);
+    expect(toggled.ok).toBeFalse();
+    if (!toggled.ok) expect(toggled.code).toBe("FORBIDDEN");
+
+    // Nothing was written by either school-level actor.
+    const leftover = await db.branch.findMany({
+      where: { schoolId: rbacSchoolId },
+    });
+    expect(leftover).toHaveLength(0);
+  });
+
+  test("super admin still creates, updates and toggles branches", async () => {
+    const created = await createBranch(
+      {
+        schoolId: rbacSchoolId,
+        nameAr: "فرع المنصة",
+        stage: "secondary",
+        isActive: true,
+      },
+      SUPER
+    );
+    expect(created.ok).toBeTrue();
+    if (!created.ok) return;
+    rbacBranchId = created.data.id;
+
+    const edited = await updateBranch(
+      {
+        schoolId: rbacSchoolId,
+        branchId: rbacBranchId,
+        nameAr: "فرع المنصة المحدث",
+        stage: "secondary",
+      },
+      SUPER
+    );
+    expect(edited.ok).toBeTrue();
+    if (edited.ok) expect(edited.data.nameAr).toBe("فرع المنصة المحدث");
+
+    const off = await setBranchActive(rbacSchoolId, rbacBranchId, false, SUPER);
+    expect(off.ok).toBeTrue();
+    if (off.ok) expect(off.data.isActive).toBeFalse();
+
+    const on = await setBranchActive(rbacSchoolId, rbacBranchId, true, SUPER);
+    expect(on.ok).toBeTrue();
+    if (on.ok) expect(on.data.isActive).toBeTrue();
+  });
+
+  test("cross-school branch ids stay rejected under the platform-only gate", async () => {
+    const other = await createSchool(
+      {
+        nameAr: "مدرسة اختبار الفروع الأخرى",
+        slug: "rbac-branches-school-b",
+        isActive: true,
+      },
+      SUPER
+    );
+    expect(other.ok).toBeTrue();
+    if (!other.ok) return;
+
+    // A foreign (schoolId, branchId) pair: even SUPER_ADMIN cannot move
+    // a branch across tenants — the relationship guard still applies.
+    const stolen = await updateBranch(
+      {
+        schoolId: other.data.id, // NOT the owning school
+        branchId: rbacBranchId,
+        nameAr: "سرقة فرع",
+        stage: "primary",
+      },
+      SUPER
+    );
+    expect(stolen.ok).toBeFalse();
+    if (!stolen.ok) expect(stolen.code).toBe("RELATION_ERROR");
+
+    // The same guard protects status toggles.
+    const toggled = await setBranchActive(other.data.id, rbacBranchId, false, SUPER);
+    expect(toggled.ok).toBeFalse();
+    if (!toggled.ok) expect(toggled.code).toBe("RELATION_ERROR");
   });
 });

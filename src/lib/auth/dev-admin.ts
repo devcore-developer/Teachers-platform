@@ -109,6 +109,36 @@ export function schoolScopeError(
 }
 
 /* ------------------------------------------------------------------ */
+/* Platform-only enforcement                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Platform-owner enforcement for service-layer writes that belong to
+ * SUPER_ADMIN alone. Returns a ServiceResult-shaped rejection for any
+ * other actor; null means "allowed".
+ *
+ * Used by the Schools & Branches management services (school and branch
+ * mutations): that whole module is a platform-owner surface now — the
+ * sidebar entry is restricted to SUPER_ADMIN, the /schools pages are
+ * server-guarded, and the branch mutations re-check the role HERE on
+ * every call, so a forged payload from a school-level account can never
+ * reach a branch row. This is deliberately DISTINCT from
+ * schoolScopeError, which keeps guarding school-scoped capabilities
+ * (registration links and friends) for the office/school managers.
+ */
+export function platformOnlyError(
+  ctx: AdminContext
+): { ok: false; message: string; code: "FORBIDDEN" } | null {
+  if (ctx.role === "SUPER_ADMIN") return null;
+  return {
+    ok: false,
+    message:
+      "إدارة المدارس والفروع متاحة لمدير المنصة فقط — العملية مرفوضة",
+    code: "FORBIDDEN",
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* IT_COORDINATOR context — deliberately narrow                         */
 /* ------------------------------------------------------------------ */
 

@@ -32,8 +32,11 @@ export const DIRECTORY_ROLE_FILTER = [
  * matrix enforced inside the service layer:
  *   SUPER_ADMIN                -> SCHOOL_MANAGER, IT_COORDINATOR,
  *                                 DEVELOPMENT_OFFICE_MANAGER + staff
+ *                                 (for ANY registered school)
  *   SCHOOL_MANAGER             -> DEVELOPMENT_OFFICE_MANAGER (own school)
- *   DEVELOPMENT_OFFICE_MANAGER -> staff roles only (own school)
+ *   DEVELOPMENT_OFFICE_MANAGER -> IT_COORDINATOR + staff roles
+ *                                 (OWN school only — the service forces
+ *                                 the school from the session context)
  * No path anywhere can create a SUPER_ADMIN.
  */
 export const STAFF_CREATABLE_ROLES = [
@@ -52,6 +55,11 @@ export type StaffCreatableRole = (typeof STAFF_CREATABLE_ROLES)[number];
  * the service layer (server enforcement) and the creation form (UI
  * options). Client-safe: this file imports only zod + field rules, so
  * client components can consume the map without pulling the DB layer.
+ *
+ * IT_COORDINATOR is creatable by SUPER_ADMIN (any school) and by
+ * DEVELOPMENT_OFFICE_MANAGER (own school only). SCHOOL_MANAGER keeps
+ * exactly its previous single entry — unchanged by the IT-coordinator
+ * feature.
  */
 export const CREATABLE_ROLES_BY_ACTOR: Record<
   string,
@@ -60,6 +68,7 @@ export const CREATABLE_ROLES_BY_ACTOR: Record<
   SUPER_ADMIN: [...STAFF_CREATABLE_ROLES],
   SCHOOL_MANAGER: ["DEVELOPMENT_OFFICE_MANAGER"],
   DEVELOPMENT_OFFICE_MANAGER: [
+    "IT_COORDINATOR",
     "EDUCATIONAL_SUPERVISOR",
     "EDUCATIONAL_DEPUTY",
     "TEACHER",

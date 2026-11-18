@@ -1,3 +1,6 @@
+// ======================================================================
+// src/app/actions/schools.ts  (معدّل — الملف كامل)
+// ======================================================================
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -12,6 +15,7 @@ import {
   updateSchool,
   type SchoolWithBranchCount,
 } from "@/lib/schools/service";
+import { deleteSchool, type SchoolDeletionSummary } from "@/lib/schools/delete";
 import type { ServiceResult } from "@/lib/validation/schools";
 
 /* ------------------------------------------------------------------ */
@@ -70,12 +74,32 @@ export async function updateSchoolAction(
   return result;
 }
 
-/** Activate/deactivate a school (deletion is intentionally not offered). */
+/**
+ * Activate/deactivate a school — the non-destructive alternative to
+ * deleteSchoolAction below (deactivation preserves history).
+ */
 export async function setSchoolActiveAction(
   schoolId: string,
   isActive: boolean
 ): Promise<ServiceResult<SchoolWithBranchCount>> {
   const result = await setSchoolActive(schoolId, isActive);
+  if (result.ok) revalidateSchoolPaths(schoolId);
+  return result;
+}
+
+/**
+ * PERMANENTLY delete ONE school with ALL of its dependent data —
+ * SUPER_ADMIN only, enforced again inside the service on every call
+ * (the typed school name in the dialog is a client-side safeguard only).
+ *
+ * The deletion itself runs in a single transaction inside
+ * src/lib/schools/delete.ts; this wrapper only adds cache invalidation
+ * (the school detail page 404s naturally after refresh).
+ */
+export async function deleteSchoolAction(
+  schoolId: string
+): Promise<ServiceResult<SchoolDeletionSummary>> {
+  const result = await deleteSchool(schoolId);
   if (result.ok) revalidateSchoolPaths(schoolId);
   return result;
 }

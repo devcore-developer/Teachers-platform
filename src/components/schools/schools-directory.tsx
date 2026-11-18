@@ -1,3 +1,6 @@
+// ======================================================================
+// src/components/schools/schools-directory.tsx  (معدّل — الملف كامل)
+// ======================================================================
 "use client";
 
 import * as React from "react";
@@ -6,6 +9,7 @@ import { ChevronLeft, Plus, Search, School as SchoolIcon } from "lucide-react";
 
 import { EmptyState } from "@/components/platform/empty-state";
 import { StatusBadge } from "@/components/platform/status-badge";
+import { DeleteSchoolButton } from "@/components/schools/delete-school-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,7 +58,16 @@ function SchoolAvatar({ school }: { school: SchoolListItem }) {
  * and status filtering over the persisted list. Desktop renders a
  * table; small screens render stacked cards.
  */
-export function SchoolsDirectory({ schools }: { schools: SchoolListItem[] }) {
+export function SchoolsDirectory({
+  schools,
+  canDelete = false,
+}: {
+  schools: SchoolListItem[];
+  /** Permanent-delete affordance — rendered for SUPER_ADMIN only (the
+   *  server page resolves the role from the session; the delete action
+   *  re-verifies it server-side on every call). */
+  canDelete?: boolean;
+}) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
 
@@ -218,13 +231,18 @@ export function SchoolsDirectory({ schools }: { schools: SchoolListItem[] }) {
                       </span>
                     </TableCell>
                     <TableCell className="py-3.5 pe-5 text-end">
-                      <Link
-                        href={`/schools/${school.id}`}
-                        aria-label={`فتح تفاصيل ${school.nameAr}`}
-                        className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <ChevronLeft className="size-4" aria-hidden="true" />
-                      </Link>
+                      <div className="flex items-center justify-end gap-1">
+                        {canDelete && (
+                          <DeleteSchoolButton schoolId={school.id} schoolName={school.nameAr} />
+                        )}
+                        <Link
+                          href={`/schools/${school.id}`}
+                          aria-label={`فتح تفاصيل ${school.nameAr}`}
+                          className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <ChevronLeft className="size-4" aria-hidden="true" />
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -235,10 +253,10 @@ export function SchoolsDirectory({ schools }: { schools: SchoolListItem[] }) {
           {/* Mobile cards */}
           <ul className="space-y-3 md:hidden" role="list" aria-label="قائمة المدارس">
             {filtered.map((school) => (
-              <li key={school.id}>
+              <li key={school.id} className="flex items-stretch gap-2">
                 <Link
                   href={`/schools/${school.id}`}
-                  className="block rounded-xl border bg-card p-4 shadow-xs outline-none transition-colors hover:border-brand-200 focus-visible:ring-2 focus-visible:ring-ring"
+                  className="block min-w-0 flex-1 rounded-xl border bg-card p-4 shadow-xs outline-none transition-colors hover:border-brand-200 focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-center gap-3">
                     <SchoolAvatar school={school} />
@@ -270,6 +288,11 @@ export function SchoolsDirectory({ schools }: { schools: SchoolListItem[] }) {
                     </code>
                   </div>
                 </Link>
+                {canDelete && (
+                  <div className="flex items-center">
+                    <DeleteSchoolButton schoolId={school.id} schoolName={school.nameAr} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>

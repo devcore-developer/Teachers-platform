@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CalendarDays, Hash, Landmark, Palette, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -12,6 +12,8 @@ import {
   toSchoolListItem,
 } from "@/lib/schools/dto";
 import { getSchoolDetail } from "@/lib/schools/service";
+import { requireUser } from "@/lib/auth/session";
+import { canManagePlatform } from "@/lib/auth/roles";
 
 export const metadata = {
   title: "تفاصيل المدرسة",
@@ -24,6 +26,16 @@ interface SchoolDetailsPageProps {
 export default async function SchoolDetailsPage({
   params,
 }: SchoolDetailsPageProps) {
+  // SERVER-SIDE GUARD — school details (identity + branches manager) are
+  // a platform-owner surface: only SUPER_ADMIN may open this page, even
+  // by direct URL or by cycling school ids. The guard runs BEFORE the
+  // school lookup, so a foreign school's very existence is never
+  // disclosed to an unauthorized role (unknown ids 404 for SUPER_ADMIN
+  // only). The branch mutations behind BranchesManager re-verify the
+  // role again inside the schools service on every call.
+  const user = await requireUser("/schools");
+  if (!canManagePlatform(user.role)) redirect("/forbidden");
+
   const { id } = await params;
   const school = await getSchoolDetail(id);
 

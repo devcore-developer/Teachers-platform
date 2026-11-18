@@ -776,4 +776,206 @@ describe("Phase 4 — users, assignments & workspaces", () => {
     expect(roleFilter.ok).toBeTrue();
     if (roleFilter.ok) expect(roleFilter.data.total).toBe(2);
   });
+
+  /* 14. IT coordinator creation — super admin, any school ------------ */
+  test("14. super admin creates IT coordinators for any school", async () => {
+    // School A (users-school-d).
+    const schoolA = await createStaffAccount(
+      {
+        name: "منسق تقنية المدرسة أ",
+        email: "p4.it.super.a@test.local",
+        password: "ItCoord11",
+        role: "IT_COORDINATOR",
+        schoolId: schoolDId,
+      },
+      SUPER_CTX,
+      { appBaseUrl: BASE, mailer: failingMailer }
+    );
+    expect(schoolA.ok).toBeTrue();
+    if (!schoolA.ok) return;
+    expect(schoolA.data.role).toBe("IT_COORDINATOR");
+    const rowA = await db.user.findUnique({ where: { id: schoolA.data.id } });
+    expect(rowA?.role).toBe("IT_COORDINATOR");
+    expect(rowA?.schoolId).toBe(schoolDId);
+
+    // The same platform actor targets a different tenant (school B).
+    const schoolB = await createStaffAccount(
+      {
+        name: "منسق تقنية المدرسة ب",
+        email: "p4.it.super.b@test.local",
+        password: "ItCoord22",
+        role: "IT_COORDINATOR",
+        schoolId: schoolEId,
+      },
+      SUPER_CTX,
+      { appBaseUrl: BASE, mailer: failingMailer }
+    );
+    expect(schoolB.ok).toBeTrue();
+    if (!schoolB.ok) return;
+    const rowB = await db.user.findUnique({ where: { id: schoolB.data.id } });
+    expect(rowB?.role).toBe("IT_COORDINATOR");
+    expect(rowB?.schoolId).toBe(schoolEId);
+  });
+
+  /* 15. Office manager creates an IT coordinator for OWN school ------ */
+  test("15. development office manager creates an IT coordinator for their own school", async () => {
+    const result = await createStaffAccount(
+      {
+        name: "منسق تقنية مكتب التطوير",
+        email: "p4.it.office@test.local",
+        password: "ItCoord33",
+        role: "IT_COORDINATOR",
+        schoolId: schoolDId, // own school — the only one the UI offers
+      },
+      officeCtx(),
+      { appBaseUrl: BASE, mailer: failingMailer }
+    );
+    expect(result.ok).toBeTrue();
+    if (!result.ok) return;
+    expect(result.data.role).toBe("IT_COORDINATOR");
+    const row = await db.user.findUnique({ where: { id: result.data.id } });
+    expect(row?.role).toBe("IT_COORDINATOR");
+    expect(row?.schoolId).toBe(schoolDId);
+  });
+
+  /* 16. A forged schoolId cannot cross the tenant boundary ----------- */
+  test("16. forged schoolId is ignored — office manager stays in own school", async () => {
+    const result = await createStaffAccount(
+      {
+        name: "محاولة اختراق المستأجر",
+        email: "p4.it.forged@test.local",
+        password: "ItCoord44",
+        role: "IT_COORDINATOR",
+        schoolId: schoolEId, // FORGED — not the actor's school
+      },
+      officeCtx(),
+      { appBaseUrl: BASE, mailer: failingMailer }
+    );
+    // The service forces schoolId from the session context: the account
+    // lands in the office manager's OWN school, never in school E.
+    expect(result.ok).toBeTrue();
+    if (!result.ok) return;
+    const row = await db.user.findUnique({ where: { id: result.data.id } });
+    expect(row?.schoolId).toBe(schoolDId);
+    expect(row?.schoolId).not.toBe(schoolEId);
+
+    const leaked = await db.user.findFirst({
+      where: { schoolId: schoolEId, email: "p4.it.forged@test.local" },
+    });
+    expect(leaked).toBeNull();
+  });
+
+  /* 17. Unauthorized roles cannot create IT coordinator accounts ----- */
+  test("17. school manager / teacher / IT coordinator contexts are rejected", async () => {
+    // SCHOOL_MANAGER is a valid AdminContext but its matrix does not
+    // include IT_COORDINATOR (unchanged: only DEVELOPMENT_OFFICE_MANAGER).
+    const managerCtx = {
+      id: "ctx-school-manager-p4",
+      name: "مدير مدرسة أ",
+      role: "SCHOOL_MANAGER" as const,
+      schoolId: schoolDId,
+    };
+    const fromManager = await createStaffAccount(
+      {
+        name: "محاولة من مدير المدرسة",
+        email: "p4.it.manager@test.local",
+        password: "ItCoord55",
+        role: "IT_COORDINATOR",
+        schoolId: schoolDId,
+      },
+      managerCtx,
+      { appBaseUrl: BASE, mailer: failingMailer }
+    );
+    expect(fromManager.ok).toBeFalse();
+    if (!fromManager.ok) expect(fromManager.code).toBe("FORBIDDEN");
+
+    // A teacher is not an AdminContext at all — the runtime gate answers
+    // FORBIDDEN (same deliberate-cast pattern as the deputy test above).
+    const teacherCtx = {
+      id: teacherD1Id,
+      name: "المعلم الأول",
+      role: "TEACHER" as const,
+      schoolId: schoolDId,
+    } as unknown as Parameters<typeof createStaffAccount>[1];
+    const fromTeacher = await createStaffAccount(
+      {
+        name: "محاولة من معلم",
+        email: "p4.it.teacher@test.local",
+        password: "ItCoord66",
+        role: "IT_COORDINATOR",
+        schoolId: schoolDId,
+      },
+      teacherCtx,
+      { appBaseUrl: BASE, mailer: failingMailer }
+    );
+    expect(fromTeacher.ok).toBeFalse();
+    if (!fromTeacher.ok) expect(fromTeacher.code).toBe("FORBIDDEN");
+
+    // The narrow IT-coordinator context never satisfies an admin service
+    // either — a coordinator cannot mint additional accounts.
+    const itCtx = {
+      id: "ctx-it-p4",
+      name: "منسق تقنية المعلومات",
+      role: "IT_COORDINATOR" as const,
+      schoolId: schoolDId,
+    } as unknown as Parameters<typeof createStaffAccount>[1];
+    const fromIt = await createStaffAccount(
+      {
+        name: "حساب منسق إضافي",
+        email: "p4.it.selfmint@test.local",
+        password: "ItCoord77",
+        role: "IT_COORDINATOR",
+        schoolId: schoolDId,
+      },
+      itCtx,
+      { appBaseUrl: BASE, mailer: failingMailer }
+    );
+    expect(fromIt.ok).toBeFalse();
+    if (!fromIt.ok) expect(fromIt.code).toBe("FORBIDDEN");
+
+    // Nothing was written for any of the three attempts.
+    const written = await db.user.count({
+      where: {
+        email: {
+          in: [
+            "p4.it.manager@test.local",
+            "p4.it.teacher@test.local",
+            "p4.it.selfmint@test.local",
+          ],
+        },
+      },
+    });
+    expect(written).toBe(0);
+  });
+
+  /* 18. Schools & Branches nav module is SUPER_ADMIN-exclusive ------- */
+  test("18. schools nav module is restricted to SUPER_ADMIN only", async () => {
+    const superNav = navIdsForRole("SUPER_ADMIN");
+    const officeNav = navIdsForRole("DEVELOPMENT_OFFICE_MANAGER");
+    const schoolManagerNav = navIdsForRole("SCHOOL_MANAGER");
+    const itNav = navIdsForRole("IT_COORDINATOR");
+    const supervisorNav = navIdsForRole("EDUCATIONAL_SUPERVISOR");
+    const deputyNav = navIdsForRole("EDUCATIONAL_DEPUTY");
+    const teacherNav = navIdsForRole("TEACHER");
+
+    expect(superNav).toContain("schools");
+    for (const nav of [
+      officeNav,
+      schoolManagerNav,
+      itNav,
+      supervisorNav,
+      deputyNav,
+      teacherNav,
+    ]) {
+      expect(nav).not.toContain("schools");
+    }
+
+    // The school-administration pair keeps every other module it needs —
+    // only the Schools & Branches entry was removed for them.
+    expect(officeNav).toContain("users");
+    expect(officeNav).toContain("school-branding");
+    expect(officeNav).toContain("registration-links");
+    expect(schoolManagerNav).toContain("users");
+    expect(schoolManagerNav).toContain("settings");
+  });
 });

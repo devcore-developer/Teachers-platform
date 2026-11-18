@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
 
@@ -8,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listSchools } from "@/lib/schools/service";
 import { toSchoolListItem } from "@/lib/schools/dto";
+import { requireUser } from "@/lib/auth/session";
+import { canManagePlatform } from "@/lib/auth/roles";
 import { EmptyState } from "@/components/platform/empty-state";
 
 export const metadata = {
@@ -37,7 +40,7 @@ function DirectorySkeleton() {
 }
 
 /** Data-loading wrapper — isolated so Suspense covers only the query. */
-async function DirectoryContent() {
+async function DirectoryContent({ canDelete }: { canDelete: boolean }) {
   let schools: ReturnType<typeof toSchoolListItem>[] | null = null;
 
   try {
@@ -58,10 +61,25 @@ async function DirectoryContent() {
     );
   }
 
-  return <SchoolsDirectory schools={schools} />;
+  return <SchoolsDirectory schools={schools} canDelete={canDelete} />;
 }
 
-export default function SchoolsPage() {
+export default async function SchoolsPage() {
+  // SERVER-SIDE GUARD — the Schools & Branches module is exclusive to
+  // SUPER_ADMIN. Unauthenticated visitors go to the login page (with a
+  // sanitized ?next=), and every other role — school manager, office
+  // manager, IT coordinator, supervisor, deputy, teacher — is redirected
+  // to the Arabic forbidden page. This is the security boundary, not the
+  // sidebar: direct URL access never renders another school's data.
+  const user = await requireUser("/schools");
+  if (!canManagePlatform(user.role)) redirect("/forbidden");
+
+  // The permanent-delete affordance is resolved on the SERVER from the
+  // session role (SUPER_ADMIN only — guaranteed by the guard above);
+  // the delete action re-verifies the role inside the service on every
+  // call.
+  const canDeleteSchool = canManagePlatform(user.role);
+
   return (
     <div>
       <PageHeader
@@ -79,7 +97,7 @@ export default function SchoolsPage() {
       />
 
       <Suspense fallback={<DirectorySkeleton />}>
-        <DirectoryContent />
+        <DirectoryContent canDelete={canDeleteSchool} />
       </Suspense>
     </div>
   );
