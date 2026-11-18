@@ -207,9 +207,9 @@ export function Sidebar({ branding, items, canManageBranding, className }: Sideb
           maxPx={11}
           minPx={9}
           className="mt-3 text-center text-sidebar-foreground/40"
-          title="منارة — مكتب التطوير التربوي"
+          title="منارة — منصة التنمية المهنية"
         >
-          {"منارة — مكتب التطوير التربوي"}
+          {"منارة — منصة التنمية المهنية"}
         </FitText>
       </div>
     </aside>

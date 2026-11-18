@@ -687,7 +687,7 @@ export function BrandingManager({
                 className="border-t px-5 py-3 text-center text-[11px] text-white/40"
                 style={{ borderColor: "rgba(255,255,255,0.12)" }}
               >
-                {previewName} · منارة — مكتب التطوير التربوي
+                {previewName} · منارة — منصة التنمية المهنية
               </div>
             </div>
 

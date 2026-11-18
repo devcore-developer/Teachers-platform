@@ -428,7 +428,7 @@ export function CertificateSheet({
               <p className="mt-1.5 text-xs leading-6 text-slate-600 sm:text-[13px]">
                 {CERT_PD_STATEMENT_AR}
                 <br />
-                بمكتب التطوير التربوي في {view.school.nameAr}.
+                بمنصة التنمية المهنية في {view.school.nameAr}.
               </p>
               {descriptionText ? (
                 <p className="cert-desc mx-auto mt-1.5 max-w-2xl text-[11px] leading-5 text-slate-400">

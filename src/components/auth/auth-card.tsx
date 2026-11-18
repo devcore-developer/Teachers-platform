@@ -120,7 +120,7 @@ export function AuthCard({
           — {resolved.subtitle}
         </p>
         <p className="mt-1 text-xs text-muted-foreground/80">
-          © {year} منارة — مكتب التطوير التربوي · جميع الحقوق محفوظة
+          © {year} منارة — منصة التنمية المهنية · جميع الحقوق محفوظة
         </p>
       </footer>
     </div>

@@ -142,7 +142,7 @@ export const GROWTH_EVENT_TYPE_LABELS: Record<string, string> = {
 
 /**
  * Platform identity — «منارة» is the PLATFORM (a multi-school product
- * operated by «مكتب التطوير التربوي»). It is NOT a school name: school
+ * operated by «منصة التنمية المهنية»). It is NOT a school name: school
  * identity (قرطبة، النهضة النموذجية، الأندلس…) always comes dynamically
  * from the certificate's School row (view.school.nameAr / logoUrl).
  * Never append a school name to this constant anywhere.
@@ -150,7 +150,7 @@ export const GROWTH_EVENT_TYPE_LABELS: Record<string, string> = {
 export const PLATFORM_NAME_AR = "منارة";
 
 /** Operator line printed under the platform name on the sheet. */
-export const PLATFORM_SUBTITLE_AR = "مكتب التطوير التربوي";
+export const PLATFORM_SUBTITLE_AR = "منصة التنمية المهنية";
 
 /** Restrained gold accent used by the premium certificate sheet. */
 export const CERTIFICATE_GOLD = "#C9A227";

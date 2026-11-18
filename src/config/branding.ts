@@ -4,7 +4,7 @@ import type { PlatformBranding } from "@/lib/types";
  * Platform identity (NOT a school identity).
  *
  * The platform is a multi-school system: «منارة» is the product operated
- * by «مكتب التطوير التربوي», while every school tenant (قرطبة، الأندلس،
+ * by «منصة التنمية المهنية», while every school tenant (قرطبة، الأندلس،
  * النور…) carries its own name, logo and colors loaded dynamically from
  * the database — see src/lib/branding.ts.
  *
@@ -15,7 +15,7 @@ import type { PlatformBranding } from "@/lib/types";
  */
 export const defaultBranding: PlatformBranding = {
   productName: "منارة",
-  subtitle: "مكتب التطوير التربوي",
+  subtitle: "منصة التنمية المهنية",
   shortName: "منارة",
   logoUrl: undefined,
   currentSchool: undefined,

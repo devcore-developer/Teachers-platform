@@ -73,7 +73,7 @@ export function PlatformSettingsForm({
             name="platformTagline"
             defaultValue={initial.platformTagline}
             maxLength={120}
-            placeholder="مكتب التطوير التربوي"
+            placeholder="منصة التنمية المهنية"
             className={inputClass}
           />
         </div>

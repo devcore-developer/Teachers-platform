@@ -1,5 +1,5 @@
 /**
- * SQLite → PostgreSQL data transfer — منارة — مكتب التطوير التربوي
+ * SQLite → PostgreSQL data transfer — منارة — منصة التنمية المهنية
  * ================================================================
  * One-shot, NON-DESTRUCTIVE, all-or-nothing migration of every record
  * from the legacy SQLite database (prisma/dev.db) into PostgreSQL

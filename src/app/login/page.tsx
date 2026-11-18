@@ -27,7 +27,7 @@ interface LoginPageProps {
  * logo and colors — so a manipulated parameter cannot leak or mutate
  * tenant data; authentication itself stays school-agnostic (email +
  * password). Without the parameter the platform identity renders
- * («منارة — مكتب التطوير التربوي»).
+ * («منارة — منصة التنمية المهنية»).
  *
  * The premium composition (identity header, decorated background,
  * elevated card and platform footer) lives in the shared AuthCard so

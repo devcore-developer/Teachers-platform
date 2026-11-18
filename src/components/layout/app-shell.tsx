@@ -87,7 +87,7 @@ export function AppShell({ children, user, allowedModuleIds, branding }: AppShel
               {resolvedBranding.productName} — {resolvedBranding.subtitle}
             </p>
             <p className="text-xs text-muted-foreground/70">
-              منارة — مكتب التطوير التربوي © 2025
+              منارة — منصة التنمية المهنية © 2025
             </p>
           </div>
         </footer>

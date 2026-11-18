@@ -16,7 +16,7 @@ import {
 /* Dynamic multi-school branding — server resolution layer.             */
 /*                                                                      */
 /* Identity is split in two:                                            */
-/*   • Platform identity: «منارة — مكتب التطوير التربوي» (constant).    */
+/*   • Platform identity: «منارة — منصة التنمية المهنية» (constant).    */
 /*   • School identity:    «منارة {اسم المدرسة}» + logo + palette,      */
 /*     loaded from the School row of the authenticated user, or from    */
 /*     the school context of a public page (login ?school=, register    */

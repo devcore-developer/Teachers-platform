@@ -4,7 +4,7 @@
  *
  * Keys (stable, documented):
  *   platform.name          — displayed platform identity (default: منارة)
- *   platform.tagline       — displayed tagline (default: مكتب التطوير التربوي)
+ *   platform.tagline       — displayed tagline (default: منصة التنمية المهنية)
  *   platform.supportEmail  — optional support contact
  *   academicYear.active    — the active academic year consumed by the
  *                            training-archive service (pre-existing key)
@@ -32,7 +32,7 @@ export const PLATFORM_SETTING_KEYS = {
 /** Built-in fallbacks — identical to the shipped config branding. */
 const DEFAULTS: PlatformSettings = {
   platformName: "منارة",
-  platformTagline: "مكتب التطوير التربوي",
+  platformTagline: "منصة التنمية المهنية",
   supportEmail: "",
   activeAcademicYear: "",
 };
