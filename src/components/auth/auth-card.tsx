@@ -6,6 +6,16 @@ import { defaultBranding } from "@/config/branding";
 import { cn } from "@/lib/utils";
 import type { PlatformBranding } from "@/lib/types";
 
+/**
+ * Display name rendered on the gate screens (login, registration,
+ * verification, password recovery) when NO school context is resolved —
+ * it replaces the former «منارة» wordmark so the portal identifies
+ * itself as «منصة التنمية المهنية» alone, with no subtitle line.
+ * School-scoped gate screens (?school= / /register/{token}) keep their
+ * own resolved identity untouched.
+ */
+export const GATE_DISPLAY_NAME = "منصة التنمية المهنية";
+
 interface AuthCardProps {
   title: string;
   description?: string;
@@ -27,6 +37,9 @@ interface AuthCardProps {
  *  - the identity header (logo + school/platform name) renders DIRECTLY
  *    on the page — no white box around the logo — and sits directly on
  *    top of the card so the two read as one composition;
+ *  - for the PLATFORM scope the header shows «منصة التنمية المهنية» as
+ *    a single title line — the former «منارة» wordmark and the subtitle
+ *    line are gone; a school context keeps its full identity;
  *  - the background carries restrained brand-tinted decoration (soft
  *    blurred shapes and a hairline ring) driven by the runtime CSS
  *    variables, so every school gets its own palette with zero assets;
@@ -47,6 +60,15 @@ export function AuthCard({
 }: AuthCardProps) {
   const resolved = branding ?? defaultBranding;
   const year = new Date().getFullYear();
+
+  // Gate-screen identity: a school context renders as resolved; the
+  // platform scope collapses to the single display name with no
+  // subtitle line (an empty subtitle also removes the trailing dash in
+  // the footer and the copyright line).
+  const schoolScope = Boolean(resolved.currentSchool);
+  const gateBranding: PlatformBranding = schoolScope
+    ? resolved
+    : { ...resolved, productName: GATE_DISPLAY_NAME, subtitle: "" };
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-gradient-to-b from-brand-50/80 via-background to-background">
@@ -69,10 +91,11 @@ export function AuthCard({
           {/* Identity header — visually connected to the card above it */}
           <div className="mb-4 flex justify-center sm:mb-5">
             <BrandLogo
-              branding={resolved}
+              branding={gateBranding}
               variant="light"
               size="lg"
               orientation="vertical"
+              withSubtitle={Boolean(gateBranding.subtitle)}
             />
           </div>
 
@@ -115,12 +138,12 @@ export function AuthCard({
             href="/"
             className="transition-colors hover:text-brand-700"
           >
-            {resolved.productName}
-          </Link>{" "}
-          — {resolved.subtitle}
+            {gateBranding.productName}
+          </Link>
+          {gateBranding.subtitle ? <> — {gateBranding.subtitle}</> : null}
         </p>
         <p className="mt-1 text-xs text-muted-foreground/80">
-          © {year} منارة — منصة التنمية المهنية · جميع الحقوق محفوظة
+          © {year} {gateBranding.productName} — مكتب التطوير التربوي · جميع الحقوق محفوظة
         </p>
       </footer>
     </div>
