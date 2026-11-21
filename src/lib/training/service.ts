@@ -3,7 +3,6 @@ import { Prisma } from "@prisma/client";
 import type { AdminContext } from "@/lib/auth/dev-admin";
 import type { ViewerIdentity } from "@/lib/training/access";
 import {
-  assignedSupervisorIdFor,
   canManageTraining,
   publishedVisibilityWhere,
   supervisorTrainingGateError,
@@ -38,8 +37,8 @@ import {
 /* client. Platform-wide records (schoolId null) are SUPER_ADMIN-only.  */
 /*                                                                      */
 /* Teacher-side reads additionally enforce the supervisor-training      */
-/* gate (IT assignment rule): supervisor-authored courses reach a       */
-/* teacher only through a current assignment to that exact supervisor.  */
+/* gate (school fence): every ACTIVE teacher may consume any published  */
+/* course of their OWN school; cross-school requests always fail.       */
 /* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
@@ -618,7 +617,6 @@ export async function getCourseForManage(
     },
   };
 }
-
 /* --------------------------- create/update ------------------------- */
 
 export async function createCourse(
@@ -808,28 +806,13 @@ export async function listPublishedCourses(
   const visibility = publishedVisibilityWhere(viewer);
   const where: Prisma.CourseWhereInput = { ...visibility };
 
-  // Supervisor-training gate (IT assignment rule): TEACHER viewers see
-  // supervisor-authored courses ONLY from their CURRENTLY assigned
-  // supervisor — office-manager/school-manager/platform courses stay
-  // open. One extra indexed read for the assignment; the supervisor
-  // filter runs INSIDE this same catalog query (no per-row gating,
-  // no N+1), and it always reflects the assignment as of NOW, so an
-  // assign/transfer/remove by the IT coordinator updates the catalog
-  // on the very next request.
-  if (viewer.role === "TEACHER") {
-    const assignedSupervisorId = await assignedSupervisorIdFor(viewer.id);
-    where.AND = [
-      {
-        OR: [
-          { createdBy: { role: { not: "EDUCATIONAL_SUPERVISOR" } } },
-          ...(assignedSupervisorId
-            ? [{ createdById: assignedSupervisorId }]
-            : []),
-        ],
-      },
-    ];
-  }
-
+  // SCHOOL-SCOPED VISIBILITY: no supervisor filter. TEACHER viewers see
+  // every PUBLISHED course of their own school (plus platform-wide
+  // courses) — the old «currently assigned supervisor» catalog filter
+  // was removed. The teacher→supervisor assignment itself is untouched
+  // (supervision dashboards/reports keep working); consumption is still
+  // fenced to the viewer's own school by the gate calls below and by
+  // getCourseForViewer/getLessonForViewer/enrollTeacher.
   if (filters.q && filters.q.trim().length > 0) {
     where.titleAr = { contains: filters.q.trim() };
   }
@@ -943,9 +926,9 @@ export async function getCourseForViewer(
     return fail("هذه الدورة غير متاحة لك", "FORBIDDEN");
   }
 
-  // Supervisor-training gate (IT assignment rule) — enforced here so a
-  // direct URL can never open a supervisor-authored course without a
-  // valid current assignment; the catalog filter alone is only UX.
+  // Supervisor-training gate (school fence) — enforced here so a
+  // direct URL can never open a course outside the viewer's own school;
+  // the catalog scoping alone is only UX.
   const supervisorGate = await supervisorTrainingGateError(viewer, {
     createdById: course.createdById,
     createdBy: course.createdBy,
@@ -1091,8 +1074,8 @@ export async function enrollTeacher(
     return fail("هذه الدورة غير متاحة لتسجيلك", "FORBIDDEN");
   }
 
-  // Supervisor-training gate (IT assignment rule) — enrollment is a
-  // WRITE: a crafted request cannot sign an unassigned teacher into a
+  // Supervisor-training gate (school fence) — enrollment is a WRITE: a
+  // crafted request cannot enroll a teacher into another school's
   // supervisor-authored course.
   const supervisorGate = await supervisorTrainingGateError(viewer, {
     createdById: course.createdById,

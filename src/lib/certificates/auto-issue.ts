@@ -6,7 +6,6 @@ import {
   CERT_NUMBER_RANDOM_LENGTH,
   CERTIFICATE_CODE_ALPHABET,
   IDENTIFIER_GENERATION_ATTEMPTS,
-  PLATFORM_NAME_AR,
 } from "@/config/certificates";
 import { resolveSchoolSignatory } from "@/lib/certificates/signatory";
 import { notifyCertificateIssued } from "@/lib/notifications/hooks";
@@ -36,9 +35,10 @@ import { db } from "@/lib/db";
 /* ------------------------------------------------------------------ */
 
 const CERT_TITLE_PREFIX = "شهادة إتمام دورة";
-const CERT_DESCRIPTION =
-  `أتمّ المعلم متطلبات الدورة التدريبية كاملة (الدروس والتقييمات) وفق ` +
-  `سجلات التعلّم في منصة ${PLATFORM_NAME_AR} — إصدار آلي عند استيفاء المتطلبات.`;
+// No stored description: the old descriptive sentence (completion +
+// auto-issuance wording mentioning the platform) was removed from
+// certificates by design — the sheet renders the title, recipient,
+// course, info strip and QR verification only.
 /** Issuing-authority snapshot for system-issued certificates. */
 const AUTO_ISSUER_LABEL = "إصدار آلي — استيفاء متطلبات الدورة";
 
@@ -256,7 +256,8 @@ export async function issueCourseCompletionCertificate(
               verificationCode,
               titleAr,
               titleEn,
-              descriptionAr: CERT_DESCRIPTION,
+              // No descriptive copy on certificates (removed by design).
+              descriptionAr: null,
               programId: null,
               courseId: course.id,
               status: "ISSUED",

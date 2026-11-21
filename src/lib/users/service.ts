@@ -38,12 +38,15 @@ import { resolveRegistrationToken } from "@/lib/registration-links/service";
 /* tokens, inactive-account handling, and role-escalation guards.       */
 /* Server actions are thin wrappers; UI never enforces security.        */
 /*                                                                      */
-/* IMMEDIATE ACTIVATION POLICY (task 1): email verification is no       */
-/* longer required anywhere in the teacher lifecycle. New self-         */
-/* registrations are created ACTIVE and pre-verified, and legacy        */
-/* accounts created before this change are healed transparently at      */
-/* their next sign-in attempt (see authenticateCredentials).            */
-/* ------------------------------------------------------------------ */
+/* PENDING ACTIVATION POLICY: a teacher who self-registers through a
+ * school link is created PRE-VERIFIED but INACTIVE — the account holds
+ * no platform access until the IT coordinator assigns an educational
+ * supervisor, which is the act that activates the account (see
+ * assignItTeacher in src/lib/it/service.ts). The existing `isActive`
+ * column is the activation status: getCurrentUser() returns null for
+ * inactive users, so EVERY page, Server Action and API route that
+ * resolves the session denies a pending teacher server-side — there is
+ * no separate status field and no client-trusted gate. */
 
 export type SafeAccount = Omit<
   Prisma.UserGetPayload<{ include: { school: { select: { id: true; nameAr: true } } } }>,
@@ -88,10 +91,12 @@ export interface RegisterTeacherDeps {
 
 /**
  * Self-registration for teachers via a school-specific link:
- * no roster matching, no approval gate, and the role is forced to
- * TEACHER — the input cannot choose a role. Per the immediate-activation
- * policy the account is created ACTIVE and PRE-VERIFIED: it signs in
- * right away, with no confirmation email and no waiting step.
+ * no roster matching, and the role is forced to TEACHER — the input
+ * cannot choose a role. Per the PENDING ACTIVATION policy the account
+ * is created PRE-VERIFIED but INACTIVE: it holds no platform access
+ * (no session anywhere — getCurrentUser() rejects inactive users) and
+ * the redirect lands on the pending-activation screen. The IT
+ * coordinator's supervisor assignment is the act that activates it.
  */
 export async function registerTeacher(
   raw: unknown,
@@ -160,13 +165,19 @@ export async function registerTeacher(
       // Audit link to the registration link used — powers the
       // per-link registration stats and the IT workspace flag.
       registrationLinkId: resolution.linkId,
-      isActive: true,
-      // Immediate activation — no email-verification gate anywhere.
+      // PENDING ACTIVATION — the account signs in only after the IT
+      // coordinator assigns a supervisor (assignItTeacher activates).
+      isActive: false,
+      // Pre-verified: email confirmation is not part of the activation
+      // gate — the supervisor assignment is.
       emailVerifiedAt: new Date(),
     },
   });
 
-  // No verification email is sent — the account signs in immediately.
+  // No verification email is sent — the activation gate is the IT
+  // coordinator's supervisor assignment, not the email inbox. The
+  // registerAction redirects to /pending-activation; the account gains
+  // access only when assignItTeacher sets isActive back to true.
   return { ok: true, status: "created", emailSent: false };
 }
 
@@ -215,7 +226,10 @@ export async function resendVerificationEmail(
 /* Credentials / login                                                  */
 /* ------------------------------------------------------------------ */
 
-export type AuthFailureCode = "INVALID_CREDENTIALS" | "INACTIVE";
+export type AuthFailureCode =
+  | "INVALID_CREDENTIALS"
+  | "INACTIVE"
+  | "PENDING_ACTIVATION";
 
 export type AuthenticateResult =
   | { ok: true; userId: string; tokenVersion: number }
@@ -249,6 +263,19 @@ export async function authenticateCredentials(
   }
 
   if (!user.isActive) {
+    // Pending activation vs administrative suspension: a self-registered
+    // teacher (registrationLinkId set) that is inactive is AWAITING the
+    // IT coordinator's supervisor assignment — say so honestly instead
+    // of the generic suspension message. Deactivated provisioned
+    // accounts keep the original INACTIVE semantics.
+    if (user.role === "TEACHER" && user.registrationLinkId) {
+      return {
+        ok: false,
+        code: "PENDING_ACTIVATION",
+        message:
+          "حسابك قيد التفعيل — بانتظار أن يُسندك منسق تقنية المعلومات في مدرستك إلى المشرف التربوي ويُفعّل حسابك",
+      };
+    }
     return {
       ok: false,
       code: "INACTIVE",
@@ -256,10 +283,10 @@ export async function authenticateCredentials(
     };
   }
 
-  // Immediate-activation policy: email verification is no longer a
-  // login requirement. Self-registered teachers created BEFORE this
-  // change (emailVerifiedAt null) are healed transparently here on
-  // their first successful sign-in — no admin action needed.
+  // Legacy healing: email verification is not a login requirement
+  // (pending activation is the supervisor assignment). Teachers created
+  // before that change (emailVerifiedAt null) are healed transparently
+  // here on their first successful sign-in — no admin action needed.
   if (user.role === "TEACHER" && !user.emailVerifiedAt) {
     await db.user.update({
       where: { id: user.id },
@@ -301,7 +328,7 @@ export async function requestPasswordReset(
   const user = await db.user.findUnique({
     where: { email: normalizeEmail(email) },
   });
-
+  
   if (user && user.isActive) {
     const rawToken = await issuePasswordResetToken(user.id);
     const mailer = deps?.mailer ?? defaultMailSender;

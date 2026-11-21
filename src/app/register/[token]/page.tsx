@@ -48,7 +48,7 @@ export default async function RegisterPage({
         <AuthCard
           branding={resolved.branding}
           title="تسجيل معلم جديد"
-          description="أنشئ حسابك المهني عبر رابط مدرستك المخصص — بياناتك تبقى داخل مدرستك، ويُوثَّق بريدك، ثم يُسند إليك مشرفك التربوي."
+          description="أنشئ حسابك المهني عبر رابط مدرستك المخصص — بياناتك تبقى داخل مدرستك، ويُفعَّل حسابك بعد أن يُسندك منسق تقنية المعلومات إلى مشرفك التربوي."
         >
           <RegisterForm
             token={rawParam}

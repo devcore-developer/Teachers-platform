@@ -162,15 +162,21 @@ export function canAccessAttachment(
 }
 
 /* ------------------------------------------------------------------ */
-/* Supervisor-training gate (IT assignment rule) — DB-backed.           */
+/* Supervisor-training gate — SCHOOL-SCOPED (course-visibility rule).   */
 /*                                                                      */
-/* Teachers can open/play lessons of supervisor-authored courses only   */
-/* while currently covered by that exact supervisor (explicit           */
-/* teacher→supervisor assignment, or branch coverage inside the         */
-/* supervisor's own school). The administrative trio (SUPER_ADMIN /     */
-/* DEVELOPMENT_OFFICE_MANAGER / SCHOOL_MANAGER) and the supervisors     */
-/* themselves preview and manage freely — this gate fences TEACHER      */
-/* learners only, so school management is never blocked.                */
+/* Every ACTIVE teacher may consume ANY published course of their OWN   */
+/* school — including supervisor-authored courses — regardless of       */
+/* which supervisor is currently assigned to them. The former           */
+/* explicit-assignment/branch-coverage rule is retired: the teacher→    */
+/* supervisor assignment itself is untouched (supervision dashboards,  */
+/* reports and management keep working exactly as before); only course  */
+/* VISIBILITY changed. The tenant fence below is the security           */
+/* boundary: the teacher's schoolId (DB session identity, never a       */
+/* client payload) must equal the course author's schoolId.             */
+/*                                                                      */
+/* The administrative trio and the supervisors preview and manage       */
+/* freely — this gate fences TEACHER learners only, so school           */
+/* management is never blocked.                                         */
 /* ------------------------------------------------------------------ */
 
 export interface SupervisorGateCourseRef {
@@ -181,8 +187,8 @@ export interface SupervisorGateCourseRef {
 /**
  * Returns an Arabic rejection message when the viewer may NOT consume
  * this course, or null when access is allowed. The watch heartbeat and
- * the media proxy both go through it, so watch time cannot accumulate
- * on a supervisor-authored course without a current assignment.
+ * the media proxy both go through it, so watch time can only ever
+ * accumulate on courses inside the viewer's own school.
  */
 export async function supervisorTrainingGateError(
   viewer: ViewerIdentity,
@@ -196,16 +202,11 @@ export async function supervisorTrainingGateError(
   const [teacher, supervisor] = await Promise.all([
     db.user.findUnique({
       where: { id: viewer.id },
-      select: { schoolId: true, branchId: true, isActive: true },
+      select: { schoolId: true, isActive: true },
     }),
     db.user.findUnique({
       where: { id: course.createdById },
-      select: {
-        role: true,
-        isActive: true,
-        schoolId: true,
-        supervisorAssignments: { select: { branchId: true } },
-      },
+      select: { role: true, schoolId: true },
     }),
   ]);
 
@@ -213,45 +214,26 @@ export async function supervisorTrainingGateError(
     return { message: "حسابك غير متاح حاليًا — تواصل مع إدارة مدرستك" };
   }
   if (
+    !teacher.schoolId ||
     !supervisor ||
     supervisor.role !== "EDUCATIONAL_SUPERVISOR" ||
-    !supervisor.isActive
-  ) {
-    return { message: "مشرف هذا التدريب غير متاح حاليًا — تواصل مع إدارة مدرستك" };
-  }
-  if (
-    !teacher.schoolId ||
     supervisor.schoolId !== teacher.schoolId ||
     viewer.schoolId !== teacher.schoolId
   ) {
+    // Cross-school request — fail closed regardless of how the course
+    // id or query params were crafted.
     return { message: "هذا التدريب غير متاح لك" };
   }
 
-  const explicit = await db.teacherSupervisorAssignment.findFirst({
-    where: {
-      teacherId: viewer.id,
-      supervisorId: course.createdById,
-      schoolId: teacher.schoolId,
-    },
-    select: { id: true },
-  });
-  if (explicit) return null;
-
-  const branchIds = supervisor.supervisorAssignments.map((row) => row.branchId);
-  if (teacher.branchId && branchIds.includes(teacher.branchId)) return null;
-
-  return {
-    message:
-      "هذا التدريب مخصص لمعلمي المشرف المربوط بهم — تواصل مع مشرفك التربوي أو إدارة مدرستك",
-  };
+  // Same school → every published school course is open to the teacher.
+  return null;
 }
 /**
  * The supervisor (User id) currently explicitly assigned to a teacher,
- * or null — one row per teacher (unique `teacherId`). Mirrors the
- * explicit-assignment leg of the gate above so the catalog filter in
- * the training service and the play/enrollment gate can never drift
- * apart: assign, transfer or remove in the IT workspace updates the
- * teacher's catalog on the very next request.
+ * or null — one row per teacher (unique `teacherId`). The course
+ * catalog and the consumption gate no longer filter by this value
+ * (school-scoped visibility), but the IT workspace, supervision
+ * surfaces and reports still read the assignment through it.
  */
 export async function assignedSupervisorIdFor(
   teacherId: string

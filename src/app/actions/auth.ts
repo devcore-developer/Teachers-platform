@@ -129,11 +129,12 @@ export async function registerAction(
   }
 
   // Both "created" and "duplicate_suppressed" lead to the SAME generic
-  // pending screen — no account-existence disclosure.
+  // pending screen — no account-existence disclosure. The teacher is
+  // NEVER signed in here and NEVER redirected to the login gate: the
+  // account is pending activation until the IT coordinator assigns a
+  // supervisor, and the dedicated screen says exactly that.
   const email = String(formData.get("email") ?? "").trim();
-  redirect(
-    `/verify-email/pending?email=${encodeURIComponent(email)}&sent=${result.emailSent ? "1" : "0"}`
-  );
+  redirect(`/pending-activation?email=${encodeURIComponent(email)}`);
 }
 
 /* ------------------------ Resend verification --------------------- */

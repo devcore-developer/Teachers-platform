@@ -62,7 +62,11 @@ export async function assignItTeacherAction(
 
   return {
     ok: true,
-    message: "تم إسناد المعلم إلى المشرف التربوي بنجاح",
+    // Pending-activation accounts complete their activation HERE — say
+    // so explicitly when the assignment flipped an inactive account.
+    message: result.data.activated
+      ? "تم إسناد المعلم إلى المشرف التربوي بنجاح — وتم تفعيل حسابه، ويمكنه الآن تسجيل الدخول"
+      : "تم إسناد المعلم إلى المشرف التربوي بنجاح",
     teacherId: result.data.teacherId,
     supervisorId: result.data.supervisorId,
   };

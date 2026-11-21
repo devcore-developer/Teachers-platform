@@ -698,7 +698,7 @@ export async function issueCertificate(
     return certificateFail(
       `سبق إصدار شهادة لهذا المعلم عن هذا المحتوى (رقم: ${existing.certificateNumber})`,
       "ALREADY_ISSUED"
-    );
+          );
   }
 
   // Re-compute eligibility from real data — never trust the client.
@@ -737,9 +737,10 @@ export async function issueCertificate(
   const titleEn =
     input.titleEn ??
     (snapshot.titleEn ? `Certificate of Completion — ${snapshot.titleEn}` : null);
-  const descriptionAr =
-    input.descriptionAr ??
-    `تم استيفاء متطلبات ${typeLabel} وفق سجلات التدريب والتقييم في منصة منارة.`;
+  // No descriptive copy by default (removed from certificates by
+  // design) — only an explicitly provided, validated description is
+  // stored; the sheet itself renders title/recipient/course/QR only.
+  const descriptionAr = input.descriptionAr ?? null;
 
   const criteriaSnapshot = JSON.stringify({
     content: { type: snapshot.type, id: snapshot.id, title: snapshot.titleAr },

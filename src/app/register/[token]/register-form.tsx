@@ -94,8 +94,9 @@ const formatDate = (d: Date) =>
  * the hidden token — `registerAction` → `registerTeacher` re-resolves
  * it server-side and re-validates every field, so nothing here is
  * trusted. On success the server action redirects to the
- * pending-verification screen; the client only renders field-level
- * errors meanwhile.
+ * pending-activation screen (the account holds NO platform access
+ * until the IT coordinator assigns a supervisor and activates it);
+ * the client only renders field-level errors meanwhile.
  */
 export function RegisterForm({
   token,
@@ -259,9 +260,9 @@ export function RegisterForm({
       </div>
 
       <p className="rounded-xl border bg-muted/40 px-3.5 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
-        بعد إنشاء الحساب سنرسل رسالة إلى بريدك لتوثيقه — التوثيق شرط تفعيل
-        الدخول، ولا يلزم أي موافقة مسبقة. وبعد التوثيق يُسندك مشرفك التربوي من
-        تقنية المعلومات لتصبح مؤهلًا لاستخدام المنصة.
+        بعد إنشاء الحساب سيبقى قيد التفعيل: يُسندك منسق تقنية المعلومات في
+        مدرستك إلى المشرف التربوي ويُفعّل حسابك، وبعدها تسجّل الدخول مباشرة
+        بالبريد وكلمة المرور اللذين أنشأتهما.
       </p>
 
       <SubmitButton />

@@ -200,7 +200,14 @@ export async function listItWorkspace(
 export async function assignItTeacher(
   ctx: ItCoordinatorContext,
   raw: unknown
-): Promise<ItServiceResult<{ teacherId: string; supervisorId: string }>> {
+): Promise<
+  ItServiceResult<{
+    teacherId: string;
+    supervisorId: string;
+    /** True when this assignment ALSO activated a pending account. */
+    activated: boolean;
+  }>
+> {
   const parsed = itAssignTeacherSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -243,6 +250,13 @@ export async function assignItTeacher(
     };
   }
 
+  // PENDING ACTIVATION: a self-registered teacher arrives inactive.
+  // Completing the supervisor assignment IS the activation act — the
+  // same transaction re-activates the account so the teacher can sign
+  // in ONLY after a supervisor is explicitly assigned. Transferring an
+  // already-active teacher is unaffected (idempotent update).
+  const pendingActivation = !teacher.isActive;
+
   await db.$transaction(async (tx) => {
     await tx.teacherSupervisorAssignment.deleteMany({
       where: { teacherId: teacher.id, schoolId: ctx.schoolId },
@@ -256,9 +270,22 @@ export async function assignItTeacher(
         assignedById: ctx.id,
       },
     });
+    if (pendingActivation) {
+      await tx.user.update({
+        where: { id: teacher.id },
+        data: { isActive: true },
+      });
+    }
   });
 
-  return { ok: true, data: { teacherId: teacher.id, supervisorId: supervisor.id } };
+  return {
+    ok: true,
+    data: {
+      teacherId: teacher.id,
+      supervisorId: supervisor.id,
+      activated: pendingActivation,
+    },
+  };
 }
 
 /** Remove a teacher's current supervisor (idempotent, school-checked). */
@@ -386,6 +413,16 @@ export async function issueItRecoveryLink(
     };
   }
   if (!teacher.isActive) {
+    // Distinguish pending-activation (self-registered, awaiting the
+    // supervisor assignment) from an administratively suspended account.
+    if (teacher.registrationLinkId) {
+      return {
+        ok: false,
+        message:
+          "حساب هذا المعلم قيد التفعيل — يُفعّل تلقائيًا عند إسناده إلى مشرف تربوي من شاشة الإسناد",
+        code: "FORBIDDEN",
+      };
+    }
     return {
       ok: false,
       message: "حساب هذا المعلم موقوف — تفعيل الحساب يتم من إدارة المدرسة أولًا",

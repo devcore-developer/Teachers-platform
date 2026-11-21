@@ -5,8 +5,8 @@
  * NOT a dashboard card. Elegant double border (school primary + gold
  * accents), three-part institutional header (platform banner ·
  * development office · school identity), a dominant Arabic title with
- * gold laurels, a large recipient-name container, the completion and
- * professional-development statements, a three-cell information strip
+ * gold laurels, a large recipient-name container, the completion
+ * statement, a three-cell information strip
  * (completion date · training hours · certificate number) and a
  * balanced bottom row: supervisor signature (right) · circular school
  * seal (center) · school-manager signature (center-left) · QR
@@ -43,7 +43,6 @@ import {
   CERT_COMPLETION_STATEMENT_AR,
   CERT_GRANT_AR,
   CERT_INK,
-  CERT_PD_STATEMENT_AR,
   CERT_RECIPIENT_LABEL_AR,
   CERT_TITLE_AR,
   CERTIFICATE_GOLD,
@@ -54,19 +53,6 @@ import {
   PLATFORM_SUBTITLE_AR,
 } from "@/config/certificates";
 import { formatIssueDate } from "@/app/certificates/ui";
-
-/**
- * Display-time brand normalization: certificates issued BEFORE the
- * platform-identity correction carry the legacy compound «منارة قرطبة»
- * inside their stored descriptionAr snapshot. The stored row is history
- * and is never rewritten — but the PRINTED sheet must always show the
- * correct platform identity «منارة» (school identity is rendered
- * separately from view.school.nameAr and is never affected).
- */
-function normalizeDescriptionAr(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.replace(/منصة\s*منارة\s*قرطبة/g, "منصة منارة").trim();
-}
 
 /* ------------------------------------------------------------------ */
 /* Decorative SVG pieces (inline so printing is pixel-identical)        */
@@ -104,9 +90,11 @@ function Laurel({ flip = false }: { flip?: boolean }) {
 /**
  * The circular school seal — double ring (brand + gold hairline), the
  * school name arched around the upper perimeter and its English name
- * around the lower perimeter, with the ACTUAL school logo centered
- * (object-contain so no logo is ever stretched; letter-initial
- * fallback when unconfigured).
+ * around the lower perimeter, with the ACTUAL school logo centered.
+ * The logo FILLS its circular frame: object-cover + object-center keep
+ * the aspect ratio (no stretching) while clipping the square image to
+ * the circle, so square uploads never show as a square inside the seal
+ * and no white bands remain (letter-initial fallback when unconfigured).
  */
 function SchoolSeal({
   nameAr,
@@ -165,7 +153,7 @@ function SchoolSeal({
         <img
           src={logoUrl}
           alt=""
-          className="absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white object-contain sm:h-12 sm:w-12"
+          className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full bg-white object-cover object-center sm:h-14 sm:w-14"
         />
       ) : (
         <div
@@ -232,7 +220,6 @@ export function CertificateSheet({
   const secondary = view.school.brandColorSecondary ?? brand;
   const gold = view.school.brandColorAccent ?? CERTIFICATE_GOLD;
   const schoolInitial = view.school.nameAr.trim().charAt(0) || "؟";
-  const descriptionText = normalizeDescriptionAr(view.descriptionAr);
 
   const printColors = {
     WebkitPrintColorAdjust: "exact",
@@ -338,7 +325,7 @@ export function CertificateSheet({
                   <img
                     src={view.school.logoUrl}
                     alt={view.school.nameAr}
-                    className="cert-logo-fallback h-12 w-12 rounded-full border-2 bg-white object-contain p-0.5"
+                    className="cert-logo-fallback h-12 w-12 overflow-hidden rounded-full border-2 bg-white object-cover object-center"
                     style={{ borderColor: `${brand}55` }}
                   />
                 ) : (
@@ -425,16 +412,6 @@ export function CertificateSheet({
                   <span className="text-slate-400">—</span>
                 )}
               </p>
-              <p className="mt-1.5 text-xs leading-6 text-slate-600 sm:text-[13px]">
-                {CERT_PD_STATEMENT_AR}
-                <br />
-                بمنصة التنمية المهنية في {view.school.nameAr}.
-              </p>
-              {descriptionText ? (
-                <p className="cert-desc mx-auto mt-1.5 max-w-2xl text-[11px] leading-5 text-slate-400">
-                  {descriptionText}
-                </p>
-              ) : null}
             </div>
 
             {/* ── Information strip: completion date · training hours · certificate number ── */}
@@ -551,10 +528,6 @@ export function CertificateSheet({
                 </p>
               </div>
             </div>
-
-            <p className="cert-footline relative z-10 mt-3 text-center text-[9.5px] font-medium text-slate-400">
-              {PLATFORM_NAME_AR} — {PLATFORM_SUBTITLE_AR} · شهادة إلكترونية قابلة للتحقق عبر رمز الاستجابة السريعة أعلاه
-            </p>
           </div>
         </div>
       </div>
